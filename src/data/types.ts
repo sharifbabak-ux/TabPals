@@ -44,6 +44,14 @@ export interface Event extends BaseRecord {
   endDate?: string;
   description?: string;
   archived: boolean;
+  /** Label shown next to amounts for this event, e.g. "تومان". */
+  currencyLabel: string;
+  /** ISO timestamp of the last manual close, or null if not manually closed. */
+  closedAt: string | null;
+  /** ISO timestamp of the last manual reopen, or null if never reopened. */
+  reopenedAt: string | null;
+  /** Reason given for the last reopen, or null if never reopened. */
+  reopenReason: string | null;
 }
 
 /**
@@ -65,8 +73,59 @@ export interface Group extends BaseRecord {
   archived: boolean;
 }
 
-export type OperationEntity = "persons" | "events" | "eventMembers" | "groups";
-export type OperationType = "create" | "update" | "archive";
+/** One person's contribution toward a voucher's total amount. */
+export interface VoucherPayer {
+  personId: string;
+  amount: number;
+}
+
+/** One participant sharing in an expense, weighted for the split engine. */
+export interface VoucherParticipant {
+  personId: string;
+  weight: number;
+}
+
+/** A participant's computed share of an expense, stored at save time. */
+export interface VoucherShare {
+  personId: string;
+  share: number;
+}
+
+export type VoucherType = "expense" | "contribution" | "settlement";
+export type VoucherStatus = "active";
+
+/**
+ * An accounting voucher (docs/PLAN.md #2 and #4). Expenses carry payers,
+ * participants, and computed shares; contributions and settlements are
+ * simple transfers between two people and leave payers/participants
+ * empty. `number` is sequential per event and never reused (see
+ * CLAUDE.md — never hard-delete accounting records).
+ */
+export interface Voucher extends BaseRecord {
+  eventId: string;
+  number: number;
+  type: VoucherType;
+  /** ISO timestamp set once at creation; never edited afterward. */
+  recordedAt: string;
+  /** Editable ISO date ("YYYY-MM-DD"), defaults to today at creation. */
+  expenseDate: string;
+  description: string;
+  totalAmount: number;
+  /** Expense only; empty for contribution/settlement. Sum must equal totalAmount. */
+  payers: VoucherPayer[];
+  /** Expense only; empty for contribution/settlement. */
+  participants: VoucherParticipant[];
+  /** Contribution/settlement only. */
+  fromPersonId?: string;
+  /** Contribution/settlement only. */
+  toPersonId?: string;
+  /** Expense only; empty for contribution/settlement. Always sums to totalAmount. */
+  shares: VoucherShare[];
+  status: VoucherStatus;
+}
+
+export type OperationEntity = "persons" | "events" | "eventMembers" | "groups" | "vouchers";
+export type OperationType = "create" | "update" | "archive" | "close" | "reopen";
 
 /** Field-level before/after values recorded for one changed field. */
 export interface FieldChange {

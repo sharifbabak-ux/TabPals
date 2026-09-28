@@ -2,28 +2,39 @@ import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/data/db";
-import { eventMembersRepository, personsRepository } from "@/data/repositories";
+import { eventMembersRepository, eventsRepository, personsRepository } from "@/data/repositories";
 import type { EventMember } from "@/data/types";
+import { isEventClosed } from "@/domain/eventStatus";
 import { formatJalaliDate } from "@/domain/format";
 import { EmptyState } from "@/ui/components/EmptyState";
 import { ConfirmDialog } from "@/ui/components/ConfirmDialog";
+import { Switch } from "@/ui/components/Switch";
+import { Tabs } from "@/ui/components/Tabs";
 import { PersonFormSheet } from "./people/PersonFormSheet";
 import { AddMembersSheet } from "./events/AddMembersSheet";
 import { ImportMembersSheet } from "./events/ImportMembersSheet";
 import { AddGroupSheet } from "./events/AddGroupSheet";
+import { EventFormSheet } from "./events/EventFormSheet";
+import { EventStatusControls } from "./events/EventStatusControls";
+import { VouchersSection } from "./events/VouchersSection";
+import { BalancesPanel } from "./events/BalancesPanel";
 
 type MemberRow = EventMember & { name: string };
+type EventTab = "members" | "vouchers";
 
 export function EventDetailScreen() {
   const { eventId = "" } = useParams();
   const navigate = useNavigate();
 
+  const [tab, setTab] = useState<EventTab>("members");
   const [showInactive, setShowInactive] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [createPersonOpen, setCreatePersonOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
   const [deactivateTarget, setDeactivateTarget] = useState<MemberRow | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState(false);
 
   const event = useLiveQuery(() => db.events.get(eventId), [eventId]);
 
@@ -41,9 +52,10 @@ export function EventDetailScreen() {
 
   const activePersons = useLiveQuery(() => db.persons.filter((p) => !p.deleted && !p.archived).toArray(), []);
 
-  const activeMemberPersonIds = useMemo(() => (members ?? []).filter((member) => member.active).map((member) => member.personId), [
-    members
-  ]);
+  const activeMemberOptions = useMemo(
+    () => (members ?? []).filter((member) => member.active).map((member) => ({ personId: member.personId, name: member.name })),
+    [members]
+  );
 
   const visibleMembers = useMemo(() => {
     if (!members) return undefined;
@@ -54,6 +66,13 @@ export function EventDetailScreen() {
     if (!deactivateTarget) return;
     await eventMembersRepository.setActive(deactivateTarget.id, !deactivateTarget.active);
     setDeactivateTarget(null);
+  }
+
+  async function handleArchiveConfirm() {
+    if (!event) return;
+    await eventsRepository.setArchived(eventId, !event.archived);
+    setArchiveTarget(false);
+    setEditOpen(false);
   }
 
   if (event === undefined || members === undefined) {
@@ -68,13 +87,21 @@ export function EventDetailScreen() {
     );
   }
 
+  const closed = isEventClosed(event, new Date());
+
   return (
     <div className="screen">
       <button type="button" className="back-link" onClick={() => navigate("/events")}>
         ← بازگشت به ایونت‌ها
       </button>
 
-      <h1>{event.title}</h1>
+      <div className="screen-header">
+        <h1>{event.title}</h1>
+        <button type="button" className="icon-button icon-button--ghost" onClick={() => setEditOpen(true)} aria-label="ویرایش ایونت">
+          ویرایش
+        </button>
+      </div>
+
       {(event.startDate || event.endDate) && (
         <p className="event-detail__dates">
           {event.startDate && formatJalaliDate(new Date(event.startDate))}
@@ -83,47 +110,66 @@ export function EventDetailScreen() {
         </p>
       )}
 
-      <div className="action-grid">
-        <button type="button" onClick={() => setAddOpen(true)}>
-          + افزودن از اشخاص
-        </button>
-        <button type="button" onClick={() => setCreatePersonOpen(true)}>
-          + شخص جدید
-        </button>
-        <button type="button" onClick={() => setImportOpen(true)}>
-          وارد کردن از ایونت قبلی
-        </button>
-        <button type="button" onClick={() => setGroupOpen(true)}>
-          + افزودن گروه
-        </button>
+      <div className="event-status-bar">
+        {closed && <span className="badge badge--closed">پایان‌یافته</span>}
+        <EventStatusControls eventId={eventId} closed={closed} />
       </div>
 
-      <h2 className="section-title">اعضا</h2>
-      <label className="toggle-row">
-        <span>نمایش غیرفعال‌ها</span>
-        <input type="checkbox" checked={showInactive} onChange={(event) => setShowInactive(event.target.checked)} />
-      </label>
+      <Tabs
+        options={[
+          { value: "members", label: "اعضا" },
+          { value: "vouchers", label: "اسناد" }
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
 
-      {visibleMembers && visibleMembers.length === 0 && <EmptyState hint="هنوز عضوی اضافه نشده است." />}
+      {tab === "members" ? (
+        <>
+          <div className="action-grid">
+            <button type="button" onClick={() => setAddOpen(true)}>
+              + افزودن از اشخاص
+            </button>
+            <button type="button" onClick={() => setCreatePersonOpen(true)}>
+              + شخص جدید
+            </button>
+            <button type="button" onClick={() => setImportOpen(true)}>
+              وارد کردن از ایونت قبلی
+            </button>
+            <button type="button" onClick={() => setGroupOpen(true)}>
+              + افزودن گروه
+            </button>
+          </div>
 
-      <ul className="list">
-        {visibleMembers?.map((member) => (
-          <li key={member.id} className={`list-item${member.active ? "" : " list-item--archived"}`}>
-            <div className="list-item__main">
-              <span className="list-item__title">{member.name}</span>
-            </div>
-            <div className="list-item__meta">
-              <button type="button" className="list-item__action" onClick={() => setDeactivateTarget(member)}>
-                {member.active ? "غیرفعال کردن" : "فعال کردن"}
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
+          <h2 className="section-title">اعضا</h2>
+          <Switch checked={showInactive} onChange={setShowInactive} label="نمایش غیرفعال‌ها" />
+
+          {visibleMembers && visibleMembers.length === 0 && <EmptyState hint="هنوز عضوی اضافه نشده است." />}
+
+          <ul className="list">
+            {visibleMembers?.map((member) => (
+              <li key={member.id} className={`list-item${member.active ? "" : " list-item--archived"}`}>
+                <div className="list-item__main">
+                  <span className="list-item__title">{member.name}</span>
+                </div>
+                <div className="list-item__meta">
+                  <button type="button" className="list-item__action" onClick={() => setDeactivateTarget(member)}>
+                    {member.active ? "غیرفعال کردن" : "فعال کردن"}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <BalancesPanel eventId={eventId} members={activeMemberOptions} currencyLabel={event.currencyLabel} />
+        </>
+      ) : (
+        <VouchersSection eventId={eventId} currencyLabel={event.currencyLabel} activeMembers={activeMemberOptions} eventClosed={closed} />
+      )}
 
       <AddMembersSheet
         open={addOpen}
-        excludePersonIds={activeMemberPersonIds}
+        excludePersonIds={activeMemberOptions.map((m) => m.personId)}
         onClose={() => setAddOpen(false)}
         onSubmit={async (personIds) => {
           await eventMembersRepository.addMembers(eventId, personIds);
@@ -160,6 +206,26 @@ export function EventDetailScreen() {
           await eventMembersRepository.addMembers(eventId, personIds);
           setGroupOpen(false);
         }}
+      />
+
+      <EventFormSheet
+        open={editOpen}
+        event={event}
+        onClose={() => setEditOpen(false)}
+        onSubmit={async (input) => {
+          await eventsRepository.update(eventId, input);
+          setEditOpen(false);
+        }}
+        onArchiveRequest={() => setArchiveTarget(true)}
+      />
+
+      <ConfirmDialog
+        open={archiveTarget}
+        title={event.archived ? "بازگردانی ایونت" : "آرشیو ایونت"}
+        message={event.archived ? `«${event.title}» از آرشیو خارج شود؟` : `«${event.title}» آرشیو شود؟ اطلاعات حذف نمی‌شود.`}
+        confirmLabel={event.archived ? "بازگردانی" : "آرشیو"}
+        onConfirm={handleArchiveConfirm}
+        onCancel={() => setArchiveTarget(false)}
       />
 
       <ConfirmDialog

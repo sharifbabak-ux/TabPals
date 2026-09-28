@@ -1,5 +1,8 @@
 import Dexie, { type EntityTable } from "dexie";
-import type { Event, EventMember, Group, Operation, Person } from "./types";
+import type { Event, EventMember, Group, Operation, Person, Voucher } from "./types";
+
+/** Default currency label backfilled onto events created before Stage 2. */
+const DEFAULT_CURRENCY_LABEL = "تومان";
 
 /**
  * Simple key/value table for app-level settings that aren't accounting
@@ -19,6 +22,7 @@ export class TabPalDB extends Dexie {
   events!: EntityTable<Event, "id">;
   eventMembers!: EntityTable<EventMember, "id">;
   groups!: EntityTable<Group, "id">;
+  vouchers!: EntityTable<Voucher, "id">;
   operations!: EntityTable<Operation, "id">;
 
   constructor(name = "tabpal") {
@@ -39,6 +43,32 @@ export class TabPalDB extends Dexie {
       groups: "id, name, archived, deleted",
       operations: "id, entity, entityId, timestamp"
     });
+
+    // Stage 2 — Vouchers & calculation engine. Adds the vouchers table and
+    // three new Event fields (currencyLabel, closedAt, reopenedAt,
+    // reopenReason). Existing events predate these fields, so upgrade()
+    // backfills them in place rather than leaving them undefined.
+    this.version(3)
+      .stores({
+        meta: "key",
+        persons: "id, name, archived, deleted",
+        events: "id, archived, deleted, startDate, closedAt",
+        eventMembers: "id, eventId, personId, &[eventId+personId], active, deleted",
+        groups: "id, name, archived, deleted",
+        vouchers: "id, eventId, &[eventId+number], type, status, deleted, recordedAt",
+        operations: "id, entity, entityId, timestamp"
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table("events")
+          .toCollection()
+          .modify((event) => {
+            if (event.currencyLabel === undefined) event.currencyLabel = DEFAULT_CURRENCY_LABEL;
+            if (event.closedAt === undefined) event.closedAt = null;
+            if (event.reopenedAt === undefined) event.reopenedAt = null;
+            if (event.reopenReason === undefined) event.reopenReason = null;
+          });
+      });
   }
 }
 

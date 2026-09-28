@@ -1,0 +1,211 @@
+import { isEventClosed } from "@/domain/eventStatus";
+import { amountsSumTo, percentsSumTo100, sharesFromExactAmounts, splitByWeight, splitEqual } from "@/domain/splitEngine";
+import { db } from "../db";
+import type { Voucher, VoucherParticipant, VoucherPayer, VoucherShare } from "../types";
+import { diffFields, logOperation, newBaseFields } from "./operationLog";
+
+const VOUCHER_LOG_FIELDS: (keyof Voucher)[] = [
+  "eventId",
+  "number",
+  "type",
+  "expenseDate",
+  "description",
+  "totalAmount",
+  "payers",
+  "participants",
+  "fromPersonId",
+  "toPersonId",
+  "shares",
+  "status"
+];
+
+export interface EqualAllSplit {
+  mode: "equal_all";
+}
+export interface EqualSelectedSplit {
+  mode: "equal_selected";
+  participantPersonIds: string[];
+}
+export interface WeightSplit {
+  mode: "weight";
+  weights: { personId: string; weight: number }[];
+}
+export interface PercentSplit {
+  mode: "percent";
+  percents: { personId: string; percent: number }[];
+}
+export interface ExactSplit {
+  mode: "exact";
+  amounts: { personId: string; amount: number }[];
+}
+export type ExpenseSplit = EqualAllSplit | EqualSelectedSplit | WeightSplit | PercentSplit | ExactSplit;
+
+export interface CreateExpenseInput {
+  eventId: string;
+  expenseDate: string;
+  description: string;
+  totalAmount: number;
+  payers: VoucherPayer[];
+  split: ExpenseSplit;
+}
+
+export interface CreateTransferInput {
+  eventId: string;
+  expenseDate: string;
+  description: string;
+  totalAmount: number;
+  fromPersonId: string;
+  toPersonId: string;
+}
+
+function computeExpenseSplit(
+  totalAmount: number,
+  split: ExpenseSplit,
+  activeMemberPersonIds: string[]
+): { participants: VoucherParticipant[]; shares: VoucherShare[] } {
+  switch (split.mode) {
+    case "equal_all": {
+      if (activeMemberPersonIds.length === 0) throw new Error("این ایونت عضو فعالی ندارد");
+      return {
+        participants: activeMemberPersonIds.map((personId) => ({ personId, weight: 1 })),
+        shares: splitEqual(totalAmount, activeMemberPersonIds)
+      };
+    }
+    case "equal_selected": {
+      if (split.participantPersonIds.length === 0) throw new Error("حداقل یک نفر باید انتخاب شود");
+      return {
+        participants: split.participantPersonIds.map((personId) => ({ personId, weight: 1 })),
+        shares: splitEqual(totalAmount, split.participantPersonIds)
+      };
+    }
+    case "weight": {
+      if (split.weights.length === 0) throw new Error("حداقل یک نفر باید انتخاب شود");
+      return {
+        participants: split.weights.map((w) => ({ personId: w.personId, weight: w.weight })),
+        shares: splitByWeight(totalAmount, split.weights)
+      };
+    }
+    case "percent": {
+      if (split.percents.length === 0) throw new Error("حداقل یک نفر باید انتخاب شود");
+      if (!percentsSumTo100(split.percents.map((p) => p.percent))) {
+        throw new Error("مجموع درصدها باید ۱۰۰ باشد");
+      }
+      return {
+        participants: split.percents.map((p) => ({ personId: p.personId, weight: p.percent })),
+        shares: splitByWeight(totalAmount, split.percents.map((p) => ({ personId: p.personId, weight: p.percent })))
+      };
+    }
+    case "exact": {
+      if (split.amounts.length === 0) throw new Error("حداقل یک نفر باید انتخاب شود");
+      if (!amountsSumTo(totalAmount, split.amounts.map((a) => a.amount))) {
+        throw new Error("مجموع مبالغ باید برابر مبلغ کل باشد");
+      }
+      return {
+        participants: split.amounts.map((a) => ({ personId: a.personId, weight: a.amount })),
+        shares: sharesFromExactAmounts(split.amounts)
+      };
+    }
+  }
+}
+
+async function nextVoucherNumber(eventId: string): Promise<number> {
+  const vouchers = await db.vouchers.where("eventId").equals(eventId).toArray();
+  return vouchers.reduce((max, v) => Math.max(max, v.number), 0) + 1;
+}
+
+/** Blocks creating a voucher in a closed event — enforced here, not only in the UI (see CLAUDE.md). */
+async function assertEventOpenForNewVoucher(eventId: string): Promise<void> {
+  const event = await db.events.get(eventId);
+  if (!event) throw new Error(`Event ${eventId} not found`);
+  if (isEventClosed(event, new Date())) {
+    throw new Error("این ایونت پایان یافته است و امکان ثبت سند جدید وجود ندارد.");
+  }
+}
+
+export const vouchersRepository = {
+  async createExpense(input: CreateExpenseInput): Promise<Voucher> {
+    if (!amountsSumTo(input.totalAmount, input.payers.map((p) => p.amount))) {
+      throw new Error("مجموع مبلغ پرداخت‌کنندگان باید برابر مبلغ کل باشد");
+    }
+
+    return db.transaction("rw", db.events, db.eventMembers, db.vouchers, db.operations, async () => {
+      await assertEventOpenForNewVoucher(input.eventId);
+
+      let activeMemberPersonIds: string[] = [];
+      if (input.split.mode === "equal_all") {
+        activeMemberPersonIds = (
+          await db.eventMembers
+            .where("eventId")
+            .equals(input.eventId)
+            .filter((m) => !m.deleted && m.active)
+            .toArray()
+        ).map((m) => m.personId);
+      }
+
+      const { participants, shares } = computeExpenseSplit(input.totalAmount, input.split, activeMemberPersonIds);
+      const number = await nextVoucherNumber(input.eventId);
+      const now = new Date().toISOString();
+
+      const voucher: Voucher = {
+        ...newBaseFields(),
+        eventId: input.eventId,
+        number,
+        type: "expense",
+        recordedAt: now,
+        expenseDate: input.expenseDate,
+        description: input.description.trim(),
+        totalAmount: input.totalAmount,
+        payers: input.payers,
+        participants,
+        shares,
+        status: "active"
+      };
+
+      await db.vouchers.add(voucher);
+      await logOperation(db, "vouchers", voucher.id, "create", diffFields(undefined, voucher, VOUCHER_LOG_FIELDS));
+      return voucher;
+    });
+  },
+
+  async createContribution(input: CreateTransferInput): Promise<Voucher> {
+    return createTransfer(input, "contribution");
+  },
+
+  async createSettlement(input: CreateTransferInput): Promise<Voucher> {
+    return createTransfer(input, "settlement");
+  }
+};
+
+async function createTransfer(input: CreateTransferInput, type: "contribution" | "settlement"): Promise<Voucher> {
+  if (input.fromPersonId === input.toPersonId) {
+    throw new Error("گیرنده و پرداخت‌کننده نمی‌توانند یک نفر باشند");
+  }
+
+  return db.transaction("rw", db.events, db.vouchers, db.operations, async () => {
+    await assertEventOpenForNewVoucher(input.eventId);
+
+    const number = await nextVoucherNumber(input.eventId);
+    const now = new Date().toISOString();
+
+    const voucher: Voucher = {
+      ...newBaseFields(),
+      eventId: input.eventId,
+      number,
+      type,
+      recordedAt: now,
+      expenseDate: input.expenseDate,
+      description: input.description.trim(),
+      totalAmount: input.totalAmount,
+      payers: [],
+      participants: [],
+      fromPersonId: input.fromPersonId,
+      toPersonId: input.toPersonId,
+      shares: [],
+      status: "active"
+    };
+
+    await db.vouchers.add(voucher);
+    await logOperation(db, "vouchers", voucher.id, "create", diffFields(undefined, voucher, VOUCHER_LOG_FIELDS));
+    return voucher;
+  });
+}

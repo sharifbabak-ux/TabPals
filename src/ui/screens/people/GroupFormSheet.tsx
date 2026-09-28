@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { BottomSheet } from "@/ui/components/BottomSheet";
+import { validateGroupName } from "@/domain/groupValidation";
 import type { Group, Person } from "@/data/types";
 import type { GroupInput } from "@/data/repositories/groupsRepository";
 
@@ -8,24 +9,30 @@ interface GroupFormSheetProps {
   group?: Group;
   /** Active persons available to add to the group. */
   persons: Person[];
+  /** Names of other active groups, used for the duplicate-name block. */
+  existingNames: string[];
   onClose: () => void;
   onSubmit: (input: GroupInput) => Promise<void>;
+  /** Present only when editing — opens the archive/restore confirmation. */
+  onArchiveRequest?: () => void;
 }
 
-export function GroupFormSheet({ open, group, persons, onClose, onSubmit }: GroupFormSheetProps) {
+export function GroupFormSheet({ open, group, persons, existingNames, onClose, onSubmit, onArchiveRequest }: GroupFormSheetProps) {
   const [name, setName] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setName(group?.name ?? "");
       setSelected(new Set(group?.personIds ?? []));
+      setSubmitError(null);
     }
   }, [open, group]);
 
-  const trimmedName = name.trim();
-  const valid = trimmedName.length > 0 && selected.size > 0;
+  const nameValidation = validateGroupName(name, existingNames);
+  const valid = nameValidation.valid && selected.size > 0;
 
   function toggle(personId: string) {
     setSelected((prev) => {
@@ -40,8 +47,11 @@ export function GroupFormSheet({ open, group, persons, onClose, onSubmit }: Grou
     event.preventDefault();
     if (!valid || submitting) return;
     setSubmitting(true);
+    setSubmitError(null);
     try {
-      await onSubmit({ name: trimmedName, personIds: Array.from(selected) });
+      await onSubmit({ name: name.trim(), personIds: Array.from(selected) });
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "خطایی رخ داد");
     } finally {
       setSubmitting(false);
     }
@@ -53,6 +63,7 @@ export function GroupFormSheet({ open, group, persons, onClose, onSubmit }: Grou
         <div className="field">
           <label htmlFor="group-name">نام گروه</label>
           <input id="group-name" value={name} onChange={(event) => setName(event.target.value)} autoFocus />
+          {nameValidation.error && <span className="field__error">{nameValidation.error}</span>}
         </div>
 
         <div className="section-title">اعضا</div>
@@ -74,6 +85,7 @@ export function GroupFormSheet({ open, group, persons, onClose, onSubmit }: Grou
           </ul>
         )}
 
+        {submitError && <p className="field__error">{submitError}</p>}
         <div className="form-actions">
           <button type="button" className="form-actions__secondary" onClick={onClose}>
             انصراف
@@ -82,6 +94,14 @@ export function GroupFormSheet({ open, group, persons, onClose, onSubmit }: Grou
             ذخیره
           </button>
         </div>
+
+        {group && onArchiveRequest && (
+          <div className="sheet__danger-zone">
+            <button type="button" className="sheet__archive-button" onClick={onArchiveRequest}>
+              {group.archived ? "بازگردانی از آرشیو" : "آرشیو کردن این گروه"}
+            </button>
+          </div>
+        )}
       </form>
     </BottomSheet>
   );

@@ -7,23 +7,27 @@ import type { PersonInput } from "@/data/repositories/personsRepository";
 interface PersonFormSheetProps {
   open: boolean;
   person?: Person;
-  /** Names of other active persons, used for the duplicate-name warning. */
+  /** Names of other active persons, used for the duplicate-name block. */
   existingNames: string[];
   onClose: () => void;
   onSubmit: (input: PersonInput) => Promise<void>;
+  /** Present only when editing — opens the archive/restore confirmation. */
+  onArchiveRequest?: () => void;
 }
 
-export function PersonFormSheet({ open, person, existingNames, onClose, onSubmit }: PersonFormSheetProps) {
+export function PersonFormSheet({ open, person, existingNames, onClose, onSubmit, onArchiveRequest }: PersonFormSheetProps) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setName(person?.name ?? "");
       setPhone(person?.phone ?? "");
       setNote(person?.note ?? "");
+      setSubmitError(null);
     }
   }, [open, person]);
 
@@ -33,8 +37,11 @@ export function PersonFormSheet({ open, person, existingNames, onClose, onSubmit
     event.preventDefault();
     if (!validation.valid || submitting) return;
     setSubmitting(true);
+    setSubmitError(null);
     try {
       await onSubmit({ name, phone, note });
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "خطایی رخ داد");
     } finally {
       setSubmitting(false);
     }
@@ -47,9 +54,6 @@ export function PersonFormSheet({ open, person, existingNames, onClose, onSubmit
           <label htmlFor="person-name">نام</label>
           <input id="person-name" value={name} onChange={(event) => setName(event.target.value)} autoFocus />
           {validation.error && <span className="field__error">{validation.error}</span>}
-          {!validation.error && validation.isDuplicate && (
-            <span className="field__warning">شخص دیگری با همین نام وجود دارد.</span>
-          )}
         </div>
         <div className="field">
           <label htmlFor="person-phone">شماره تماس (اختیاری)</label>
@@ -59,6 +63,7 @@ export function PersonFormSheet({ open, person, existingNames, onClose, onSubmit
           <label htmlFor="person-note">یادداشت (اختیاری)</label>
           <input id="person-note" value={note} onChange={(event) => setNote(event.target.value)} />
         </div>
+        {submitError && <p className="field__error">{submitError}</p>}
         <div className="form-actions">
           <button type="button" className="form-actions__secondary" onClick={onClose}>
             انصراف
@@ -67,6 +72,14 @@ export function PersonFormSheet({ open, person, existingNames, onClose, onSubmit
             ذخیره
           </button>
         </div>
+
+        {person && onArchiveRequest && (
+          <div className="sheet__danger-zone">
+            <button type="button" className="sheet__archive-button" onClick={onArchiveRequest}>
+              {person.archived ? "بازگردانی از آرشیو" : "آرشیو کردن این شخص"}
+            </button>
+          </div>
+        )}
       </form>
     </BottomSheet>
   );
