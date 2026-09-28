@@ -1,0 +1,39 @@
+.update-banner {
+  position: fixed;
+  top: 0;
+  inset-inline: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  padding-top: calc(10px + env(safe-area-inset-top));
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+  font-size: 0.9rem;
+}
+
+.update-banner__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.update-banner button {
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.update-banner button:not(.update-banner__dismiss) {
+  background: var(--color-primary-contrast);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.update-banner__dismiss {
+  background: transparent;
+  color: inherit;
+}
