@@ -16,6 +16,7 @@
   align-items: center;
   justify-content: center;
   gap: 2px;
+  padding: 6px 0;
   text-decoration: none;
   color: var(--color-text-muted);
   font-size: 0.75rem;
@@ -23,9 +24,19 @@
 
 .bottom-nav__icon {
   display: flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
+  padding: 3px 16px;
+  border-radius: 999px;
+  transition: background-color var(--transition-fast);
 }
 
 .bottom-nav__item--active {
   color: var(--color-primary);
+  font-weight: 600;
+}
+
+.bottom-nav__item--active .bottom-nav__icon {
+  background: var(--color-primary-soft);
 }

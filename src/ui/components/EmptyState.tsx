@@ -1,8 +1,15 @@
+import { LogoMark } from "./Logo";
+
 interface EmptyStateProps {
   hint: string;
 }
 
-/** Short Persian hint shown instead of an empty list. */
+/** Faded logo mark with a short Persian hint, shown instead of an empty list. */
 export function EmptyState({ hint }: EmptyStateProps) {
-  return <p className="empty-state">{hint}</p>;
+  return (
+    <div className="empty-state">
+      <LogoMark size={56} className="empty-state__mark" />
+      <p className="empty-state__hint">{hint}</p>
+    </div>
+  );
 }

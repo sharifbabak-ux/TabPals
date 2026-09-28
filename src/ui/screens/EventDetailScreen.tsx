@@ -6,6 +6,7 @@ import { eventMembersRepository, eventsRepository, personsRepository } from "@/d
 import type { EventMember } from "@/data/types";
 import { isEventClosed } from "@/domain/eventStatus";
 import { formatJalaliDate } from "@/domain/format";
+import { Avatar } from "@/ui/components/Avatar";
 import { EmptyState } from "@/ui/components/EmptyState";
 import { ConfirmDialog } from "@/ui/components/ConfirmDialog";
 import { Switch } from "@/ui/components/Switch";
@@ -97,7 +98,12 @@ export function EventDetailScreen() {
 
       <div className="screen-header">
         <h1>{event.title}</h1>
-        <button type="button" className="icon-button icon-button--ghost" onClick={() => setEditOpen(true)} aria-label="ویرایش ایونت">
+        <button
+          type="button"
+          className="icon-button icon-button--ghost icon-button--label"
+          onClick={() => setEditOpen(true)}
+          aria-label="ویرایش ایونت"
+        >
           ویرایش
         </button>
       </div>
@@ -149,6 +155,7 @@ export function EventDetailScreen() {
           <ul className="list">
             {visibleMembers?.map((member) => (
               <li key={member.id} className={`list-item${member.active ? "" : " list-item--archived"}`}>
+                <Avatar id={member.personId} name={member.name} />
                 <div className="list-item__main">
                   <span className="list-item__title">{member.name}</span>
                 </div>

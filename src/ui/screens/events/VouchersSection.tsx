@@ -4,6 +4,7 @@ import { db } from "@/data/db";
 import type { Voucher, VoucherType } from "@/data/types";
 import { formatAmount, formatJalaliDate, toPersianDigits } from "@/domain/format";
 import { EmptyState } from "@/ui/components/EmptyState";
+import { ContributionIcon, ExpenseIcon, SettlementIcon } from "@/ui/components/icons";
 import { NewVoucherMenuSheet } from "./NewVoucherMenuSheet";
 import { ExpenseWizardSheet } from "./ExpenseWizardSheet";
 import { TransferFormSheet } from "./TransferFormSheet";
@@ -25,6 +26,12 @@ const TYPE_LABELS: Record<Voucher["type"], string> = {
   expense: "هزینه",
   contribution: "واریز",
   settlement: "تسویه"
+};
+
+const TYPE_ICONS: Record<Voucher["type"], typeof ExpenseIcon> = {
+  expense: ExpenseIcon,
+  contribution: ContributionIcon,
+  settlement: SettlementIcon
 };
 
 export function VouchersSection({ eventId, currencyLabel, activeMembers, eventClosed }: VouchersSectionProps) {
@@ -76,8 +83,13 @@ export function VouchersSection({ eventId, currencyLabel, activeMembers, eventCl
       {sorted.length === 0 && <EmptyState hint="هنوز سندی ثبت نشده است." />}
 
       <ul className="list">
-        {sorted.map((voucher) => (
+        {sorted.map((voucher) => {
+          const TypeIcon = TYPE_ICONS[voucher.type];
+          return (
           <li key={voucher.id} className="list-item" onClick={() => setDetailVoucher(voucher)}>
+            <span className={`voucher-row__icon voucher-row__icon--${voucher.type}`}>
+              <TypeIcon width={18} height={18} />
+            </span>
             <div className="list-item__main">
               <span className="list-item__title">
                 #{toPersianDigits(voucher.number)} · {TYPE_LABELS[voucher.type]} · {voucher.description || "بدون توضیح"}
@@ -90,7 +102,8 @@ export function VouchersSection({ eventId, currencyLabel, activeMembers, eventCl
               </span>
             </div>
           </li>
-        ))}
+          );
+        })}
       </ul>
 
       <NewVoucherMenuSheet open={menuOpen} onClose={() => setMenuOpen(false)} onSelect={handleTypeSelect} />

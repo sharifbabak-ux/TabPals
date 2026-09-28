@@ -1,46 +1,7 @@
+@import "./theme/tokens.css";
+
 :root {
-  color-scheme: light dark;
-  --color-bg: #f8fafc;
-  --color-surface: #ffffff;
-  --color-text: #0f172a;
-  --color-text-muted: #64748b;
-  --color-border: #e2e8f0;
-  --color-primary: #4f46e5;
-  --color-primary-contrast: #ffffff;
   --nav-height: 64px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --color-bg: #0f172a;
-    --color-surface: #1e293b;
-    --color-text: #f1f5f9;
-    --color-text-muted: #94a3b8;
-    --color-border: #334155;
-    --color-primary: #818cf8;
-    --color-primary-contrast: #0f172a;
-  }
-}
-
-/* Explicit "روشن"/"تیره" choice from Settings overrides the system preference. */
-:root[data-theme="light"] {
-  --color-bg: #f8fafc;
-  --color-surface: #ffffff;
-  --color-text: #0f172a;
-  --color-text-muted: #64748b;
-  --color-border: #e2e8f0;
-  --color-primary: #4f46e5;
-  --color-primary-contrast: #ffffff;
-}
-
-:root[data-theme="dark"] {
-  --color-bg: #0f172a;
-  --color-surface: #1e293b;
-  --color-text: #f1f5f9;
-  --color-text-muted: #94a3b8;
-  --color-border: #334155;
-  --color-primary: #818cf8;
-  --color-primary-contrast: #0f172a;
 }
 
 * {
@@ -67,6 +28,16 @@ input,
 select,
 textarea {
   font-family: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }
 
 .app-shell {
@@ -102,28 +73,53 @@ textarea {
 
 .screen-header h1 {
   margin: 0;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.screen-header--brand {
+  align-items: flex-start;
 }
 
 .icon-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
   border: none;
   background: var(--color-primary);
   color: var(--color-primary-contrast);
-  font-size: 1.3rem;
+  font-size: 1.4rem;
   line-height: 1;
   cursor: pointer;
   flex-shrink: 0;
+  box-shadow: 0 0 0 2px var(--color-accent);
+  transition: transform var(--transition-fast);
+}
+
+.icon-button:active {
+  transform: scale(0.94);
 }
 
 .icon-button--ghost {
+  width: auto;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-text-muted);
   border: 1px solid var(--color-border);
+  box-shadow: none;
+  font-size: 0.85rem;
+}
+
+.icon-button--label {
+  white-space: nowrap;
 }
 
 .search-input {
@@ -219,6 +215,7 @@ textarea {
   font-size: 0.9rem;
   font-weight: 500;
   cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
 }
 
 .tabs__tab--active {
@@ -230,9 +227,9 @@ textarea {
 /* Badges for event/voucher state -------------------------------------- */
 
 .badge--closed {
-  color: #b45309;
-  background: rgba(217, 119, 6, 0.12);
-  border-color: rgba(217, 119, 6, 0.3);
+  color: var(--color-accent-contrast);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
 }
 
 /* Lists --------------------------------------------------------------- */
@@ -249,20 +246,26 @@ textarea {
 .list-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 12px;
-  padding: 12px 14px;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 13px 16px;
   text-align: start;
   width: 100%;
   color: inherit;
   text-decoration: none;
   cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.list-item:active {
+  transform: scale(0.99);
 }
 
 .list-item__main {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -312,10 +315,23 @@ textarea {
 }
 
 .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
   color: var(--color-text-muted);
   text-align: center;
   padding: 40px 16px;
   line-height: 1.7;
+}
+
+.empty-state__mark {
+  opacity: 0.35;
+}
+
+.empty-state__hint {
+  margin: 0;
+  max-width: 26em;
 }
 
 /* Forms ----------------------------------------------------------------- */
@@ -350,12 +366,12 @@ textarea {
 
 .field__warning {
   font-size: 0.78rem;
-  color: #d97706;
+  color: var(--color-accent);
 }
 
 .field__error {
   font-size: 0.78rem;
-  color: #dc2626;
+  color: var(--color-debtor);
 }
 
 .form-actions {
@@ -366,11 +382,17 @@ textarea {
 
 .form-actions button {
   flex: 1;
+  min-height: 44px;
   border: none;
-  border-radius: 10px;
-  padding: 11px;
+  border-radius: var(--radius-control);
+  padding: 12px;
   font-size: 0.95rem;
   cursor: pointer;
+  transition: transform var(--transition-fast);
+}
+
+.form-actions button:active {
+  transform: scale(0.98);
 }
 
 .form-actions__primary {
@@ -599,39 +621,108 @@ textarea {
 
 .balance-row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 10px 12px;
+  gap: 10px;
+  padding: 12px 14px;
   border: 1px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
   background: var(--color-surface);
   margin-bottom: 8px;
+}
+
+.balance-row__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.balance-row__name {
+  font-weight: 600;
 }
 
 .balance-row__amounts {
   display: flex;
   gap: 12px;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--color-text-muted);
 }
 
+.balance-row__end {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 .balance-row__balance--positive {
-  color: #16a34a;
+  color: var(--color-creditor);
   font-weight: 700;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .balance-row__balance--negative {
-  color: #dc2626;
+  color: var(--color-debtor);
   font-weight: 700;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .balance-row__balance--zero {
   color: var(--color-text-muted);
   font-weight: 600;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.balance-chip {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+}
+
+.balance-chip--creditor {
+  background: color-mix(in srgb, var(--color-creditor) 18%, var(--color-surface));
+  color: var(--color-creditor);
+}
+
+.balance-chip--debtor {
+  background: color-mix(in srgb, var(--color-debtor) 18%, var(--color-surface));
+  color: var(--color-debtor);
+}
+
+.voucher-row__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.voucher-row__icon--expense {
+  background: color-mix(in srgb, var(--color-debtor) 16%, var(--color-surface));
+  color: var(--color-debtor);
+}
+
+.voucher-row__icon--contribution {
+  background: color-mix(in srgb, var(--color-creditor) 16%, var(--color-surface));
+  color: var(--color-creditor);
+}
+
+.voucher-row__icon--settlement {
+  background: color-mix(in srgb, var(--color-accent) 20%, var(--color-surface));
+  color: var(--color-accent-contrast);
 }
 
 .voucher-row__amount {
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .voucher-detail__field {

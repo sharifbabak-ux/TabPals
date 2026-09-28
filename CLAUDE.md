@@ -1,4 +1,4 @@
-# CLAUDE.md — rules for every future session on TabPal
+# CLAUDE.md — rules for every future session on TabPals
 
 Read `docs/PLAN.md` first, before making any change. It is the approved
 product plan and the source of truth for what each stage covers — do not

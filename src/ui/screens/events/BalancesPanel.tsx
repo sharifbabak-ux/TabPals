@@ -2,6 +2,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/data/db";
 import { computeBalances } from "@/domain/balanceEngine";
 import { formatAmount } from "@/domain/format";
+import { Avatar } from "@/ui/components/Avatar";
 
 interface MemberOption {
   personId: string;
@@ -45,21 +46,29 @@ export function BalancesPanel({ eventId, members, currencyLabel }: BalancesPanel
     <div className="balances-panel">
       <h2 className="section-title">تراز افراد</h2>
       {balances.map((balance) => {
+        const name = members.find((m) => m.personId === balance.personId)?.name ?? "؟";
         const balanceClass =
           balance.balance > 0 ? "balance-row__balance--positive" : balance.balance < 0 ? "balance-row__balance--negative" : "balance-row__balance--zero";
+        const chipClass =
+          balance.balance > 0 ? "balance-chip balance-chip--creditor" : balance.balance < 0 ? "balance-chip balance-chip--debtor" : "balance-chip";
         return (
           <div className="balance-row" key={balance.personId}>
-            <div>
-              <div>{members.find((m) => m.personId === balance.personId)?.name ?? "؟"}</div>
+            <Avatar id={balance.personId} name={name} />
+            <div className="balance-row__main">
+              <div className="balance-row__name">{name}</div>
               <div className="balance-row__amounts">
                 <span>پرداخت: {formatAmount(balance.totalPaid)}</span>
                 <span>سهم: {formatAmount(balance.totalShare)}</span>
               </div>
             </div>
-            <span className={balanceClass}>
-              {formatAmount(Math.abs(balance.balance))} {currencyLabel}
-              {balance.balance > 0 ? " طلبکار" : balance.balance < 0 ? " بدهکار" : ""}
-            </span>
+            <div className="balance-row__end">
+              <span className={balanceClass}>
+                {formatAmount(Math.abs(balance.balance))} {currencyLabel}
+              </span>
+              {balance.balance !== 0 && (
+                <span className={chipClass}>{balance.balance > 0 ? "طلبکار" : "بدهکار"}</span>
+              )}
+            </div>
           </div>
         );
       })}

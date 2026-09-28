@@ -3,7 +3,13 @@
  * All UI text, the PWA manifest, and Settings must read from here rather
  * than hard-coding the app name.
  */
-export const APP_NAME = "TabPal";
+export const APP_NAME = "TabPals";
+
+/** Persian display name, shown in the app header/logo wordmark area. */
+export const APP_NAME_FA = "حساب دوستانه";
+
+/** Persian tagline, shown under the logo on the events screen header. */
+export const TAGLINE_FA = "ضامن پایداری جمع‌های دوستانه";
 
 /**
  * Stage 0-7 build with no server. Flip only when a real backend (Stage 8)

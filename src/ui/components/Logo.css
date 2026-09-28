@@ -1,0 +1,40 @@
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.logo__wordmark {
+  font-family: "Fraunces", serif;
+  font-weight: 600;
+  font-size: 1.35rem;
+  line-height: 1.1;
+  direction: ltr;
+  text-align: right;
+}
+
+.logo__wordmark-tab {
+  color: var(--color-ink);
+}
+
+.logo__wordmark-pals {
+  color: var(--color-primary);
+}
+
+.logo__name-fa {
+  font-size: 0.8rem;
+  color: var(--color-ink-muted);
+  font-weight: 500;
+}
+
+.logo__tagline {
+  font-size: 0.72rem;
+  color: var(--color-ink-muted);
+}

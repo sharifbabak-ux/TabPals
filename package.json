@@ -1,6 +1,6 @@
 {
   "name": "tabpal",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,6 +12,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@fontsource/fraunces": "^5.1.1",
     "@fontsource/vazirmatn": "^5.1.0",
     "dexie": "^4.0.10",
     "dexie-react-hooks": "^4.4.0",
@@ -27,6 +28,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^25.0.1",
+    "playwright": "^1.56.1",
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
     "vite-plugin-pwa": "^0.21.1",
