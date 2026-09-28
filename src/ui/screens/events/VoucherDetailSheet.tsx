@@ -1,5 +1,6 @@
 import { BottomSheet } from "@/ui/components/BottomSheet";
-import { formatAmount, formatJalaliDate, formatJalaliDateTime, toPersianDigits } from "@/domain/format";
+import { JalaliDate } from "@/ui/components/JalaliDate";
+import { formatAmount, toPersianDigits } from "@/domain/format";
 import type { Voucher } from "@/data/types";
 
 interface MemberOption {
@@ -10,7 +11,7 @@ interface MemberOption {
 interface VoucherDetailSheetProps {
   voucher: Voucher | null;
   members: MemberOption[];
-  currencyLabel: string;
+  currency: string;
   onClose: () => void;
 }
 
@@ -24,7 +25,7 @@ function nameOf(members: MemberOption[], personId: string): string {
   return members.find((m) => m.personId === personId)?.name ?? "؟";
 }
 
-export function VoucherDetailSheet({ voucher, members, currencyLabel, onClose }: VoucherDetailSheetProps) {
+export function VoucherDetailSheet({ voucher, members, currency, onClose }: VoucherDetailSheetProps) {
   if (!voucher) return null;
 
   return (
@@ -35,11 +36,15 @@ export function VoucherDetailSheet({ voucher, members, currencyLabel, onClose }:
       </div>
       <div className="voucher-detail__field">
         <span>تاریخ ثبت</span>
-        <span>{formatJalaliDateTime(new Date(voucher.recordedAt))}</span>
+        <span>
+          <JalaliDate date={new Date(voucher.recordedAt)} weekday time />
+        </span>
       </div>
       <div className="voucher-detail__field">
         <span>تاریخ هزینه</span>
-        <span>{formatJalaliDate(new Date(`${voucher.expenseDate}T00:00:00`))}</span>
+        <span>
+          <JalaliDate date={new Date(`${voucher.expenseDate}T00:00:00`)} />
+        </span>
       </div>
       <div className="voucher-detail__field">
         <span>توضیحات</span>
@@ -48,7 +53,7 @@ export function VoucherDetailSheet({ voucher, members, currencyLabel, onClose }:
       <div className="voucher-detail__field">
         <span>مبلغ کل</span>
         <span>
-          {formatAmount(voucher.totalAmount)} {currencyLabel}
+          {formatAmount(voucher.totalAmount)} {currency}
         </span>
       </div>
 

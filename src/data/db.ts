@@ -3,6 +3,7 @@ import type { Event, EventMember, Group, Operation, Person, Voucher } from "./ty
 
 /** Default currency label backfilled onto events created before Stage 2. */
 const DEFAULT_CURRENCY_LABEL = "تومان";
+const VALID_CURRENCIES = new Set(["تومان", "ریال"]);
 
 /**
  * Simple key/value table for app-level settings that aren't accounting
@@ -68,6 +69,50 @@ export class TabPalDB extends Dexie {
             if (event.reopenedAt === undefined) event.reopenedAt = null;
             if (event.reopenReason === undefined) event.reopenReason = null;
           });
+      });
+
+    // Stage 3A — treasurer, member ordering, and the currency enum. Renames
+    // the free-text currencyLabel into a constrained currency enum,
+    // backfills treasurerPersonId (null until set on existing events), and
+    // assigns eventMembers.sortOrder from existing creation order so
+    // drag-and-drop reordering has a stable starting point.
+    this.version(4)
+      .stores({
+        meta: "key",
+        persons: "id, name, archived, deleted",
+        events: "id, archived, deleted, startDate, closedAt, treasurerPersonId",
+        eventMembers: "id, eventId, personId, &[eventId+personId], active, deleted, sortOrder",
+        groups: "id, name, archived, deleted",
+        vouchers: "id, eventId, &[eventId+number], type, status, deleted, recordedAt",
+        operations: "id, entity, entityId, timestamp"
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table("events")
+          .toCollection()
+          .modify((event) => {
+            const label = event.currencyLabel;
+            event.currency = VALID_CURRENCIES.has(label) ? label : DEFAULT_CURRENCY_LABEL;
+            delete event.currencyLabel;
+            if (event.treasurerPersonId === undefined) event.treasurerPersonId = null;
+          });
+
+        const membersByEvent = new Map<string, { id: string; createdAt: string }[]>();
+        await tx
+          .table("eventMembers")
+          .toCollection()
+          .each((member) => {
+            const list = membersByEvent.get(member.eventId) ?? [];
+            list.push({ id: member.id, createdAt: member.createdAt });
+            membersByEvent.set(member.eventId, list);
+          });
+
+        for (const members of membersByEvent.values()) {
+          members.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+          for (let i = 0; i < members.length; i++) {
+            await tx.table("eventMembers").update(members[i].id, { sortOrder: i });
+          }
+        }
       });
   }
 }

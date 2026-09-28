@@ -86,6 +86,19 @@ export function SettlementIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+const DRAG_HANDLE_DOT_ROWS = [7.5, 12, 16.5];
+const DRAG_HANDLE_DOT_COLS = [9, 15];
+
+export function DragHandleIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true" {...props}>
+      {DRAG_HANDLE_DOT_ROWS.map((y) =>
+        DRAG_HANDLE_DOT_COLS.map((x) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.4" />)
+      )}
+    </svg>
+  );
+}
+
 const GEAR_TICK_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
 
 export function SettingsIcon(props: SVGProps<SVGSVGElement>) {

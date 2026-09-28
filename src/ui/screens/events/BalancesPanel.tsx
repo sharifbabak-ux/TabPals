@@ -1,22 +1,23 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/data/db";
-import { computeBalances } from "@/domain/balanceEngine";
+import { computeBalanceBreakdown } from "@/domain/balanceEngine";
 import { formatAmount } from "@/domain/format";
 import { Avatar } from "@/ui/components/Avatar";
 
 interface MemberOption {
   personId: string;
   name: string;
+  photo?: Blob;
 }
 
 interface BalancesPanelProps {
   eventId: string;
   members: MemberOption[];
-  currencyLabel: string;
+  currency: string;
 }
 
-/** Temporary simple balances panel — the full dashboard arrives in Stage 3 (docs/PLAN.md #7). */
-export function BalancesPanel({ eventId, members, currencyLabel }: BalancesPanelProps) {
+/** Per-member balance breakdown (docs/PLAN.md Stage 3A UI #10) — fund money (contributions/settlements) is kept separate from expense shares. */
+export function BalancesPanel({ eventId, members, currency }: BalancesPanelProps) {
   const vouchers = useLiveQuery(
     () =>
       db.vouchers
@@ -29,7 +30,7 @@ export function BalancesPanel({ eventId, members, currencyLabel }: BalancesPanel
 
   if (!vouchers || members.length === 0) return null;
 
-  const balances = computeBalances(
+  const breakdown = computeBalanceBreakdown(
     members.map((m) => m.personId),
     vouchers.map((v) => ({
       type: v.type,
@@ -45,29 +46,32 @@ export function BalancesPanel({ eventId, members, currencyLabel }: BalancesPanel
   return (
     <div className="balances-panel">
       <h2 className="section-title">تراز افراد</h2>
-      {balances.map((balance) => {
-        const name = members.find((m) => m.personId === balance.personId)?.name ?? "؟";
+      {breakdown.map((row) => {
+        const member = members.find((m) => m.personId === row.personId);
+        const name = member?.name ?? "؟";
         const balanceClass =
-          balance.balance > 0 ? "balance-row__balance--positive" : balance.balance < 0 ? "balance-row__balance--negative" : "balance-row__balance--zero";
+          row.balance > 0 ? "balance-row__balance--positive" : row.balance < 0 ? "balance-row__balance--negative" : "balance-row__balance--zero";
         const chipClass =
-          balance.balance > 0 ? "balance-chip balance-chip--creditor" : balance.balance < 0 ? "balance-chip balance-chip--debtor" : "balance-chip";
+          row.balance > 0 ? "balance-chip balance-chip--creditor" : row.balance < 0 ? "balance-chip balance-chip--debtor" : "balance-chip";
         return (
-          <div className="balance-row" key={balance.personId}>
-            <Avatar id={balance.personId} name={name} />
+          <div className="balance-row" key={row.personId}>
+            <Avatar id={row.personId} name={name} photo={member?.photo} />
             <div className="balance-row__main">
               <div className="balance-row__name">{name}</div>
-              <div className="balance-row__amounts">
-                <span>پرداخت: {formatAmount(balance.totalPaid)}</span>
-                <span>سهم: {formatAmount(balance.totalShare)}</span>
+              <div className="balance-row__breakdown">
+                {row.expensePaid > 0 && <span>پرداخت هزینه: {formatAmount(row.expensePaid)}</span>}
+                {row.expenseShare > 0 && <span>سهم از هزینه‌ها: {formatAmount(row.expenseShare)}</span>}
+                {row.contributedToFund > 0 && <span>واریز به صندوق: {formatAmount(row.contributedToFund)}</span>}
+                {row.receivedAsTreasurer > 0 && <span>دریافتی به‌عنوان مسئول صندوق: {formatAmount(row.receivedAsTreasurer)}</span>}
+                {row.settlementsPaid > 0 && <span>تسویه پرداختی: {formatAmount(row.settlementsPaid)}</span>}
+                {row.settlementsReceived > 0 && <span>تسویه دریافتی: {formatAmount(row.settlementsReceived)}</span>}
               </div>
             </div>
             <div className="balance-row__end">
               <span className={balanceClass}>
-                {formatAmount(Math.abs(balance.balance))} {currencyLabel}
+                {formatAmount(Math.abs(row.balance))} {currency}
               </span>
-              {balance.balance !== 0 && (
-                <span className={chipClass}>{balance.balance > 0 ? "طلبکار" : "بدهکار"}</span>
-              )}
+              {row.balance !== 0 && <span className={chipClass}>{row.balance > 0 ? "طلبکار" : "بدهکار"}</span>}
             </div>
           </div>
         );

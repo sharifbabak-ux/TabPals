@@ -15,3 +15,11 @@
 Theme: system / light / dark, user-selectable. A dedicated visual design stage (2.5) follows Stage 2: cream/olive/gold palette, reversible via a git tag and isolated PR.
 
 Stages: 0 foundation, 1 people & events, 2 vouchers & calculation engine, 3 dashboard & settlement, 4 audit trail, 5 attachments & voice, 6 backup, 7 multi-user sync, 8 dormant online layer, 9 native Android APK & iOS project.
+
+Stage 3 is split into three parts:
+
+- **3A** (done): fixes and foundations needed before the rest of the dashboard can be built — person photos (square, center-cropped, resized/compressed via `src/platform`), drag-and-drop member ordering (`eventMembers.sortOrder`, balances panel follows this order), currency as a تومان/ریال enum (`events.currency`, migrated from the old free-text `currencyLabel`), a custom Jalali date picker and the "weekday + year/month/day, LTR-isolated" date format everywhere a date is shown, per-event treasurer (`treasurerPersonId`, optional card number/IBAN with Luhn/mod-97 validation, changes logged), the balances panel split into a full per-member breakdown (share of expenses, expense payments, fund contributions, treasurer receipts, settlements) instead of mixing fund money into "share", RTL-correct toggle switches, guiding sentences under each wizard step's title, and closed-event read-only rules: the repository layer rejects all member changes (add/import/add group/deactivate/reorder), treasurer changes, and voucher changes on a closed event — only reopening is allowed; vouchers stay fully viewable.
+- **3B**: per-member statements, the comprehensive event report, treasurer-hub settlement, and a closing-message template bank.
+- **3C**: PDF/image export and all send methods (share sheet, WhatsApp/Telegram text, SMS-with-link).
+
+Stage 6 note: backups must include person photos (Stage 3A added `persons.photo`) alongside the rest of each event's data.

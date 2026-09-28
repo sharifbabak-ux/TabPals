@@ -1,8 +1,10 @@
+import { useEffect, useState } from "react";
 import "./Avatar.css";
 
 interface AvatarProps {
   id: string;
   name: string;
+  photo?: Blob;
   size?: number;
 }
 
@@ -23,8 +25,32 @@ function paletteIndex(id: string): number {
   return hash % PALETTE_SIZE;
 }
 
-/** Circular initials avatar; background color is derived deterministically from the person's id. */
-export function Avatar({ id, name, size = 36 }: AvatarProps) {
+/** Circular avatar: shows the person's photo if present, else initials with a color derived deterministically from their id. */
+export function Avatar({ id, name, photo, size = 36 }: AvatarProps) {
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!photo) {
+      setPhotoUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(photo);
+    setPhotoUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photo]);
+
+  if (photoUrl) {
+    return (
+      <img
+        src={photoUrl}
+        alt=""
+        className="avatar avatar--photo"
+        style={{ width: size, height: size }}
+        aria-hidden="true"
+      />
+    );
+  }
+
   return (
     <span
       className={`avatar avatar--${paletteIndex(id)}`}

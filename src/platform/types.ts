@@ -51,6 +51,19 @@ export interface ShareService {
   shareText(text: string, title?: string): Promise<void>;
 }
 
+export type ImagePickSource = "camera" | "gallery";
+
+/**
+ * Picks an image (camera or gallery) for a person's avatar and returns it
+ * center-cropped to a square, resized to at most maxSize×maxSize, and
+ * compressed (WebP or JPEG, ~0.75 quality) — see CLAUDE.md Data rules and
+ * docs/PLAN.md Stage 3A UI #9. Cropping needs a canvas, so this stays in
+ * src/platform rather than src/domain. Returns null if the user cancels.
+ */
+export interface ImageService {
+  pickSquarePhoto(source: ImagePickSource, maxSize?: number, quality?: number): Promise<Blob | null>;
+}
+
 export interface SpeechRecognitionResult {
   transcript: string;
   isFinal: boolean;

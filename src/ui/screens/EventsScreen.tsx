@@ -2,10 +2,11 @@ import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate } from "react-router-dom";
 import { db } from "@/data/db";
-import { eventsRepository } from "@/data/repositories";
+import { eventMembersRepository, eventsRepository } from "@/data/repositories";
 import { isEventClosed } from "@/domain/eventStatus";
-import { formatJalaliDate, toPersianDigits } from "@/domain/format";
+import { toPersianDigits } from "@/domain/format";
 import { EmptyState } from "@/ui/components/EmptyState";
+import { JalaliDate } from "@/ui/components/JalaliDate";
 import { Logo } from "@/ui/components/Logo";
 import { Switch } from "@/ui/components/Switch";
 import { EventFormSheet } from "./events/EventFormSheet";
@@ -16,6 +17,7 @@ export function EventsScreen() {
   const [creating, setCreating] = useState(false);
 
   const events = useLiveQuery(() => db.events.filter((event) => !event.deleted).toArray(), []);
+  const persons = useLiveQuery(() => db.persons.filter((p) => !p.deleted && !p.archived).toArray(), []);
 
   const memberCounts = useLiveQuery(async () => {
     const members = await db.eventMembers.filter((member) => !member.deleted && member.active).toArray();
@@ -55,7 +57,11 @@ export function EventsScreen() {
           >
             <div className="list-item__main">
               <span className="list-item__title">{event.title}</span>
-              {event.startDate && <span className="list-item__subtitle">{formatJalaliDate(new Date(event.startDate))}</span>}
+              {event.startDate && (
+                <span className="list-item__subtitle">
+                  <JalaliDate date={new Date(event.startDate)} />
+                </span>
+              )}
             </div>
             <div className="list-item__meta">
               {isEventClosed(event, new Date()) && <span className="badge badge--closed">پایان‌یافته</span>}
@@ -67,9 +73,13 @@ export function EventsScreen() {
 
       <EventFormSheet
         open={creating}
+        treasurerOptions={(persons ?? []).map((p) => ({ id: p.id, name: p.name }))}
         onClose={() => setCreating(false)}
         onSubmit={async (input) => {
           const event = await eventsRepository.create(input);
+          if (input.treasurerPersonId) {
+            await eventMembersRepository.addMember(event.id, input.treasurerPersonId);
+          }
           setCreating(false);
           navigate(`/events/${event.id}`);
         }}

@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { BottomSheet } from "@/ui/components/BottomSheet";
+import { Avatar } from "@/ui/components/Avatar";
 import { validatePersonName } from "@/domain/personValidation";
+import { imageService } from "@/platform";
 import type { Person } from "@/data/types";
 import type { PersonInput } from "@/data/repositories/personsRepository";
 
@@ -19,6 +21,10 @@ export function PersonFormSheet({ open, person, existingNames, onClose, onSubmit
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
+  /** undefined = keep existing photo unchanged, null = remove it, Blob = newly picked. */
+  const [photo, setPhoto] = useState<Blob | null | undefined>(undefined);
+  const [pickingPhoto, setPickingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -27,11 +33,27 @@ export function PersonFormSheet({ open, person, existingNames, onClose, onSubmit
       setName(person?.name ?? "");
       setPhone(person?.phone ?? "");
       setNote(person?.note ?? "");
+      setPhoto(undefined);
+      setPhotoError(null);
       setSubmitError(null);
     }
   }, [open, person]);
 
   const validation = validatePersonName(name, existingNames);
+  const previewPhoto = photo === undefined ? person?.photo : photo === null ? undefined : photo;
+
+  async function pickPhoto(source: "camera" | "gallery") {
+    setPickingPhoto(true);
+    setPhotoError(null);
+    try {
+      const blob = await imageService.pickSquarePhoto(source);
+      if (blob) setPhoto(blob);
+    } catch (error) {
+      setPhotoError(error instanceof Error ? error.message : "خطایی رخ داد");
+    } finally {
+      setPickingPhoto(false);
+    }
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -39,7 +61,7 @@ export function PersonFormSheet({ open, person, existingNames, onClose, onSubmit
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await onSubmit({ name, phone, note });
+      await onSubmit({ name, phone, note, photo });
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "خطایی رخ داد");
     } finally {
@@ -50,6 +72,24 @@ export function PersonFormSheet({ open, person, existingNames, onClose, onSubmit
   return (
     <BottomSheet open={open} title={person ? "ویرایش شخص" : "شخص جدید"} onClose={onClose}>
       <form onSubmit={handleSubmit}>
+        <div className="person-photo-field">
+          <Avatar id={person?.id ?? "new-person"} name={name || "؟"} photo={previewPhoto} size={72} />
+          <div className="person-photo-field__actions">
+            <button type="button" disabled={pickingPhoto} onClick={() => pickPhoto("camera")}>
+              دوربین
+            </button>
+            <button type="button" disabled={pickingPhoto} onClick={() => pickPhoto("gallery")}>
+              گالری
+            </button>
+            {previewPhoto && (
+              <button type="button" className="person-photo-field__remove" onClick={() => setPhoto(null)}>
+                حذف عکس
+              </button>
+            )}
+          </div>
+        </div>
+        {photoError && <p className="field__error">{photoError}</p>}
+
         <div className="field">
           <label htmlFor="person-name">نام</label>
           <input id="person-name" value={name} onChange={(event) => setName(event.target.value)} autoFocus />

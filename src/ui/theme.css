@@ -178,19 +178,22 @@ textarea {
   position: absolute;
   height: 18px;
   width: 18px;
-  left: 3px;
+  inset-inline-start: 3px;
   top: 3px;
   background: var(--color-surface);
   border-radius: 50%;
-  transition: transform 0.15s ease;
+  transition: inset-inline-start 0.15s ease;
 }
 
 .switch input:checked + .switch__track {
   background: var(--color-primary);
 }
 
+/* Animating inset-inline-start (a logical property) instead of a fixed
+   translateX keeps the knob's "off"/"on" resting positions correct and
+   inside the track in both RTL and LTR, without a direction lookup. */
 .switch input:checked + .switch__track::before {
-  transform: translateX(-16px);
+  inset-inline-start: 19px;
 }
 
 /* Segmented tabs (اشخاص | گروه‌ها, theme selector) ------------------------ */
@@ -336,6 +339,34 @@ textarea {
 
 /* Forms ----------------------------------------------------------------- */
 
+.person-photo-field {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.person-photo-field__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1;
+}
+
+.person-photo-field__actions button {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.person-photo-field__remove {
+  color: var(--color-debtor);
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -479,6 +510,62 @@ textarea {
   cursor: pointer;
 }
 
+.action-grid button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.event-detail__closed-note {
+  margin: -4px 0 12px;
+}
+
+/* Member rows (drag-and-drop ordering, Stage 3A UI #5) -------------------- */
+
+.member-row {
+  cursor: default;
+  flex-wrap: wrap;
+}
+
+.member-row .list-item__meta {
+  flex-shrink: 1;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.member-row .list-item__main {
+  flex-basis: 60px;
+}
+
+.member-row__handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  border-radius: 8px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.member-row__handle:active {
+  cursor: grabbing;
+}
+
+.member-row__handle--muted {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.badge--treasurer {
+  color: var(--color-accent-contrast);
+  background: color-mix(in srgb, var(--color-accent) 25%, var(--color-surface));
+  border-color: var(--color-accent);
+}
+
 .event-detail__dates {
   color: var(--color-text-muted);
   font-size: 0.9rem;
@@ -514,6 +601,13 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.wizard-step__guidance {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  text-align: center;
+  margin: -6px 0 4px;
 }
 
 .wizard-step__question {
@@ -644,6 +738,14 @@ textarea {
   display: flex;
   gap: 12px;
   font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.balance-row__breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.76rem;
   color: var(--color-text-muted);
 }
 

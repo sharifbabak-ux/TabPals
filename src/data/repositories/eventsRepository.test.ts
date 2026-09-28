@@ -8,17 +8,57 @@ beforeEach(async () => {
 });
 
 describe("eventsRepository", () => {
-  it("creates an event with default currencyLabel and no close/reopen state", async () => {
+  it("creates an event with default currency and no close/reopen state", async () => {
     const event = await eventsRepository.create({ title: "سفر شمال" });
-    expect(event.currencyLabel).toBe("تومان");
+    expect(event.currency).toBe("تومان");
+    expect(event.treasurerPersonId).toBeNull();
     expect(event.closedAt).toBeNull();
     expect(event.reopenedAt).toBeNull();
     expect(event.reopenReason).toBeNull();
   });
 
-  it("accepts a custom currency label", async () => {
-    const event = await eventsRepository.create({ title: "سفر", currencyLabel: "دلار" });
-    expect(event.currencyLabel).toBe("دلار");
+  it("accepts ریال as the currency", async () => {
+    const event = await eventsRepository.create({ title: "سفر", currency: "ریال" });
+    expect(event.currency).toBe("ریال");
+  });
+
+  it("falls back to تومان for an invalid currency value", async () => {
+    const event = await eventsRepository.create({ title: "سفر", currency: "دلار" as never });
+    expect(event.currency).toBe("تومان");
+  });
+
+  it("sets the treasurer and logs the change", async () => {
+    const event = await eventsRepository.create({ title: "سفر", treasurerPersonId: "p1" });
+    expect(event.treasurerPersonId).toBe("p1");
+
+    await eventsRepository.update(event.id, { treasurerPersonId: "p2" });
+    const updated = await db.events.get(event.id);
+    expect(updated?.treasurerPersonId).toBe("p2");
+
+    const ops = await db.operations
+      .where("entityId")
+      .equals(event.id)
+      .filter((o) => o.type === "update" && "treasurerPersonId" in o.changes)
+      .toArray();
+    expect(ops).toHaveLength(1);
+    expect(ops[0].changes.treasurerPersonId).toEqual({ before: "p1", after: "p2" });
+  });
+
+  it("rejects an invalid treasurer card number or IBAN", async () => {
+    await expect(eventsRepository.create({ title: "سفر", treasurerCardNumber: "12345" })).rejects.toThrow();
+    await expect(eventsRepository.create({ title: "سفر", treasurerIban: "IR123" })).rejects.toThrow();
+  });
+
+  it("blocks changing the treasurer on a closed event", async () => {
+    const event = await eventsRepository.create({ title: "سفر", treasurerPersonId: "p1" });
+    await eventsRepository.close(event.id);
+    await expect(eventsRepository.update(event.id, { treasurerPersonId: "p2" })).rejects.toThrow();
+  });
+
+  it("still allows editing the title on a closed event", async () => {
+    const event = await eventsRepository.create({ title: "سفر" });
+    await eventsRepository.close(event.id);
+    await expect(eventsRepository.update(event.id, { title: "سفر ۲" })).resolves.toBeUndefined();
   });
 
   it("closes an event and logs a close operation", async () => {

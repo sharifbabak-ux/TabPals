@@ -65,3 +65,68 @@ export function computeBalances(memberPersonIds: string[], vouchers: BalanceVouc
     return { personId, totalPaid, totalShare, balance: totalPaid - totalShare };
   });
 }
+
+/**
+ * Full per-member breakdown (docs/PLAN.md Stage 3A UI #10): splits the
+ * same paid/share totals above by voucher type so the balances panel can
+ * show "share of expenses" separately from fund money in and out, instead
+ * of mixing them into one "share" figure.
+ *
+ * `balance` here always equals `computeBalances`'s balance for the same
+ * member id and voucher list — this is additive, not a replacement.
+ */
+export interface MemberBalanceBreakdown {
+  personId: string;
+  expensePaid: number;
+  expenseShare: number;
+  contributedToFund: number;
+  receivedAsTreasurer: number;
+  settlementsPaid: number;
+  settlementsReceived: number;
+  balance: number;
+}
+
+export function computeBalanceBreakdown(memberPersonIds: string[], vouchers: BalanceVoucher[]): MemberBalanceBreakdown[] {
+  const totals = new Map<
+    string,
+    Omit<MemberBalanceBreakdown, "personId" | "balance">
+  >(
+    memberPersonIds.map((id) => [
+      id,
+      { expensePaid: 0, expenseShare: 0, contributedToFund: 0, receivedAsTreasurer: 0, settlementsPaid: 0, settlementsReceived: 0 }
+    ])
+  );
+
+  const add = (personId: string, field: keyof Omit<MemberBalanceBreakdown, "personId" | "balance">, amount: number) => {
+    const row = totals.get(personId);
+    if (!row) return;
+    row[field] += amount;
+  };
+
+  for (const voucher of vouchers) {
+    if (voucher.status !== "active") continue;
+
+    if (voucher.type === "expense") {
+      for (const payer of voucher.payers ?? []) add(payer.personId, "expensePaid", payer.amount);
+      for (const s of voucher.shares ?? []) add(s.personId, "expenseShare", s.share);
+    } else if (voucher.type === "contribution") {
+      if (voucher.fromPersonId) add(voucher.fromPersonId, "contributedToFund", voucher.totalAmount);
+      if (voucher.toPersonId) add(voucher.toPersonId, "receivedAsTreasurer", voucher.totalAmount);
+    } else {
+      if (voucher.fromPersonId) add(voucher.fromPersonId, "settlementsPaid", voucher.totalAmount);
+      if (voucher.toPersonId) add(voucher.toPersonId, "settlementsReceived", voucher.totalAmount);
+    }
+  }
+
+  return memberPersonIds.map((personId) => {
+    const row = totals.get(personId)!;
+    const balance =
+      row.expensePaid -
+      row.expenseShare +
+      row.contributedToFund -
+      row.receivedAsTreasurer +
+      row.settlementsPaid -
+      row.settlementsReceived;
+    return { personId, ...row, balance };
+  });
+}

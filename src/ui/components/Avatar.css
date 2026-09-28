@@ -9,6 +9,10 @@
   line-height: 1;
 }
 
+.avatar--photo {
+  object-fit: cover;
+}
+
 .avatar--0 {
   background: var(--avatar-0);
 }

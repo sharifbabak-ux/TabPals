@@ -33,7 +33,12 @@ export interface Person extends BaseRecord {
   phone?: string;
   note?: string;
   archived: boolean;
+  /** Square avatar image, max 256x256, WebP or JPEG ~0.75 quality (see src/platform image service). */
+  photo?: Blob;
 }
+
+/** The two currencies TabPals events can be tracked in. */
+export type EventCurrency = "تومان" | "ریال";
 
 /** A gathering/trip whose expenses are tracked together. */
 export interface Event extends BaseRecord {
@@ -44,8 +49,13 @@ export interface Event extends BaseRecord {
   endDate?: string;
   description?: string;
   archived: boolean;
-  /** Label shown next to amounts for this event, e.g. "تومان". */
-  currencyLabel: string;
+  currency: EventCurrency;
+  /** Person id of the treasurer holding contributed funds. Required for new events; null on events created before Stage 3A until set. */
+  treasurerPersonId: string | null;
+  /** Normalized 16-digit card number, optional. */
+  treasurerCardNumber?: string;
+  /** Normalized "IR" + 24-digit IBAN, optional. */
+  treasurerIban?: string;
   /** ISO timestamp of the last manual close, or null if not manually closed. */
   closedAt: string | null;
   /** ISO timestamp of the last manual reopen, or null if never reopened. */
@@ -64,6 +74,8 @@ export interface EventMember extends BaseRecord {
   personId: string;
   defaultWeight: number;
   active: boolean;
+  /** Position in the manually-ordered members list (drag-and-drop, Stage 3A). Lower sorts first. */
+  sortOrder: number;
 }
 
 /** A saved, reusable set of persons (e.g. "family") for one-tap add to an event. */

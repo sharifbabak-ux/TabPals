@@ -1,6 +1,6 @@
 {
   "name": "tabpal",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,6 +12,9 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@fontsource/fraunces": "^5.1.1",
     "@fontsource/vazirmatn": "^5.1.0",
     "dexie": "^4.0.10",

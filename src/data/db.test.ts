@@ -68,6 +68,7 @@ describe("TabPalDB schema v1 -> v2 migration", () => {
       personId: "p1",
       defaultWeight: 1,
       active: true,
+      sortOrder: 0,
       createdAt: "2025-01-01T00:00:00.000Z",
       updatedAt: "2025-01-01T00:00:00.000Z",
       deviceId: "device-1",
@@ -114,7 +115,7 @@ describe("TabPalDB schema v2 -> v3 migration", () => {
     await upgraded.open();
 
     const event = await upgraded.events.get("e1");
-    expect(event?.currencyLabel).toBe("تومان");
+    expect(event?.currency).toBe("تومان");
     expect(event?.closedAt).toBeNull();
     expect(event?.reopenedAt).toBeNull();
     expect(event?.reopenReason).toBeNull();
@@ -147,6 +148,73 @@ describe("TabPalDB schema v2 -> v3 migration", () => {
     };
     await upgraded.vouchers.add({ ...base, id: "v1", number: 1 });
     await expect(upgraded.vouchers.add({ ...base, id: "v2", number: 1 })).rejects.toThrow();
+
+    upgraded.close();
+  });
+});
+
+describe("TabPalDB schema v3 -> v4 migration", () => {
+  class V3DB extends Dexie {
+    events!: Dexie.Table<Record<string, unknown>, string>;
+    eventMembers!: Dexie.Table<Record<string, unknown>, string>;
+    constructor(name: string) {
+      super(name);
+      this.version(3).stores({
+        meta: "key",
+        persons: "id, name, archived, deleted",
+        events: "id, archived, deleted, startDate, closedAt",
+        eventMembers: "id, eventId, personId, &[eventId+personId], active, deleted",
+        groups: "id, name, archived, deleted",
+        vouchers: "id, eventId, &[eventId+number], type, status, deleted, recordedAt",
+        operations: "id, entity, entityId, timestamp"
+      });
+    }
+  }
+
+  const baseFields = {
+    createdAt: "2025-01-01T00:00:00.000Z",
+    updatedAt: "2025-01-01T00:00:00.000Z",
+    deviceId: "device-1",
+    version: 1,
+    deleted: false
+  };
+
+  it("converts currencyLabel into the currency enum, defaulting unknown labels to تومان", async () => {
+    const legacy = new V3DB(TEST_DB_NAME);
+    await legacy.events.bulkPut([
+      { id: "e1", title: "سفر شمال", archived: false, currencyLabel: "ریال", closedAt: null, reopenedAt: null, reopenReason: null, ...baseFields },
+      { id: "e2", title: "سفر جنوب", archived: false, currencyLabel: "دلار", closedAt: null, reopenedAt: null, reopenReason: null, ...baseFields },
+      { id: "e3", title: "سفر غرب", archived: false, currencyLabel: "تومان", closedAt: null, reopenedAt: null, reopenReason: null, ...baseFields }
+    ]);
+    legacy.close();
+
+    const upgraded = new TabPalDB(TEST_DB_NAME);
+    await upgraded.open();
+
+    expect((await upgraded.events.get("e1"))?.currency).toBe("ریال");
+    expect((await upgraded.events.get("e2"))?.currency).toBe("تومان");
+    expect((await upgraded.events.get("e3"))?.currency).toBe("تومان");
+    expect((await upgraded.events.get("e1")) as unknown as { currencyLabel?: string }).not.toHaveProperty("currencyLabel");
+    expect((await upgraded.events.get("e1"))?.treasurerPersonId).toBeNull();
+
+    upgraded.close();
+  });
+
+  it("assigns sortOrder to existing eventMembers by creation order, per event", async () => {
+    const legacy = new V3DB(TEST_DB_NAME);
+    await legacy.eventMembers.bulkPut([
+      { id: "m2", eventId: "e1", personId: "p2", defaultWeight: 1, active: true, ...baseFields, createdAt: "2025-01-02T00:00:00.000Z" },
+      { id: "m1", eventId: "e1", personId: "p1", defaultWeight: 1, active: true, ...baseFields, createdAt: "2025-01-01T00:00:00.000Z" },
+      { id: "m3", eventId: "e2", personId: "p3", defaultWeight: 1, active: true, ...baseFields, createdAt: "2025-01-01T00:00:00.000Z" }
+    ]);
+    legacy.close();
+
+    const upgraded = new TabPalDB(TEST_DB_NAME);
+    await upgraded.open();
+
+    expect((await upgraded.eventMembers.get("m1"))?.sortOrder).toBe(0);
+    expect((await upgraded.eventMembers.get("m2"))?.sortOrder).toBe(1);
+    expect((await upgraded.eventMembers.get("m3"))?.sortOrder).toBe(0);
 
     upgraded.close();
   });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeBalances, type BalanceVoucher } from "./balanceEngine";
+import { computeBalanceBreakdown, computeBalances, type BalanceVoucher } from "./balanceEngine";
 
 describe("computeBalances", () => {
   it("credits a single payer and debits participants for an expense split equally", () => {
@@ -129,5 +129,92 @@ describe("computeBalances", () => {
     const balances = computeBalances(["p1", "p2", "p3", "treasurer"], vouchers);
     const sum = balances.reduce((total, b) => total + b.balance, 0);
     expect(sum).toBe(0);
+  });
+});
+
+describe("computeBalanceBreakdown", () => {
+  const mixedVouchers: BalanceVoucher[] = [
+    {
+      type: "expense",
+      status: "active",
+      totalAmount: 100,
+      payers: [{ personId: "p1", amount: 100 }],
+      shares: [
+        { personId: "p1", share: 50 },
+        { personId: "p2", share: 50 }
+      ]
+    },
+    { type: "contribution", status: "active", totalAmount: 500, fromPersonId: "p1", toPersonId: "treasurer" },
+    { type: "settlement", status: "active", totalAmount: 40, fromPersonId: "p2", toPersonId: "p1" },
+    {
+      type: "expense",
+      status: "void",
+      totalAmount: 9999,
+      payers: [{ personId: "p1", amount: 9999 }],
+      shares: [{ personId: "p1", share: 9999 }]
+    }
+  ];
+
+  it("splits paid/share totals per voucher type", () => {
+    const breakdown = computeBalanceBreakdown(["p1", "p2", "treasurer"], mixedVouchers);
+
+    expect(breakdown.find((b) => b.personId === "p1")).toEqual({
+      personId: "p1",
+      expensePaid: 100,
+      expenseShare: 50,
+      contributedToFund: 500,
+      receivedAsTreasurer: 0,
+      settlementsPaid: 0,
+      settlementsReceived: 40,
+      balance: 100 - 50 + 500 - 0 + 0 - 40
+    });
+
+    expect(breakdown.find((b) => b.personId === "p2")).toEqual({
+      personId: "p2",
+      expensePaid: 0,
+      expenseShare: 50,
+      contributedToFund: 0,
+      receivedAsTreasurer: 0,
+      settlementsPaid: 40,
+      settlementsReceived: 0,
+      balance: 0 - 50 + 0 - 0 + 40 - 0
+    });
+
+    expect(breakdown.find((b) => b.personId === "treasurer")).toEqual({
+      personId: "treasurer",
+      expensePaid: 0,
+      expenseShare: 0,
+      contributedToFund: 0,
+      receivedAsTreasurer: 500,
+      settlementsPaid: 0,
+      settlementsReceived: 0,
+      balance: -500
+    });
+  });
+
+  it("agrees with computeBalances on the overall balance", () => {
+    const memberIds = ["p1", "p2", "treasurer"];
+    const simple = computeBalances(memberIds, mixedVouchers);
+    const breakdown = computeBalanceBreakdown(memberIds, mixedVouchers);
+    for (const memberId of memberIds) {
+      expect(breakdown.find((b) => b.personId === memberId)!.balance).toBe(
+        simple.find((b) => b.personId === memberId)!.balance
+      );
+    }
+  });
+
+  it("keeps zero totals for members with no vouchers", () => {
+    expect(computeBalanceBreakdown(["p1"], [])).toEqual([
+      {
+        personId: "p1",
+        expensePaid: 0,
+        expenseShare: 0,
+        contributedToFund: 0,
+        receivedAsTreasurer: 0,
+        settlementsPaid: 0,
+        settlementsReceived: 0,
+        balance: 0
+      }
+    ]);
   });
 });
