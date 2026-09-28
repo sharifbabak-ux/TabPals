@@ -1,8 +1,12 @@
+import { PersonsSection } from "./people/PersonsSection";
+import { GroupsSection } from "./people/GroupsSection";
+
 export function PeopleScreen() {
   return (
-    <section className="screen">
-      <h1>اشخاص</h1>
-      <p>این بخش در مرحله‌ی بعد تکمیل می‌شود.</p>
-    </section>
+    <div className="screen">
+      <PersonsSection />
+      <hr className="section-divider" />
+      <GroupsSection />
+    </div>
   );
 }

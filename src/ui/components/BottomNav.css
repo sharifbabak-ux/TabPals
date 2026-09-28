@@ -22,7 +22,7 @@
 }
 
 .bottom-nav__icon {
-  font-size: 1.25rem;
+  display: flex;
   line-height: 1;
 }
 
