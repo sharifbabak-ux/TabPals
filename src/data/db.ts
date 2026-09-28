@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from "dexie";
+import type { Event, EventMember, Group, Operation, Person } from "./types";
 
 /**
  * Simple key/value table for app-level settings that aren't accounting
@@ -14,12 +15,29 @@ export interface MetaRecord {
 
 export class TabPalDB extends Dexie {
   meta!: EntityTable<MetaRecord, "key">;
+  persons!: EntityTable<Person, "id">;
+  events!: EntityTable<Event, "id">;
+  eventMembers!: EntityTable<EventMember, "id">;
+  groups!: EntityTable<Group, "id">;
+  operations!: EntityTable<Operation, "id">;
 
-  constructor() {
-    super("tabpal");
+  constructor(name = "tabpal") {
+    super(name);
 
     this.version(1).stores({
       meta: "key"
+    });
+
+    // Stage 1 — People & Events. Purely additive: new empty tables, the
+    // existing meta store is untouched, so Dexie preserves all existing
+    // data with no upgrade() function needed.
+    this.version(2).stores({
+      meta: "key",
+      persons: "id, name, archived, deleted",
+      events: "id, archived, deleted, startDate",
+      eventMembers: "id, eventId, personId, &[eventId+personId], active, deleted",
+      groups: "id, name, archived, deleted",
+      operations: "id, entity, entityId, timestamp"
     });
   }
 }
