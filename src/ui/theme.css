@@ -11,7 +11,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --color-bg: #0f172a;
     --color-surface: #1e293b;
     --color-text: #f1f5f9;
@@ -20,6 +20,27 @@
     --color-primary: #818cf8;
     --color-primary-contrast: #0f172a;
   }
+}
+
+/* Explicit "روشن"/"تیره" choice from Settings overrides the system preference. */
+:root[data-theme="light"] {
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-text: #0f172a;
+  --color-text-muted: #64748b;
+  --color-border: #e2e8f0;
+  --color-primary: #4f46e5;
+  --color-primary-contrast: #ffffff;
+}
+
+:root[data-theme="dark"] {
+  --color-bg: #0f172a;
+  --color-surface: #1e293b;
+  --color-text: #f1f5f9;
+  --color-text-muted: #94a3b8;
+  --color-border: #334155;
+  --color-primary: #818cf8;
+  --color-primary-contrast: #0f172a;
 }
 
 * {
@@ -131,6 +152,89 @@ textarea {
   height: 18px;
 }
 
+/* Toggle switch (replaces plain checkboxes for "show archived" etc.) --- */
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.switch__track {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: var(--color-border);
+  border-radius: 999px;
+  transition: background-color 0.15s ease;
+}
+
+.switch__track::before {
+  content: "";
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  top: 3px;
+  background: var(--color-surface);
+  border-radius: 50%;
+  transition: transform 0.15s ease;
+}
+
+.switch input:checked + .switch__track {
+  background: var(--color-primary);
+}
+
+.switch input:checked + .switch__track::before {
+  transform: translateX(-16px);
+}
+
+/* Segmented tabs (اشخاص | گروه‌ها, theme selector) ------------------------ */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 16px;
+}
+
+.tabs__tab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  border-radius: 9px;
+  padding: 9px 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.tabs__tab--active {
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+/* Badges for event/voucher state -------------------------------------- */
+
+.badge--closed {
+  color: #b45309;
+  background: rgba(217, 119, 6, 0.12);
+  border-color: rgba(217, 119, 6, 0.3);
+}
+
 /* Lists --------------------------------------------------------------- */
 
 .list {
@@ -229,7 +333,8 @@ textarea {
 }
 
 .field input,
-.field textarea {
+.field textarea,
+.field select {
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid var(--color-border);
@@ -362,6 +467,224 @@ textarea {
   border: none;
   border-top: 1px solid var(--color-border);
   margin: 24px 0;
+}
+
+/* Amount input (new expense flow) -------------------------------------- */
+
+.amount-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 1rem;
+  text-align: center;
+}
+
+.amount-input--large {
+  font-size: 2.2rem;
+  font-weight: 700;
+  padding: 20px 12px;
+}
+
+.wizard-step {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.wizard-step__question {
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: center;
+  margin: 8px 0 0;
+}
+
+.wizard-step__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.wizard-step__actions button {
+  flex: 1;
+  border: none;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.wizard-step__actions button.wizard-step__actions--primary {
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+  border: none;
+  font-weight: 600;
+}
+
+.split-mode-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.split-mode-tabs button {
+  flex: 1;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.split-mode-tabs button.split-mode-tabs__tab--active {
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+  border-color: var(--color-primary);
+  font-weight: 600;
+}
+
+.split-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.split-row__name {
+  flex: 1;
+}
+
+.split-row input {
+  width: 90px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  text-align: center;
+}
+
+.split-summary {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.split-summary__row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+
+.split-summary__total {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 700;
+  border-top: 1px solid var(--color-border);
+  margin-top: 6px;
+  padding-top: 6px;
+}
+
+.balances-panel {
+  margin-top: 20px;
+}
+
+.balance-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  margin-bottom: 8px;
+}
+
+.balance-row__amounts {
+  display: flex;
+  gap: 12px;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.balance-row__balance--positive {
+  color: #16a34a;
+  font-weight: 700;
+}
+
+.balance-row__balance--negative {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.balance-row__balance--zero {
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.voucher-row__amount {
+  font-weight: 700;
+}
+
+.voucher-detail__field {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.voucher-detail__field span:first-child {
+  color: var(--color-text-muted);
+}
+
+.event-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.event-status-bar button {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.field textarea.reason-textarea {
+  min-height: 70px;
+  resize: vertical;
+}
+
+/* Archive action moved from list-row buttons into the edit sheet ------- */
+
+.sheet__danger-zone {
+  border-top: 1px solid var(--color-border);
+  margin-top: 16px;
+  padding-top: 16px;
+}
+
+.sheet__archive-button {
+  width: 100%;
+  background: none;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  border-radius: 10px;
+  padding: 11px;
+  font-size: 0.9rem;
+  cursor: pointer;
 }
 
 .back-link {

@@ -61,4 +61,26 @@ describe("personsRepository", () => {
     const ops = await db.operations.where("entityId").equals(person.id).toArray();
     expect(ops).toHaveLength(1);
   });
+
+  it("blocks creating a person with a name that normalizes to an existing non-archived person's name", async () => {
+    await personsRepository.create({ name: "علی رضایی" });
+    await expect(personsRepository.create({ name: "علي رضايي" })).rejects.toThrow();
+  });
+
+  it("allows creating a person whose name matches an archived person's name", async () => {
+    const person = await personsRepository.create({ name: "Ali" });
+    await personsRepository.setArchived(person.id, true);
+    await expect(personsRepository.create({ name: "Ali" })).resolves.toBeTruthy();
+  });
+
+  it("blocks renaming a person to another existing person's name", async () => {
+    await personsRepository.create({ name: "Ali" });
+    const sara = await personsRepository.create({ name: "Sara" });
+    await expect(personsRepository.update(sara.id, { name: "Ali" })).rejects.toThrow();
+  });
+
+  it("allows renaming a person to their own unchanged name", async () => {
+    const person = await personsRepository.create({ name: "Ali" });
+    await expect(personsRepository.update(person.id, { name: "Ali", phone: "0912" })).resolves.toBeUndefined();
+  });
 });

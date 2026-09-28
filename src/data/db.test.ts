@@ -80,3 +80,74 @@ describe("TabPalDB schema v1 -> v2 migration", () => {
     upgraded.close();
   });
 });
+
+describe("TabPalDB schema v2 -> v3 migration", () => {
+  it("backfills currencyLabel/closedAt/reopenedAt/reopenReason on existing v2 events", async () => {
+    class V2DB extends Dexie {
+      events!: Dexie.Table<Record<string, unknown>, string>;
+      constructor() {
+        super(TEST_DB_NAME);
+        this.version(2).stores({
+          meta: "key",
+          persons: "id, name, archived, deleted",
+          events: "id, archived, deleted, startDate",
+          eventMembers: "id, eventId, personId, &[eventId+personId], active, deleted",
+          groups: "id, name, archived, deleted",
+          operations: "id, entity, entityId, timestamp"
+        });
+      }
+    }
+    const legacy = new V2DB();
+    await legacy.events.put({
+      id: "e1",
+      title: "سفر شمال",
+      archived: false,
+      createdAt: "2025-01-01T00:00:00.000Z",
+      updatedAt: "2025-01-01T00:00:00.000Z",
+      deviceId: "device-1",
+      version: 1,
+      deleted: false
+    });
+    legacy.close();
+
+    const upgraded = new TabPalDB(TEST_DB_NAME);
+    await upgraded.open();
+
+    const event = await upgraded.events.get("e1");
+    expect(event?.currencyLabel).toBe("تومان");
+    expect(event?.closedAt).toBeNull();
+    expect(event?.reopenedAt).toBeNull();
+    expect(event?.reopenReason).toBeNull();
+
+    upgraded.close();
+  });
+
+  it("adds an empty, immediately usable vouchers table with a per-event unique voucher number", async () => {
+    const upgraded = new TabPalDB(TEST_DB_NAME);
+    await upgraded.open();
+
+    expect(await upgraded.vouchers.count()).toBe(0);
+
+    const base = {
+      eventId: "e1",
+      type: "expense" as const,
+      recordedAt: "2025-01-01T00:00:00.000Z",
+      expenseDate: "2025-01-01",
+      description: "شام",
+      totalAmount: 100,
+      payers: [{ personId: "p1", amount: 100 }],
+      participants: [{ personId: "p1", weight: 1 }],
+      shares: [{ personId: "p1", share: 100 }],
+      status: "active" as const,
+      createdAt: "2025-01-01T00:00:00.000Z",
+      updatedAt: "2025-01-01T00:00:00.000Z",
+      deviceId: "device-1",
+      version: 1,
+      deleted: false
+    };
+    await upgraded.vouchers.add({ ...base, id: "v1", number: 1 });
+    await expect(upgraded.vouchers.add({ ...base, id: "v2", number: 1 })).rejects.toThrow();
+
+    upgraded.close();
+  });
+});

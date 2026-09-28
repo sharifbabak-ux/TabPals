@@ -3,8 +3,10 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate } from "react-router-dom";
 import { db } from "@/data/db";
 import { eventsRepository } from "@/data/repositories";
+import { isEventClosed } from "@/domain/eventStatus";
 import { formatJalaliDate, toPersianDigits } from "@/domain/format";
 import { EmptyState } from "@/ui/components/EmptyState";
+import { Switch } from "@/ui/components/Switch";
 import { EventFormSheet } from "./events/EventFormSheet";
 
 export function EventsScreen() {
@@ -39,10 +41,7 @@ export function EventsScreen() {
         </button>
       </div>
 
-      <label className="toggle-row">
-        <span>نمایش آرشیو شده‌ها</span>
-        <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} />
-      </label>
+      <Switch checked={showArchived} onChange={setShowArchived} label="نمایش آرشیو شده‌ها" />
 
       {filtered && filtered.length === 0 && <EmptyState hint="هنوز ایونتی نساخته‌اید. با دکمه‌ی + شروع کنید." />}
 
@@ -58,6 +57,7 @@ export function EventsScreen() {
               {event.startDate && <span className="list-item__subtitle">{formatJalaliDate(new Date(event.startDate))}</span>}
             </div>
             <div className="list-item__meta">
+              {isEventClosed(event, new Date()) && <span className="badge badge--closed">پایان‌یافته</span>}
               <span className="badge">{toPersianDigits(memberCounts?.get(event.id) ?? 0)} نفر</span>
             </div>
           </li>

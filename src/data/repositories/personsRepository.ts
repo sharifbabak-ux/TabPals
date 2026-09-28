@@ -1,3 +1,4 @@
+import { normalizeName } from "@/domain/nameNormalization";
 import { db } from "../db";
 import type { Person } from "../types";
 import { diffFields, logOperation, newBaseFields, touchBaseFields } from "./operationLog";
@@ -16,9 +17,20 @@ function normalize(input: Partial<PersonInput>): Partial<PersonInput> {
   return result;
 }
 
+/** Blocks creating/renaming a person whose normalized name matches an existing non-archived one (see CLAUDE.md). */
+async function assertNameAvailable(name: string, excludePersonId?: string): Promise<void> {
+  const target = normalizeName(name);
+  const others = await db.persons.filter((p) => !p.deleted && !p.archived && p.id !== excludePersonId).toArray();
+  const clash = others.find((p) => normalizeName(p.name) === target);
+  if (clash) {
+    throw new Error(`شخص دیگری با نام «${clash.name}» وجود دارد. یک ویژگی متمایزکننده اضافه کنید، مثلاً «${name} (کرج)».`);
+  }
+}
+
 export const personsRepository = {
   async create(input: PersonInput): Promise<Person> {
     const normalized = normalize(input) as PersonInput;
+    await assertNameAvailable(normalized.name);
     const person: Person = {
       ...newBaseFields(),
       name: normalized.name,
@@ -35,6 +47,9 @@ export const personsRepository = {
 
   async update(id: string, changes: Partial<PersonInput>): Promise<void> {
     const normalized = normalize(changes);
+    if (normalized.name !== undefined) {
+      await assertNameAvailable(normalized.name, id);
+    }
     await db.transaction("rw", db.persons, db.operations, async () => {
       const existing = await db.persons.get(id);
       if (!existing) throw new Error(`Person ${id} not found`);

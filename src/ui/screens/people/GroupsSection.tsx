@@ -6,6 +6,7 @@ import type { Group } from "@/data/types";
 import { toPersianDigits } from "@/domain/format";
 import { EmptyState } from "@/ui/components/EmptyState";
 import { ConfirmDialog } from "@/ui/components/ConfirmDialog";
+import { Switch } from "@/ui/components/Switch";
 import { GroupFormSheet } from "./GroupFormSheet";
 
 export function GroupsSection() {
@@ -26,23 +27,18 @@ export function GroupsSection() {
     if (!archiveTarget) return;
     await groupsRepository.setArchived(archiveTarget.id, !archiveTarget.archived);
     setArchiveTarget(null);
+    setEditing(null);
   }
 
   return (
     <section>
-      <div className="screen-header">
-        <h2 className="section-title" style={{ margin: 0 }}>
-          گروه‌ها
-        </h2>
+      <div className="screen-header" style={{ justifyContent: "flex-end" }}>
         <button type="button" className="icon-button" onClick={() => setCreating(true)} aria-label="گروه جدید">
           +
         </button>
       </div>
 
-      <label className="toggle-row">
-        <span>نمایش گروه‌های آرشیو شده</span>
-        <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} />
-      </label>
+      <Switch checked={showArchived} onChange={setShowArchived} label="نمایش گروه‌های آرشیو شده" />
 
       {filteredGroups && filteredGroups.length === 0 && <EmptyState hint="هنوز گروهی نساخته‌اید." />}
 
@@ -57,18 +53,6 @@ export function GroupsSection() {
               <span className="list-item__title">{group.name}</span>
               <span className="list-item__subtitle">{toPersianDigits(group.personIds.length)} عضو</span>
             </div>
-            <div className="list-item__meta">
-              <button
-                type="button"
-                className="list-item__action"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setArchiveTarget(group);
-                }}
-              >
-                {group.archived ? "بازگردانی" : "آرشیو"}
-              </button>
-            </div>
           </li>
         ))}
       </ul>
@@ -76,6 +60,7 @@ export function GroupsSection() {
       <GroupFormSheet
         open={creating}
         persons={persons ?? []}
+        existingNames={(groups ?? []).filter((g) => !g.archived).map((g) => g.name)}
         onClose={() => setCreating(false)}
         onSubmit={async (input) => {
           await groupsRepository.create(input);
@@ -87,11 +72,13 @@ export function GroupsSection() {
         open={editing !== null}
         group={editing ?? undefined}
         persons={persons ?? []}
+        existingNames={(groups ?? []).filter((g) => g.id !== editing?.id && !g.archived).map((g) => g.name)}
         onClose={() => setEditing(null)}
         onSubmit={async (input) => {
           if (editing) await groupsRepository.update(editing.id, input);
           setEditing(null);
         }}
+        onArchiveRequest={() => setArchiveTarget(editing)}
       />
 
       <ConfirmDialog

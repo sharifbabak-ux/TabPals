@@ -5,6 +5,7 @@ import { personsRepository } from "@/data/repositories";
 import type { Person } from "@/data/types";
 import { EmptyState } from "@/ui/components/EmptyState";
 import { ConfirmDialog } from "@/ui/components/ConfirmDialog";
+import { Switch } from "@/ui/components/Switch";
 import { PersonFormSheet } from "./PersonFormSheet";
 
 export function PersonsSection() {
@@ -29,29 +30,26 @@ export function PersonsSection() {
     if (!archiveTarget) return;
     await personsRepository.setArchived(archiveTarget.id, !archiveTarget.archived);
     setArchiveTarget(null);
+    setEditing(null);
   }
 
   return (
     <section>
       <div className="screen-header">
-        <h1>اشخاص</h1>
+        <input
+          className="search-input"
+          style={{ marginBottom: 0, flex: 1 }}
+          type="search"
+          placeholder="جستجوی نام..."
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
         <button type="button" className="icon-button" onClick={() => setCreating(true)} aria-label="افزودن شخص">
           +
         </button>
       </div>
 
-      <input
-        className="search-input"
-        type="search"
-        placeholder="جستجوی نام..."
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-      />
-
-      <label className="toggle-row">
-        <span>نمایش آرشیو شده‌ها</span>
-        <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} />
-      </label>
+      <Switch checked={showArchived} onChange={setShowArchived} label="نمایش آرشیو شده‌ها" />
 
       {filtered && filtered.length === 0 && (
         <EmptyState hint={search ? "شخصی با این نام پیدا نشد." : "هنوز شخصی اضافه نشده. با دکمه‌ی + شروع کنید."} />
@@ -67,18 +65,6 @@ export function PersonsSection() {
             <div className="list-item__main">
               <span className="list-item__title">{person.name}</span>
               {person.phone && <span className="list-item__subtitle">{person.phone}</span>}
-            </div>
-            <div className="list-item__meta">
-              <button
-                type="button"
-                className="list-item__action"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setArchiveTarget(person);
-                }}
-              >
-                {person.archived ? "بازگردانی" : "آرشیو"}
-              </button>
             </div>
           </li>
         ))}
@@ -103,6 +89,7 @@ export function PersonsSection() {
           if (editing) await personsRepository.update(editing.id, input);
           setEditing(null);
         }}
+        onArchiveRequest={() => setArchiveTarget(editing)}
       />
 
       <ConfirmDialog
