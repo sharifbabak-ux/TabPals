@@ -23,8 +23,8 @@ export default defineConfig(({ mode }) => {
         includeAssets: ["favicon.svg", "apple-touch-icon.png"],
         manifest: {
           id: base,
-          name: "TabPal",
-          short_name: "TabPal",
+          name: "TabPals – حساب دوستانه",
+          short_name: "TabPals",
           description: "مدیریت آفلاین هزینه‌های گروهی سفر و دورهمی",
           lang: "fa",
           dir: "rtl",
@@ -32,8 +32,8 @@ export default defineConfig(({ mode }) => {
           orientation: "portrait",
           start_url: base,
           scope: base,
-          background_color: "#0f172a",
-          theme_color: "#0f172a",
+          background_color: "#F3EDDF",
+          theme_color: "#4E5D2F",
           icons: [
             {
               src: `${base}icons/icon-192.png`,

@@ -3,6 +3,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/data/db";
 import { personsRepository } from "@/data/repositories";
 import type { Person } from "@/data/types";
+import { Avatar } from "@/ui/components/Avatar";
 import { EmptyState } from "@/ui/components/EmptyState";
 import { ConfirmDialog } from "@/ui/components/ConfirmDialog";
 import { Switch } from "@/ui/components/Switch";
@@ -62,6 +63,7 @@ export function PersonsSection() {
             className={`list-item${person.archived ? " list-item--archived" : ""}`}
             onClick={() => setEditing(person)}
           >
+            <Avatar id={person.id} name={person.name} />
             <div className="list-item__main">
               <span className="list-item__title">{person.name}</span>
               {person.phone && <span className="list-item__subtitle">{person.phone}</span>}

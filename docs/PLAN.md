@@ -1,4 +1,4 @@
-# TabPal — Approved Plan
+# TabPals — Approved Plan
 
 1. People & events: global people directory; each event selects members from it. Import members from a previous event via a checklist with select all / select none (covers all, all-except, multi-select). Saved groups (e.g. a family) can be added in one tap. Duplicate person/group names are blocked using Persian normalization.
 2. Vouchers: each expense is an accounting voucher with a sequential number per event. Record time (Jalali date, weekday, time) is automatic and immutable; expense date is a separate editable field. Voucher types: expense, contribution to treasurer, settlement payment. An expense may have multiple payers with amounts. Events are open or closed. Closed by end date or manually; closed events block new vouchers; reopening requires a reason and is logged.

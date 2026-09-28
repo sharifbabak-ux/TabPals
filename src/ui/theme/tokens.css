@@ -1,0 +1,123 @@
+/**
+ * TabPals design tokens — the single source of every color, radius and
+ * transition used in the app (docs/PLAN.md Stage 2.5). Light is the
+ * default; dark applies either via `prefers-color-scheme` or the explicit
+ * data-theme="dark" override set by src/ui/theme.tsx.
+ *
+ * Legacy `--color-bg` / `--color-text` / `--color-text-muted` aliases are
+ * kept so existing component stylesheets keep working unchanged; new
+ * styling should prefer the named tokens (background/ink/ink-muted/...).
+ */
+:root {
+  color-scheme: light dark;
+
+  --color-background: #f3eddf;
+  --color-surface: #fbf8f1;
+  --color-surface-2: #efe8d8;
+  --color-ink: #26261f;
+  --color-ink-muted: #5e5d52;
+  --color-primary: #4e5d2f;
+  --color-primary-soft: #9aa66b;
+  --color-accent: #b8913a;
+  --color-border: #e2d9c5;
+  --color-creditor: #3f6b2a;
+  --color-debtor: #a4452c;
+
+  --color-primary-contrast: #f3eddf;
+  --color-accent-contrast: #26261f;
+
+  /* legacy aliases used across existing component CSS */
+  --color-bg: var(--color-background);
+  --color-text: var(--color-ink);
+  --color-text-muted: var(--color-ink-muted);
+
+  --radius-card: 16px;
+  --radius-control: 10px;
+  --shadow-card: 0 1px 2px rgba(38, 38, 31, 0.06), 0 6px 20px rgba(38, 38, 31, 0.1);
+  --transition-fast: 150ms ease;
+  --transition-base: 200ms ease;
+
+  /* Fixed muted palette for member-avatar initials, picked by person id. */
+  --avatar-0: #7c6a45;
+  --avatar-1: #5b7a52;
+  --avatar-2: #9c6b4f;
+  --avatar-3: #6b7d8c;
+  --avatar-4: #8c7a9c;
+  --avatar-5: #a68a4e;
+  --avatar-text: #fbf8f1;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-background: #1e1f19;
+    --color-surface: #2a2b23;
+    --color-surface-2: #33342b;
+    --color-ink: #ede7d6;
+    --color-ink-muted: #b3ae9c;
+    --color-primary: #9aa66b;
+    --color-primary-soft: #4e5d2f;
+    --color-accent: #c9a24a;
+    --color-border: #3b3c32;
+    --color-creditor: #9cc27e;
+    --color-debtor: #e08a6e;
+
+    --color-primary-contrast: #1e1f19;
+    --color-accent-contrast: #1e1f19;
+
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
+
+    --avatar-0: #b3a47e;
+    --avatar-1: #9dbb92;
+    --avatar-2: #c99b7e;
+    --avatar-3: #9db0be;
+    --avatar-4: #bba6c9;
+    --avatar-5: #cbb37e;
+    --avatar-text: #1e1f19;
+  }
+}
+
+:root[data-theme="light"] {
+  --color-background: #f3eddf;
+  --color-surface: #fbf8f1;
+  --color-surface-2: #efe8d8;
+  --color-ink: #26261f;
+  --color-ink-muted: #5e5d52;
+  --color-primary: #4e5d2f;
+  --color-primary-soft: #9aa66b;
+  --color-accent: #b8913a;
+  --color-border: #e2d9c5;
+  --color-creditor: #3f6b2a;
+  --color-debtor: #a4452c;
+
+  --color-primary-contrast: #f3eddf;
+  --color-accent-contrast: #26261f;
+
+  --shadow-card: 0 1px 2px rgba(38, 38, 31, 0.06), 0 6px 20px rgba(38, 38, 31, 0.1);
+}
+
+:root[data-theme="dark"] {
+  --color-background: #1e1f19;
+  --color-surface: #2a2b23;
+  --color-surface-2: #33342b;
+  --color-ink: #ede7d6;
+  --color-ink-muted: #b3ae9c;
+  --color-primary: #9aa66b;
+  --color-primary-soft: #4e5d2f;
+  --color-accent: #c9a24a;
+  --color-border: #3b3c32;
+  --color-creditor: #9cc27e;
+  --color-debtor: #e08a6e;
+
+  --color-primary-contrast: #1e1f19;
+  --color-accent-contrast: #1e1f19;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
+
+  --avatar-0: #b3a47e;
+  --avatar-1: #9dbb92;
+  --avatar-2: #c99b7e;
+  --avatar-3: #9db0be;
+  --avatar-4: #bba6c9;
+  --avatar-5: #cbb37e;
+  --avatar-text: #1e1f19;
+}

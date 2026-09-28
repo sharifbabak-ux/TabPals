@@ -6,6 +6,7 @@ import { eventsRepository } from "@/data/repositories";
 import { isEventClosed } from "@/domain/eventStatus";
 import { formatJalaliDate, toPersianDigits } from "@/domain/format";
 import { EmptyState } from "@/ui/components/EmptyState";
+import { Logo } from "@/ui/components/Logo";
 import { Switch } from "@/ui/components/Switch";
 import { EventFormSheet } from "./events/EventFormSheet";
 
@@ -34,8 +35,8 @@ export function EventsScreen() {
 
   return (
     <div className="screen">
-      <div className="screen-header">
-        <h1>ایونت‌ها</h1>
+      <div className="screen-header screen-header--brand">
+        <Logo showTagline />
         <button type="button" className="icon-button" onClick={() => setCreating(true)} aria-label="ایونت جدید">
           +
         </button>

@@ -1,20 +1,43 @@
 .confirm-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.5);
+  background: color-mix(in srgb, var(--color-ink) 45%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
   z-index: 40;
+  animation: confirm-fade var(--transition-base);
 }
 
 .confirm-dialog {
   background: var(--color-surface);
-  border-radius: 14px;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
   padding: 20px;
   width: 100%;
   max-width: 340px;
+  animation: confirm-pop var(--transition-base);
+}
+
+@keyframes confirm-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes confirm-pop {
+  from {
+    transform: scale(0.96);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confirm-overlay,
+  .confirm-dialog {
+    animation: none;
+  }
 }
 
 .confirm-dialog h2 {
@@ -55,6 +78,6 @@
 }
 
 .confirm-dialog__confirm--danger {
-  background: #dc2626;
-  color: #ffffff;
+  background: var(--color-debtor);
+  color: var(--color-primary-contrast);
 }

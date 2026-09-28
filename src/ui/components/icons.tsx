@@ -54,6 +54,38 @@ export function ArchiveIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function ExpenseIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <IconBase {...props}>
+      <path d="M6 3.5h9.5L19 7v13.5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z" />
+      <path d="M15.3 3.6V7a1 1 0 0 0 1 1h3.1" />
+      <line x1="8.3" y1="12.3" x2="15.7" y2="12.3" />
+      <line x1="8.3" y1="15.8" x2="13.5" y2="15.8" />
+    </IconBase>
+  );
+}
+
+export function ContributionIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <IconBase {...props}>
+      <circle cx="12" cy="12" r="8.5" />
+      <line x1="12" y1="7.5" x2="12" y2="16.5" />
+      <path d="M9 10.2c0-1.3 1.3-2.2 3-2.2s3 .8 3 1.9c0 1-1 1.6-2.6 1.9l-.8.15c-1.6.3-2.6.95-2.6 1.95 0 1.1 1.35 2.06 3 2.06s3-.85 3-2.1" />
+    </IconBase>
+  );
+}
+
+export function SettlementIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <IconBase {...props}>
+      <path d="M4 9h13.5" />
+      <path d="M14.5 5.5 18 9l-3.5 3.5" />
+      <path d="M20 15H6.5" />
+      <path d="M9.5 11.5 6 15l3.5 3.5" />
+    </IconBase>
+  );
+}
+
 const GEAR_TICK_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
 
 export function SettingsIcon(props: SVGProps<SVGSVGElement>) {
