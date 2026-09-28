@@ -5,6 +5,7 @@ import { WebPlatform } from "./web/platform";
 import { WebFileService } from "./web/fileService";
 import { WebShareService } from "./web/shareService";
 import { WebSpeechService } from "./web/speechService";
+import { WebImageService } from "./web/imageService";
 
 /**
  * Active platform service instances. Stage 9 swaps these for
@@ -15,3 +16,4 @@ export const platform = new WebPlatform();
 export const fileService = new WebFileService();
 export const shareService = new WebShareService();
 export const speechService = new WebSpeechService();
+export const imageService = new WebImageService();

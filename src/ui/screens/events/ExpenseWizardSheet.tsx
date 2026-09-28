@@ -37,6 +37,18 @@ type CustomMode = "weight" | "percent" | "exact";
 
 const CUSTOM_MODE_LABELS: Record<CustomMode, string> = { weight: "ضریب", percent: "درصد", exact: "مبلغ" };
 
+const STEP_GUIDANCE: Record<Step, string> = {
+  amount: "لطفاً مبلغ هزینه‌ی انجام‌شده را وارد کنید",
+  payer: "چه کسی این هزینه را پرداخت کرده؟",
+  payer_multi: "چه کسی این هزینه را پرداخت کرده؟",
+  description: "شرح کوتاهی از این هزینه بنویسید",
+  equal_all_q: "سهم افراد در این هزینه چگونه است؟",
+  participants: "سهم افراد در این هزینه چگونه است؟",
+  equal_selected_q: "سهم افراد در این هزینه چگونه است؟",
+  custom_split: "سهم افراد در این هزینه چگونه است؟",
+  summary: "سهم افراد در این هزینه چگونه است؟"
+};
+
 function nameOf(members: MemberOption[], personId: string): string {
   return members.find((m) => m.personId === personId)?.name ?? "؟";
 }
@@ -200,6 +212,8 @@ export function ExpenseWizardSheet({ open, eventId, activeMembers, lastPayerId, 
             ← مرحله قبل
           </button>
         )}
+
+        <p className="wizard-step__guidance">{STEP_GUIDANCE[step]}</p>
 
         {step === "amount" && (
           <>

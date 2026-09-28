@@ -37,6 +37,11 @@ export function formatJalaliDateTime(date: Date): string {
   return `${formatWeekday(date)} ${formatJalaliDate(date)} ${formatTime(date)}`;
 }
 
+/** Formats a Jalali weekday + date without a time, e.g. "دوشنبه ۱۴۰۵/۰۷/۰۶". */
+export function formatJalaliWeekdayDate(date: Date): string {
+  return `${formatWeekday(date)} ${formatJalaliDate(date)}`;
+}
+
 /**
  * Formats a monetary amount with Persian digits and Persian thousand
  * separators (e.g. 1234567 -> "۱٬۲۳۴٬۵۶۷"). Amounts are always whole

@@ -15,6 +15,10 @@ async function createOpenEvent() {
   return eventsRepository.create({ title: "سفر شمال" });
 }
 
+async function createOpenEventWithTreasurer(treasurerPersonId = "treasurer") {
+  return eventsRepository.create({ title: "سفر شمال", treasurerPersonId });
+}
+
 describe("vouchersRepository.createExpense", () => {
   it("creates an expense with an equal-all split among active members and logs a create operation", async () => {
     const event = await createOpenEvent();
@@ -207,15 +211,14 @@ describe("vouchersRepository.createExpense", () => {
 });
 
 describe("vouchersRepository.createContribution / createSettlement", () => {
-  it("creates a contribution voucher with from/to and no payers/participants", async () => {
-    const event = await createOpenEvent();
+  it("creates a contribution voucher to the event's treasurer, with no payers/participants", async () => {
+    const event = await createOpenEventWithTreasurer("treasurer");
     const voucher = await vouchersRepository.createContribution({
       eventId: event.id,
       expenseDate: "2025-09-28",
       description: "واریز به خزانه‌دار",
       totalAmount: 500,
-      fromPersonId: "p1",
-      toPersonId: "treasurer"
+      fromPersonId: "p1"
     });
 
     expect(voucher.type).toBe("contribution");
@@ -223,6 +226,19 @@ describe("vouchersRepository.createContribution / createSettlement", () => {
     expect(voucher.toPersonId).toBe("treasurer");
     expect(voucher.payers).toEqual([]);
     expect(voucher.participants).toEqual([]);
+  });
+
+  it("rejects a contribution when the event has no treasurer set", async () => {
+    const event = await createOpenEvent();
+    await expect(
+      vouchersRepository.createContribution({
+        eventId: event.id,
+        expenseDate: "2025-09-28",
+        description: "واریز",
+        totalAmount: 100,
+        fromPersonId: "p1"
+      })
+    ).rejects.toThrow();
   });
 
   it("creates a settlement voucher", async () => {
@@ -253,7 +269,7 @@ describe("vouchersRepository.createContribution / createSettlement", () => {
   });
 
   it("blocks creating a transfer voucher in a closed event", async () => {
-    const event = await createOpenEvent();
+    const event = await createOpenEventWithTreasurer("b");
     await eventsRepository.close(event.id);
     await expect(
       vouchersRepository.createContribution({
@@ -261,8 +277,7 @@ describe("vouchersRepository.createContribution / createSettlement", () => {
         expenseDate: "2025-09-28",
         description: "واریز",
         totalAmount: 100,
-        fromPersonId: "a",
-        toPersonId: "b"
+        fromPersonId: "a"
       })
     ).rejects.toThrow();
   });

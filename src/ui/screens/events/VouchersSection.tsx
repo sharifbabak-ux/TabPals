@@ -2,8 +2,9 @@ import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/data/db";
 import type { Voucher, VoucherType } from "@/data/types";
-import { formatAmount, formatJalaliDate, toPersianDigits } from "@/domain/format";
+import { formatAmount, toPersianDigits } from "@/domain/format";
 import { EmptyState } from "@/ui/components/EmptyState";
+import { JalaliDate } from "@/ui/components/JalaliDate";
 import { ContributionIcon, ExpenseIcon, SettlementIcon } from "@/ui/components/icons";
 import { NewVoucherMenuSheet } from "./NewVoucherMenuSheet";
 import { ExpenseWizardSheet } from "./ExpenseWizardSheet";
@@ -17,9 +18,11 @@ interface MemberOption {
 
 interface VouchersSectionProps {
   eventId: string;
-  currencyLabel: string;
+  currency: string;
   activeMembers: MemberOption[];
   eventClosed: boolean;
+  treasurerPersonId: string | null;
+  treasurerName: string | null;
 }
 
 const TYPE_LABELS: Record<Voucher["type"], string> = {
@@ -34,7 +37,14 @@ const TYPE_ICONS: Record<Voucher["type"], typeof ExpenseIcon> = {
   settlement: SettlementIcon
 };
 
-export function VouchersSection({ eventId, currencyLabel, activeMembers, eventClosed }: VouchersSectionProps) {
+export function VouchersSection({
+  eventId,
+  currency,
+  activeMembers,
+  eventClosed,
+  treasurerPersonId,
+  treasurerName
+}: VouchersSectionProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeFlow, setActiveFlow] = useState<VoucherType | null>(null);
   const [detailVoucher, setDetailVoucher] = useState<Voucher | null>(null);
@@ -94,11 +104,13 @@ export function VouchersSection({ eventId, currencyLabel, activeMembers, eventCl
               <span className="list-item__title">
                 #{toPersianDigits(voucher.number)} · {TYPE_LABELS[voucher.type]} · {voucher.description || "بدون توضیح"}
               </span>
-              <span className="list-item__subtitle">{formatJalaliDate(new Date(`${voucher.expenseDate}T00:00:00`))}</span>
+              <span className="list-item__subtitle">
+                <JalaliDate date={new Date(`${voucher.expenseDate}T00:00:00`)} />
+              </span>
             </div>
             <div className="list-item__meta">
               <span className="voucher-row__amount">
-                {formatAmount(voucher.totalAmount)} {currencyLabel}
+                {formatAmount(voucher.totalAmount)} {currency}
               </span>
             </div>
           </li>
@@ -122,6 +134,8 @@ export function VouchersSection({ eventId, currencyLabel, activeMembers, eventCl
         type="contribution"
         eventId={eventId}
         members={activeMembers}
+        treasurerPersonId={treasurerPersonId}
+        treasurerName={treasurerName}
         onClose={() => setActiveFlow(null)}
         onSaved={handleSaved}
       />
@@ -135,7 +149,7 @@ export function VouchersSection({ eventId, currencyLabel, activeMembers, eventCl
         onSaved={handleSaved}
       />
 
-      <VoucherDetailSheet voucher={detailVoucher} members={activeMembers} currencyLabel={currencyLabel} onClose={() => setDetailVoucher(null)} />
+      <VoucherDetailSheet voucher={detailVoucher} members={activeMembers} currency={currency} onClose={() => setDetailVoucher(null)} />
     </div>
   );
 }

@@ -58,6 +58,15 @@ export interface CreateTransferInput {
   toPersonId: string;
 }
 
+/** Contributions always go to the event's treasurer, so the caller only picks who is giving. */
+export interface CreateContributionInput {
+  eventId: string;
+  expenseDate: string;
+  description: string;
+  totalAmount: number;
+  fromPersonId: string;
+}
+
 function computeExpenseSplit(
   totalAmount: number,
   split: ExpenseSplit,
@@ -167,8 +176,12 @@ export const vouchersRepository = {
     });
   },
 
-  async createContribution(input: CreateTransferInput): Promise<Voucher> {
-    return createTransfer(input, "contribution");
+  /** Contribution to the treasurer. Resolves toPersonId from event.treasurerPersonId — never caller-supplied. */
+  async createContribution(input: CreateContributionInput): Promise<Voucher> {
+    const event = await db.events.get(input.eventId);
+    if (!event) throw new Error(`Event ${input.eventId} not found`);
+    if (!event.treasurerPersonId) throw new Error("برای این ایونت مسئول صندوق تعیین نشده است.");
+    return createTransfer({ ...input, toPersonId: event.treasurerPersonId }, "contribution");
   },
 
   async createSettlement(input: CreateTransferInput): Promise<Voucher> {

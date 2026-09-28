@@ -63,7 +63,7 @@ export function PersonsSection() {
             className={`list-item${person.archived ? " list-item--archived" : ""}`}
             onClick={() => setEditing(person)}
           >
-            <Avatar id={person.id} name={person.name} />
+            <Avatar id={person.id} name={person.name} photo={person.photo} />
             <div className="list-item__main">
               <span className="list-item__title">{person.name}</span>
               {person.phone && <span className="list-item__subtitle">{person.phone}</span>}
