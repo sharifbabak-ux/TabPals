@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeDigits, validateCardNumber, validateIban } from "./paymentValidation";
+import { formatCardNumberGrouped, formatIbanGrouped, normalizeDigits, validateCardNumber, validateIban } from "./paymentValidation";
 
 /** Builds a Luhn-valid 16-digit card number from a 15-digit prefix. */
 function buildValidCard(prefix15: string): string {
@@ -93,6 +93,18 @@ describe("validateIban", () => {
   it("rejects a broken checksum", () => {
     const broken = validIban.slice(0, -1) + (validIban.at(-1) === "0" ? "1" : "0");
     expect(validateIban(broken).valid).toBe(false);
+  });
+});
+
+describe("formatCardNumberGrouped", () => {
+  it("groups a 16-digit card number as 4-4-4-4", () => {
+    expect(formatCardNumberGrouped("1234567890123456")).toBe("1234 5678 9012 3456");
+  });
+});
+
+describe("formatIbanGrouped", () => {
+  it("groups an IR + 24-digit IBAN in 4-char chunks", () => {
+    expect(formatIbanGrouped("IR120570028180010123456702")).toBe("IR12 0570 0281 8001 0123 4567 02");
   });
 });
 

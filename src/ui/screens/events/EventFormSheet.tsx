@@ -56,7 +56,9 @@ export function EventFormSheet({ open, event, closed, treasurerOptions, onClose,
     }
   }, [open, event]);
 
-  const treasurerLocked = Boolean(event) && Boolean(closed);
+  // Once a treasurer is set, changing it on a closed event requires reopening — but SETTING one
+  // for the first time stays allowed while closed, so a statement can be issued (docs/PLAN.md Stage 3B).
+  const treasurerLocked = Boolean(event) && Boolean(closed) && Boolean(event?.treasurerPersonId);
   const cardValidation = treasurerCardNumber.trim() ? validateCardNumber(treasurerCardNumber) : null;
   const ibanValidation = treasurerIban.trim() ? validateIban(treasurerIban) : null;
 

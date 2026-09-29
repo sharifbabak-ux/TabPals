@@ -1,9 +1,30 @@
 import Dexie, { type EntityTable } from "dexie";
-import type { Event, EventMember, Group, Operation, Person, Voucher } from "./types";
+import { ulid } from "ulid";
+import { DEFAULT_MESSAGE_TEMPLATES } from "@/domain/messageTemplateDefaults";
+import { getDeviceId } from "./deviceId";
+import type { Event, EventMember, Group, MessageTemplate, Operation, Person, Statement, Voucher } from "./types";
 
 /** Default currency label backfilled onto events created before Stage 2. */
 const DEFAULT_CURRENCY_LABEL = "تومان";
 const VALID_CURRENCIES = new Set(["تومان", "ریال"]);
+
+/** Builds fresh MessageTemplate rows from the default set, ready to insert. Shared by the v5 upgrade path and the fresh-install `populate` path. */
+function buildDefaultMessageTemplateRows(): MessageTemplate[] {
+  const now = new Date().toISOString();
+  const deviceId = getDeviceId();
+  return DEFAULT_MESSAGE_TEMPLATES.map((template) => ({
+    id: ulid(),
+    category: template.category,
+    text: template.text,
+    enabled: true,
+    isDefault: true,
+    createdAt: now,
+    updatedAt: now,
+    deviceId,
+    version: 1,
+    deleted: false
+  }));
+}
 
 /**
  * Simple key/value table for app-level settings that aren't accounting
@@ -24,6 +45,8 @@ export class TabPalDB extends Dexie {
   eventMembers!: EntityTable<EventMember, "id">;
   groups!: EntityTable<Group, "id">;
   vouchers!: EntityTable<Voucher, "id">;
+  statements!: EntityTable<Statement, "id">;
+  messageTemplates!: EntityTable<MessageTemplate, "id">;
   operations!: EntityTable<Operation, "id">;
 
   constructor(name = "tabpal") {
@@ -114,6 +137,49 @@ export class TabPalDB extends Dexie {
           }
         }
       });
+
+    // Stage 3B — statements, comprehensive report, treasurer-hub
+    // settlement, message templates. Adds the statements and
+    // messageTemplates tables (seeded with the default closing-message
+    // templates), and backfills splitMode on existing expense vouchers
+    // from their stored participant weights: all-equal weights means the
+    // expense was split equally, anything else means a weighted split
+    // (percent/exact splits didn't exist before Stage 3B, so there's
+    // nothing to distinguish them from "weight" in old data).
+    this.version(5)
+      .stores({
+        meta: "key",
+        persons: "id, name, archived, deleted",
+        events: "id, archived, deleted, startDate, closedAt, treasurerPersonId",
+        eventMembers: "id, eventId, personId, &[eventId+personId], active, deleted, sortOrder",
+        groups: "id, name, archived, deleted",
+        vouchers: "id, eventId, &[eventId+number], type, status, deleted, recordedAt",
+        statements: "id, eventId, kind, personId, &[eventId+number], status, deleted",
+        messageTemplates: "id, category, enabled, isDefault, deleted",
+        operations: "id, entity, entityId, timestamp"
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table("vouchers")
+          .toCollection()
+          .modify((voucher) => {
+            if (voucher.type !== "expense" || voucher.splitMode !== undefined) return;
+            const weights: number[] = (voucher.participants ?? []).map((p: { weight: number }) => p.weight);
+            const allEqual = weights.length > 0 && weights.every((w) => w === weights[0]);
+            voucher.splitMode = allEqual ? "equal" : "weight";
+          });
+
+        await tx.table("messageTemplates").bulkAdd(buildDefaultMessageTemplateRows());
+      });
+
+    // Dexie only runs version().upgrade() when migrating an EXISTING
+    // database; a brand-new install goes straight to the latest schema
+    // with no upgrade() calls at all, so first-run seeding needs this
+    // separate `populate` hook (fires exactly once, only for a database
+    // that never existed before).
+    this.on("populate", async () => {
+      await this.messageTemplates.bulkAdd(buildDefaultMessageTemplateRows());
+    });
   }
 }
 

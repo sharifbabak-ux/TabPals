@@ -1,0 +1,15 @@
+.statements-section__prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.statement-status-chip--current {
+  color: var(--color-creditor);
+  border-color: var(--color-creditor);
+}
+
+.statement-status-chip--outdated {
+  color: var(--color-ink-muted);
+}

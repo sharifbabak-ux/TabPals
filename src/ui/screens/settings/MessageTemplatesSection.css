@@ -1,0 +1,24 @@
+.template-category {
+  margin-top: 16px;
+}
+
+.template-list-item {
+  cursor: default;
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.template-list-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.template-preview {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  margin: 0;
+  line-height: 1.6;
+}

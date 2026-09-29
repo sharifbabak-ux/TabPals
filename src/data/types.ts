@@ -107,6 +107,15 @@ export type VoucherType = "expense" | "contribution" | "settlement";
 export type VoucherStatus = "active";
 
 /**
+ * The expense-split mode actually used to compute a voucher's shares
+ * (docs/PLAN.md Stage 3B). Only meaningful for `type: "expense"`.
+ * Percent/exact inputs aren't stored separately: `participants[].weight`
+ * already holds the percent (0-100) or exact amount used, so it stays
+ * available for statement display as-is.
+ */
+export type SplitMode = "equal" | "weight" | "percent" | "exact";
+
+/**
  * An accounting voucher (docs/PLAN.md #2 and #4). Expenses carry payers,
  * participants, and computed shares; contributions and settlements are
  * simple transfers between two people and leave payers/participants
@@ -134,10 +143,58 @@ export interface Voucher extends BaseRecord {
   /** Expense only; empty for contribution/settlement. Always sums to totalAmount. */
   shares: VoucherShare[];
   status: VoucherStatus;
+  /** Expense only; undefined for contribution/settlement. */
+  splitMode?: SplitMode;
 }
 
-export type OperationEntity = "persons" | "events" | "eventMembers" | "groups" | "vouchers";
-export type OperationType = "create" | "update" | "archive" | "close" | "reopen";
+/** "member" statements are per-person; "comprehensive" covers the whole event (personId is null). */
+export type StatementKind = "member" | "treasurer" | "comprehensive";
+export type StatementStatus = "current" | "outdated";
+
+/**
+ * An issued statement/report (docs/PLAN.md Stage 3B). `snapshot` is the
+ * complete canonical JSON of every value used to render the statement, so
+ * it re-renders identically forever regardless of later edits to the
+ * underlying data. Reopening an event marks all its "current" statements
+ * "outdated" (never edited or deleted otherwise).
+ */
+export interface Statement extends BaseRecord {
+  eventId: string;
+  kind: StatementKind;
+  /** null for comprehensive report statements. */
+  personId: string | null;
+  /** Sequential per event across all statements of any kind, never reused. */
+  number: number;
+  /** Issue count for this exact person+kind pair; starts at 1 and increments on re-issue. */
+  issueVersion: number;
+  issuedAt: string;
+  /** Canonical JSON string of everything used to render this statement. */
+  snapshot: string;
+  /** Template chosen at issue time; null for the comprehensive report, which has no closing message. */
+  templateId: string | null;
+  /** The closing message, already rendered with placeholders filled in; stored so it never changes on re-render. */
+  closingText: string;
+  /** 8 uppercase hex chars in two groups, e.g. "A3F9-2C71". SHA-256 of `snapshot`. */
+  verificationCode: string;
+  status: StatementStatus;
+}
+
+export type MessageTemplateCategory = "debtor" | "creditor" | "settled" | "treasurer";
+
+/**
+ * A closing-message template for statements (docs/PLAN.md Stage 3B).
+ * Seeded with defaults (`isDefault: true`) on first run/migration;
+ * "بازگردانی متن‌های پیش‌فرض" in Settings restores exactly those.
+ */
+export interface MessageTemplate extends BaseRecord {
+  category: MessageTemplateCategory;
+  text: string;
+  enabled: boolean;
+  isDefault: boolean;
+}
+
+export type OperationEntity = "persons" | "events" | "eventMembers" | "groups" | "vouchers" | "statements" | "messageTemplates";
+export type OperationType = "create" | "update" | "archive" | "close" | "reopen" | "outdate";
 
 /** Field-level before/after values recorded for one changed field. */
 export interface FieldChange {
