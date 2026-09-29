@@ -16,6 +16,7 @@ export function ComprehensiveReportView({ data }: ComprehensiveReportViewProps) 
     <div className="statement-body">
       <section>
         <h2 className="section-title">اعضا</h2>
+        <div className="table-scroll">
         <table className="statement-table">
           <thead>
             <tr>
@@ -34,10 +35,12 @@ export function ComprehensiveReportView({ data }: ComprehensiveReportViewProps) 
             ))}
           </tbody>
         </table>
+        </div>
       </section>
 
       <section>
         <h2 className="section-title">دفتر کل اسناد</h2>
+        <div className="table-scroll">
         <table className="statement-table">
           <thead>
             <tr>
@@ -82,10 +85,12 @@ export function ComprehensiveReportView({ data }: ComprehensiveReportViewProps) 
             ))}
           </tbody>
         </table>
+        </div>
       </section>
 
       <section>
         <h2 className="section-title">حساب صندوق</h2>
+        <div className="table-scroll">
         <table className="statement-table">
           <thead>
             <tr>
@@ -108,6 +113,7 @@ export function ComprehensiveReportView({ data }: ComprehensiveReportViewProps) 
             ))}
           </tbody>
         </table>
+        </div>
         <p>
           جمع واریزی به صندوق: {formatAmount(fundAccount.totalContributed)} {event.currency}
         </p>
@@ -123,6 +129,7 @@ export function ComprehensiveReportView({ data }: ComprehensiveReportViewProps) 
 
       <section>
         <h2 className="section-title">خلاصه هر عضو</h2>
+        <div className="table-scroll">
         <table className="statement-table">
           <thead>
             <tr>
@@ -153,6 +160,7 @@ export function ComprehensiveReportView({ data }: ComprehensiveReportViewProps) 
             ))}
           </tbody>
         </table>
+        </div>
       </section>
 
       {hubSettlement && (

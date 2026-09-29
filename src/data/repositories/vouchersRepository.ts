@@ -17,7 +17,8 @@ const VOUCHER_LOG_FIELDS: (keyof Voucher)[] = [
   "toPersonId",
   "shares",
   "status",
-  "splitMode"
+  "splitMode",
+  "payerSplitMode"
 ];
 
 /** Maps a caller's chosen split mode to the stored, statement-facing SplitMode (docs/PLAN.md Stage 3B). */
@@ -28,6 +29,25 @@ const SPLIT_MODE_BY_INPUT_MODE: Record<ExpenseSplit["mode"], SplitMode> = {
   percent: "percent",
   exact: "exact"
 };
+
+export interface PayerEqualSplit {
+  mode: "equal";
+  payerPersonIds: string[];
+}
+export interface PayerWeightSplit {
+  mode: "weight";
+  weights: { personId: string; weight: number }[];
+}
+export interface PayerPercentSplit {
+  mode: "percent";
+  percents: { personId: string; percent: number }[];
+}
+export interface PayerExactSplit {
+  mode: "exact";
+  amounts: { personId: string; amount: number }[];
+}
+/** How a multi-payer expense's payer amounts are derived from the total (docs/PLAN.md Stage 3B.1) — reuses the same split engine as the participant share split, with the same exact-sum rounding guarantee. */
+export type PayerSplit = PayerEqualSplit | PayerWeightSplit | PayerPercentSplit | PayerExactSplit;
 
 export interface EqualAllSplit {
   mode: "equal_all";
@@ -55,8 +75,49 @@ export interface CreateExpenseInput {
   expenseDate: string;
   description: string;
   totalAmount: number;
+  /** Used as-is (validated to sum to totalAmount) when `payerSplit` is omitted — the single-payer case, or a precomputed multi-payer list. */
   payers: VoucherPayer[];
+  /** When provided, `payers` is ignored and the payer amounts are derived from this split instead (docs/PLAN.md Stage 3B.1 multi-payer entry). */
+  payerSplit?: PayerSplit;
   split: ExpenseSplit;
+}
+
+function computePayerSplit(totalAmount: number, split: PayerSplit): { payers: VoucherPayer[]; payerSplitMode: SplitMode } {
+  switch (split.mode) {
+    case "equal": {
+      if (split.payerPersonIds.length === 0) throw new Error("حداقل یک پرداخت‌کننده باید انتخاب شود");
+      const shares = splitEqual(totalAmount, split.payerPersonIds);
+      return { payers: shares.map((s) => ({ personId: s.personId, amount: s.share })), payerSplitMode: "equal" };
+    }
+    case "weight": {
+      if (split.weights.length === 0) throw new Error("حداقل یک پرداخت‌کننده باید انتخاب شود");
+      const shares = splitByWeight(totalAmount, split.weights);
+      const weightByPerson = new Map(split.weights.map((w) => [w.personId, w.weight]));
+      return {
+        payers: shares.map((s) => ({ personId: s.personId, amount: s.share, weight: weightByPerson.get(s.personId) })),
+        payerSplitMode: "weight"
+      };
+    }
+    case "percent": {
+      if (split.percents.length === 0) throw new Error("حداقل یک پرداخت‌کننده باید انتخاب شود");
+      if (!percentsSumTo100(split.percents.map((p) => p.percent))) {
+        throw new Error("مجموع درصدها باید ۱۰۰ باشد");
+      }
+      const shares = splitByWeight(totalAmount, split.percents.map((p) => ({ personId: p.personId, weight: p.percent })));
+      const percentByPerson = new Map(split.percents.map((p) => [p.personId, p.percent]));
+      return {
+        payers: shares.map((s) => ({ personId: s.personId, amount: s.share, weight: percentByPerson.get(s.personId) })),
+        payerSplitMode: "percent"
+      };
+    }
+    case "exact": {
+      if (split.amounts.length === 0) throw new Error("حداقل یک پرداخت‌کننده باید انتخاب شود");
+      if (!amountsSumTo(totalAmount, split.amounts.map((a) => a.amount))) {
+        throw new Error("مجموع مبالغ پرداخت‌کنندگان باید برابر مبلغ کل باشد");
+      }
+      return { payers: split.amounts.map((a) => ({ personId: a.personId, amount: a.amount })), payerSplitMode: "exact" };
+    }
+  }
 }
 
 export interface CreateTransferInput {
@@ -143,8 +204,18 @@ async function assertEventOpenForNewVoucher(eventId: string): Promise<void> {
 
 export const vouchersRepository = {
   async createExpense(input: CreateExpenseInput): Promise<Voucher> {
-    if (!amountsSumTo(input.totalAmount, input.payers.map((p) => p.amount))) {
-      throw new Error("مجموع مبلغ پرداخت‌کنندگان باید برابر مبلغ کل باشد");
+    let payers: VoucherPayer[];
+    let payerSplitMode: SplitMode | undefined;
+    if (input.payerSplit) {
+      const computed = computePayerSplit(input.totalAmount, input.payerSplit);
+      payers = computed.payers;
+      payerSplitMode = computed.payerSplitMode;
+    } else {
+      if (!amountsSumTo(input.totalAmount, input.payers.map((p) => p.amount))) {
+        throw new Error("مجموع مبلغ پرداخت‌کنندگان باید برابر مبلغ کل باشد");
+      }
+      payers = input.payers;
+      payerSplitMode = input.payers.length > 1 ? "exact" : undefined;
     }
 
     return db.transaction("rw", db.events, db.eventMembers, db.vouchers, db.operations, async () => {
@@ -174,11 +245,12 @@ export const vouchersRepository = {
         expenseDate: input.expenseDate,
         description: input.description.trim(),
         totalAmount: input.totalAmount,
-        payers: input.payers,
+        payers,
         participants,
         shares,
         status: "active",
-        splitMode: SPLIT_MODE_BY_INPUT_MODE[input.split.mode]
+        splitMode: SPLIT_MODE_BY_INPUT_MODE[input.split.mode],
+        payerSplitMode
       };
 
       await db.vouchers.add(voucher);

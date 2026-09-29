@@ -24,6 +24,7 @@ export function MemberStatementView({ data, closingText }: MemberStatementViewPr
         {expenses.length === 0 ? (
           <p className="statement-empty">در این هزینه‌ای سهیم نبوده یا پرداختی نداشته‌اید.</p>
         ) : (
+          <div className="table-scroll">
           <table className="statement-table">
             <thead>
               <tr>
@@ -78,6 +79,7 @@ export function MemberStatementView({ data, closingText }: MemberStatementViewPr
               </tr>
             </tfoot>
           </table>
+          </div>
         )}
       </section>
 
@@ -86,6 +88,7 @@ export function MemberStatementView({ data, closingText }: MemberStatementViewPr
         {fundEntries.length === 0 ? (
           <p className="statement-empty">واریز یا تسویه‌ای ثبت نشده است.</p>
         ) : (
+          <div className="table-scroll">
           <table className="statement-table">
             <thead>
               <tr>
@@ -112,11 +115,13 @@ export function MemberStatementView({ data, closingText }: MemberStatementViewPr
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </section>
 
       <section>
         <h2 className="section-title">خلاصه حساب</h2>
+        <div className="table-scroll">
         <table className="statement-table statement-table--summary">
           <tbody>
             <tr>
@@ -163,6 +168,7 @@ export function MemberStatementView({ data, closingText }: MemberStatementViewPr
             </tr>
           </tbody>
         </table>
+        </div>
       </section>
 
       {hubSettlement && (
@@ -186,7 +192,17 @@ export function MemberStatementView({ data, closingText }: MemberStatementViewPr
               <ul className="statement-hub-list">
                 {hubSettlement.paysFromTreasurer.map((row) => (
                   <li key={row.personId}>
-                    {row.name}: {formatAmount(row.amount)} {event.currency}
+                    <div>
+                      {row.name}: {formatAmount(row.amount)} {event.currency}
+                    </div>
+                    {(row.cardNumberGrouped || row.ibanGrouped || row.bankName || row.accountHolder) && (
+                      <div className="statement-hub-list__bank">
+                        {row.bankName && <span>{row.bankName}</span>}
+                        {row.cardNumberGrouped && <span dir="ltr">{row.cardNumberGrouped}</span>}
+                        {row.ibanGrouped && <span dir="ltr">{row.ibanGrouped}</span>}
+                        {row.accountHolder && <span>به نام {row.accountHolder}</span>}
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -212,6 +228,7 @@ export function MemberStatementView({ data, closingText }: MemberStatementViewPr
               مسئول صندوق: <strong>{treasurerName}</strong>
             </p>
           )}
+          {data.treasurerBankName && <p>{data.treasurerBankName}</p>}
           {data.treasurerCardNumberGrouped && (
             <p dir="ltr" className="statement-payment-box__number">
               {data.treasurerCardNumberGrouped}
@@ -222,6 +239,7 @@ export function MemberStatementView({ data, closingText }: MemberStatementViewPr
               {data.treasurerIbanGrouped}
             </p>
           )}
+          {data.treasurerAccountHolder && <p>به نام {data.treasurerAccountHolder}</p>}
         </section>
       )}
     </div>

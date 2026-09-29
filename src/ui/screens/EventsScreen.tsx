@@ -3,6 +3,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate } from "react-router-dom";
 import { db } from "@/data/db";
 import { eventMembersRepository, eventsRepository } from "@/data/repositories";
+import { personFullName } from "@/domain/displayName";
 import { isEventClosed } from "@/domain/eventStatus";
 import { toPersianDigits } from "@/domain/format";
 import { EmptyState } from "@/ui/components/EmptyState";
@@ -16,7 +17,7 @@ export function EventsScreen() {
   const [showArchived, setShowArchived] = useState(false);
   const [creating, setCreating] = useState(false);
 
-  const events = useLiveQuery(() => db.events.filter((event) => !event.deleted).toArray(), []);
+  const events = useLiveQuery(() => db.events.filter((event) => !event.deleted && !event.deletedAt).toArray(), []);
   const persons = useLiveQuery(() => db.persons.filter((p) => !p.deleted && !p.archived).toArray(), []);
 
   const memberCounts = useLiveQuery(async () => {
@@ -73,7 +74,14 @@ export function EventsScreen() {
 
       <EventFormSheet
         open={creating}
-        treasurerOptions={(persons ?? []).map((p) => ({ id: p.id, name: p.name }))}
+        treasurerOptions={(persons ?? []).map((p) => ({
+          id: p.id,
+          name: personFullName(p),
+          cardNumber: p.cardNumber,
+          iban: p.iban,
+          bankName: p.bankName,
+          accountHolder: p.accountHolder
+        }))}
         onClose={() => setCreating(false)}
         onSubmit={async (input) => {
           const event = await eventsRepository.create(input);

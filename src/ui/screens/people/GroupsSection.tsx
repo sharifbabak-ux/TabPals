@@ -14,6 +14,8 @@ export function GroupsSection() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Group | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<Group | null>(null);
+  const [permanentDeleteTarget, setPermanentDeleteTarget] = useState<Group | null>(null);
+  const [permanentDeleteError, setPermanentDeleteError] = useState<string | null>(null);
 
   const groups = useLiveQuery(() => db.groups.filter((g) => !g.deleted).toArray(), []);
   const persons = useLiveQuery(() => db.persons.filter((p) => !p.deleted && !p.archived).toArray(), []);
@@ -28,6 +30,18 @@ export function GroupsSection() {
     await groupsRepository.setArchived(archiveTarget.id, !archiveTarget.archived);
     setArchiveTarget(null);
     setEditing(null);
+  }
+
+  async function handlePermanentDeleteConfirm() {
+    if (!permanentDeleteTarget) return;
+    setPermanentDeleteError(null);
+    try {
+      await groupsRepository.permanentlyDelete(permanentDeleteTarget.id);
+      setPermanentDeleteTarget(null);
+      setEditing(null);
+    } catch (e) {
+      setPermanentDeleteError(e instanceof Error ? e.message : "خطایی رخ داد");
+    }
   }
 
   return (
@@ -79,6 +93,7 @@ export function GroupsSection() {
           setEditing(null);
         }}
         onArchiveRequest={() => setArchiveTarget(editing)}
+        onPermanentDeleteRequest={() => setPermanentDeleteTarget(editing)}
       />
 
       <ConfirmDialog
@@ -88,6 +103,21 @@ export function GroupsSection() {
         confirmLabel={archiveTarget?.archived ? "بازگردانی" : "آرشیو"}
         onConfirm={handleArchiveConfirm}
         onCancel={() => setArchiveTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={permanentDeleteTarget !== null}
+        title="حذف دائمی گروه"
+        message={`«${permanentDeleteTarget?.name}» برای همیشه حذف شود؟ این عملیات قابل بازگشت نیست.${
+          permanentDeleteError ? ` — ${permanentDeleteError}` : ""
+        }`}
+        confirmLabel="حذف دائمی"
+        danger
+        onConfirm={handlePermanentDeleteConfirm}
+        onCancel={() => {
+          setPermanentDeleteTarget(null);
+          setPermanentDeleteError(null);
+        }}
       />
     </section>
   );

@@ -3,6 +3,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/data/db";
 import { BottomSheet } from "@/ui/components/BottomSheet";
 import { EmptyState } from "@/ui/components/EmptyState";
+import { personFullName } from "@/domain/displayName";
 import { toPersianDigits } from "@/domain/format";
 import {
   buildImportCandidates,
@@ -44,7 +45,7 @@ export function ImportMembersSheet({ open, currentEventId, currentMemberPersonId
       .filter((member) => !member.deleted && member.active)
       .toArray();
     const persons = await db.persons.bulkGet(rows.map((row) => row.personId));
-    return rows.map((row, index) => ({ personId: row.personId, name: persons[index]?.name ?? "؟" }));
+    return rows.map((row, index) => ({ personId: row.personId, name: persons[index] ? personFullName(persons[index]) : "؟" }));
   }, [sourceEventId]);
 
   const candidates = useMemo(

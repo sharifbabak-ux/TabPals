@@ -3,6 +3,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/data/db";
 import { BottomSheet } from "@/ui/components/BottomSheet";
 import { EmptyState } from "@/ui/components/EmptyState";
+import { personFullName } from "@/domain/displayName";
 import { toPersianDigits } from "@/domain/format";
 import { buildImportCandidates, selectAllCandidates, selectNoCandidates, toggleCandidateSelection } from "@/domain/memberImport";
 
@@ -30,7 +31,7 @@ export function AddMembersSheet({ open, excludePersonIds, onClose, onSubmit }: A
   }, [open]);
 
   const candidates = useMemo(() => {
-    const all = (persons ?? []).map((p) => ({ personId: p.id, name: p.name }));
+    const all = (persons ?? []).map((p) => ({ personId: p.id, name: personFullName(p) }));
     return buildImportCandidates(all, excludePersonIds);
   }, [persons, excludePersonIds]);
 

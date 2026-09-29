@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { BottomSheet } from "@/ui/components/BottomSheet";
+import { personFullName } from "@/domain/displayName";
 import { validateGroupName } from "@/domain/groupValidation";
 import type { Group, Person } from "@/data/types";
 import type { GroupInput } from "@/data/repositories/groupsRepository";
@@ -15,9 +16,20 @@ interface GroupFormSheetProps {
   onSubmit: (input: GroupInput) => Promise<void>;
   /** Present only when editing — opens the archive/restore confirmation. */
   onArchiveRequest?: () => void;
+  /** Present only when editing an archived group — opens the permanent-delete confirmation. */
+  onPermanentDeleteRequest?: () => void;
 }
 
-export function GroupFormSheet({ open, group, persons, existingNames, onClose, onSubmit, onArchiveRequest }: GroupFormSheetProps) {
+export function GroupFormSheet({
+  open,
+  group,
+  persons,
+  existingNames,
+  onClose,
+  onSubmit,
+  onArchiveRequest,
+  onPermanentDeleteRequest
+}: GroupFormSheetProps) {
   const [name, setName] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
@@ -79,7 +91,7 @@ export function GroupFormSheet({ open, group, persons, existingNames, onClose, o
                   checked={selected.has(person.id)}
                   onChange={() => toggle(person.id)}
                 />
-                <label htmlFor={`group-person-${person.id}`}>{person.name}</label>
+                <label htmlFor={`group-person-${person.id}`}>{personFullName(person)}</label>
               </li>
             ))}
           </ul>
@@ -100,6 +112,11 @@ export function GroupFormSheet({ open, group, persons, existingNames, onClose, o
             <button type="button" className="sheet__archive-button" onClick={onArchiveRequest}>
               {group.archived ? "بازگردانی از آرشیو" : "آرشیو کردن این گروه"}
             </button>
+            {group.archived && onPermanentDeleteRequest && (
+              <button type="button" className="sheet__archive-button sheet__archive-button--danger" onClick={onPermanentDeleteRequest}>
+                حذف دائمی
+              </button>
+            )}
           </div>
         )}
       </form>

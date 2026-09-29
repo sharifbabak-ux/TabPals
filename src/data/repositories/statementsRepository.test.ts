@@ -17,9 +17,9 @@ beforeEach(async () => {
 });
 
 async function createClosedEventWithData() {
-  const treasurer = await personsRepository.create({ name: "ترانه" });
-  const a = await personsRepository.create({ name: "آرش" });
-  const b = await personsRepository.create({ name: "بهار" });
+  const treasurer = await personsRepository.create({ firstName: "ترانه", lastName: "تی" });
+  const a = await personsRepository.create({ firstName: "آرش", lastName: "ای" });
+  const b = await personsRepository.create({ firstName: "بهار", lastName: "بی" });
   const event = await eventsRepository.create({ title: "سفر شمال", treasurerPersonId: treasurer.id });
   await eventMembersRepository.addMembers(event.id, [treasurer.id, a.id, b.id]);
   await vouchersRepository.createExpense({
@@ -36,7 +36,7 @@ async function createClosedEventWithData() {
 
 describe("statementsRepository — issue guards", () => {
   it("refuses to issue on an open event", async () => {
-    const treasurer = await personsRepository.create({ name: "ترانه" });
+    const treasurer = await personsRepository.create({ firstName: "ترانه", lastName: "تی" });
     const event = await eventsRepository.create({ title: "سفر", treasurerPersonId: treasurer.id });
     await eventMembersRepository.addMember(event.id, treasurer.id);
     await expect(statementsRepository.issueForMember(event.id, treasurer.id)).rejects.toThrow();

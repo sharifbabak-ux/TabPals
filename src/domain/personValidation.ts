@@ -1,7 +1,7 @@
 /**
- * Pure validation for the person name field (اشخاص add/edit sheet). A
- * duplicate name (after normalization) is BLOCKED, not just warned about
- * — see CLAUDE.md and the Stage 2 task description, part A.5.
+ * Pure validation for the person name fields (اشخاص add/edit sheet). A
+ * duplicate normalized firstName+lastName combination is BLOCKED, not
+ * just warned about — see CLAUDE.md and docs/PLAN.md Stage 3B.1.
  */
 import { normalizeName } from "./nameNormalization";
 
@@ -12,25 +12,44 @@ export interface PersonNameValidation {
   error: string | null;
 }
 
-/**
- * @param name candidate name, as typed.
- * @param existingNames names of other non-archived persons to compare
- *   against (the caller excludes the person currently being edited, if any).
- */
-export function validatePersonName(name: string, existingNames: string[]): PersonNameValidation {
-  const trimmed = name.trim();
+export interface PersonNameCandidate {
+  firstName: string;
+  lastName: string;
+}
 
-  if (!trimmed) {
+function normalizedKey(name: PersonNameCandidate): string {
+  return normalizeName(`${name.firstName} ${name.lastName}`.trim());
+}
+
+/**
+ * @param firstName candidate first name, as typed.
+ * @param lastName candidate last name, as typed.
+ * @param existingNames first/last names of other non-archived persons to
+ *   compare against (the caller excludes the person currently being edited).
+ */
+export function validatePersonName(
+  firstName: string,
+  lastName: string,
+  existingNames: PersonNameCandidate[]
+): PersonNameValidation {
+  const trimmedFirst = firstName.trim();
+  const trimmedLast = lastName.trim();
+
+  if (!trimmedFirst) {
     return { valid: false, error: "نام الزامی است" };
   }
+  if (!trimmedLast) {
+    return { valid: false, error: "نام خانوادگی الزامی است" };
+  }
 
-  const normalized = normalizeName(trimmed);
-  const clash = existingNames.find((existing) => normalizeName(existing) === normalized);
+  const normalized = normalizedKey({ firstName: trimmedFirst, lastName: trimmedLast });
+  const clash = existingNames.find((existing) => normalizedKey(existing) === normalized);
 
   if (clash) {
+    const clashFullName = `${clash.firstName} ${clash.lastName}`.trim();
     return {
       valid: false,
-      error: `شخص دیگری با نام «${clash}» وجود دارد. یک ویژگی متمایزکننده اضافه کنید، مثلاً «${trimmed} (کرج)».`
+      error: `شخص دیگری با نام «${clashFullName}» وجود دارد. یک ویژگی متمایزکننده اضافه کنید، مثلاً «${trimmedFirst} ${trimmedLast} (کرج)».`
     };
   }
 

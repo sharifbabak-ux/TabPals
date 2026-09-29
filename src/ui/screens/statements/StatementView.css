@@ -112,6 +112,15 @@
   padding-inline-start: 20px;
 }
 
+.statement-hub-list__bank {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
 .statement-hub-totals {
   color: var(--color-text-muted);
   font-size: 0.85rem;
@@ -212,6 +221,10 @@
 
   .statement-table thead {
     display: table-header-group;
+  }
+
+  .table-scroll {
+    overflow: visible;
   }
 
   .statement-table tr,

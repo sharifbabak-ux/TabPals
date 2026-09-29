@@ -63,6 +63,13 @@ textarea {
 
 /* Shared screen chrome ---------------------------------------------- */
 
+/* Wraps any wide table so IT scrolls horizontally instead of the page (docs/PLAN.md Stage 3B.1 — no horizontal overflow anywhere). */
+.table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
 .screen-header {
   display: flex;
   align-items: center;
@@ -687,6 +694,41 @@ textarea {
   text-align: center;
 }
 
+.wizard-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.wizard-summary__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+}
+
+.wizard-summary__row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.wizard-summary__label {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.wizard-summary__value {
+  font-weight: 600;
+}
+
 .split-summary {
   background: var(--color-bg);
   border: 1px solid var(--color-border);
@@ -859,6 +901,30 @@ textarea {
 .field textarea.reason-textarea {
   min-height: 70px;
   resize: vertical;
+  overflow-wrap: anywhere;
+}
+
+.field textarea.reason-textarea--autogrow {
+  resize: none;
+  overflow: hidden;
+}
+
+.placeholder-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.placeholder-chip {
+  font-size: 0.75rem;
+  font-family: monospace;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
 }
 
 /* Archive action moved from list-row buttons into the edit sheet ------- */
@@ -878,6 +944,73 @@ textarea {
   padding: 11px;
   font-size: 0.9rem;
   cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.sheet__archive-button--danger {
+  color: var(--color-debtor);
+  border-color: var(--color-debtor);
+}
+
+.sheet__archive-button--danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Collapsible section (person bank details, Stage 3B.1) ------------------ */
+
+.collapsible-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  color: var(--color-text);
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+
+.collapsible-body {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 4px;
+}
+
+.trash-row {
+  flex-wrap: wrap;
+  cursor: default;
+}
+
+.trash-row__actions {
+  flex-wrap: wrap;
+}
+
+.trash-row__delete {
+  color: var(--color-debtor);
+}
+
+.name-review-row {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  cursor: default;
+}
+
+.name-review-row__fields {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.name-review-row__fields .field {
+  flex: 1;
+  min-width: 120px;
+  margin-bottom: 0;
 }
 
 .back-link {

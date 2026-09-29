@@ -50,4 +50,20 @@ describe("groupsRepository", () => {
     const other = await groupsRepository.create({ name: "دوستان", personIds: ["p2"] });
     await expect(groupsRepository.update(other.id, { name: "خانواده" })).rejects.toThrow();
   });
+
+  it("blocks permanently deleting a non-archived group", async () => {
+    const group = await groupsRepository.create({ name: "خانواده", personIds: ["p1"] });
+    await expect(groupsRepository.permanentlyDelete(group.id)).rejects.toThrow();
+  });
+
+  it("permanently deletes an archived group and writes a purge tombstone", async () => {
+    const group = await groupsRepository.create({ name: "خانواده", personIds: ["p1"] });
+    await groupsRepository.setArchived(group.id, true);
+
+    await groupsRepository.permanentlyDelete(group.id);
+
+    expect(await db.groups.get(group.id)).toBeUndefined();
+    const ops = await db.operations.where("entityId").equals(group.id).filter((o) => o.type === "purge").toArray();
+    expect(ops).toHaveLength(1);
+  });
 });
