@@ -54,12 +54,17 @@ function normalize(input: Partial<EventInput>): Partial<EventInput> {
   return result;
 }
 
-/** Blocks treasurer changes on a closed event — only reopening is allowed (see CLAUDE.md). */
+/**
+ * Blocks treasurer changes on a closed event — only reopening is allowed
+ * (see CLAUDE.md) — EXCEPT setting a treasurer for the first time
+ * (existing.treasurerPersonId still null), which docs/PLAN.md Stage 3B
+ * explicitly allows on a closed event so a statement can be issued.
+ */
 function assertTreasurerEditableIfClosed(existing: Event, diff: Record<string, unknown>): void {
   const touchesTreasurer = TREASURER_FIELDS.some((field) => field in diff);
-  if (touchesTreasurer && isEventClosed(existing, new Date())) {
-    throw new Error("این ایونت پایان‌یافته است؛ برای تغییر مسئول صندوق، ابتدا آن را بازگشایی کنید.");
-  }
+  if (!touchesTreasurer || !isEventClosed(existing, new Date())) return;
+  if (existing.treasurerPersonId === null) return;
+  throw new Error("این ایونت پایان‌یافته است؛ برای تغییر مسئول صندوق، ابتدا آن را بازگشایی کنید.");
 }
 
 export const eventsRepository = {
@@ -149,12 +154,12 @@ export const eventsRepository = {
     });
   },
 
-  /** Reopens a closed event ("بازگشایی ایونت"). Requires a non-empty reason and is always logged. */
+  /** Reopens a closed event ("بازگشایی ایونت"). Requires a non-empty reason, is always logged, and marks all of the event's current statements "outdated" (docs/PLAN.md Stage 3B). */
   async reopen(id: string, reason: string): Promise<void> {
     const trimmedReason = reason.trim();
     if (!trimmedReason) throw new Error("دلیل بازگشایی الزامی است");
 
-    await db.transaction("rw", db.events, db.operations, async () => {
+    await db.transaction("rw", db.events, db.statements, db.operations, async () => {
       const existing = await db.events.get(id);
       if (!existing) throw new Error(`Event ${id} not found`);
       const updated: Event = {
@@ -166,6 +171,17 @@ export const eventsRepository = {
       };
       await db.events.put(updated);
       await logOperation(db, "events", id, "reopen", diffFields(existing, updated, ["closedAt", "reopenedAt", "reopenReason"]));
+
+      const currentStatements = await db.statements
+        .where("eventId")
+        .equals(id)
+        .filter((s) => !s.deleted && s.status === "current")
+        .toArray();
+      for (const statement of currentStatements) {
+        const updatedStatement = { ...statement, status: "outdated" as const, ...touchBaseFields(statement) };
+        await db.statements.put(updatedStatement);
+        await logOperation(db, "statements", statement.id, "outdate", diffFields(statement, updatedStatement, ["status"]));
+      }
     });
   }
 };

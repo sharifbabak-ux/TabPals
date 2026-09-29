@@ -36,6 +36,7 @@ describe("vouchersRepository.createExpense", () => {
     expect(voucher.number).toBe(1);
     expect(voucher.shares.reduce((sum, s) => sum + s.share, 0)).toBe(100);
     expect(voucher.participants).toHaveLength(3);
+    expect(voucher.splitMode).toBe("equal");
 
     const ops = await db.operations.where("entityId").equals(voucher.id).toArray();
     expect(ops).toHaveLength(1);
@@ -62,6 +63,7 @@ describe("vouchersRepository.createExpense", () => {
       ])
     );
     expect(voucher.shares).toHaveLength(2);
+    expect(voucher.splitMode).toBe("equal");
   });
 
   it("splits by weight", async () => {
@@ -85,6 +87,7 @@ describe("vouchersRepository.createExpense", () => {
       { personId: "p1", share: 100 },
       { personId: "p2", share: 200 }
     ]);
+    expect(voucher.splitMode).toBe("weight");
   });
 
   it("splits by percent and rejects percents that do not total 100", async () => {
@@ -107,6 +110,7 @@ describe("vouchersRepository.createExpense", () => {
       { personId: "p1", share: 250 },
       { personId: "p2", share: 750 }
     ]);
+    expect(voucher.splitMode).toBe("percent");
 
     await expect(
       vouchersRepository.createExpense({
@@ -140,6 +144,7 @@ describe("vouchersRepository.createExpense", () => {
       { personId: "p1", share: 40 },
       { personId: "p2", share: 60 }
     ]);
+    expect(voucher.splitMode).toBe("exact");
 
     await expect(
       vouchersRepository.createExpense({

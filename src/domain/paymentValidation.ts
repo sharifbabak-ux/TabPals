@@ -88,3 +88,13 @@ export function validateIban(input: string): PaymentFieldValidation {
   }
   return { valid: true, normalized: withPrefix };
 }
+
+/** Groups a normalized 16-digit card number as "1234 5678 9012 3456" for display on statements. */
+export function formatCardNumberGrouped(normalizedCardNumber: string): string {
+  return normalizedCardNumber.replace(/(\d{4})(?=\d)/g, "$1 ");
+}
+
+/** Groups a normalized "IR" + 24-digit IBAN as "IR12 3456 7890 1234 5678 9012 34" for display on statements. */
+export function formatIbanGrouped(normalizedIban: string): string {
+  return normalizedIban.replace(/(.{4})(?=.)/g, "$1 ");
+}

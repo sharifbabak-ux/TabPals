@@ -2,6 +2,7 @@ import { APP_NAME, APP_VERSION } from "@/config/app";
 import { toPersianDigits } from "@/domain/format";
 import { Tabs } from "@/ui/components/Tabs";
 import { useTheme, type ThemeMode } from "@/ui/theme";
+import { MessageTemplatesSection } from "./settings/MessageTemplatesSection";
 
 export function SettingsScreen() {
   const { theme, setTheme } = useTheme();
@@ -23,6 +24,8 @@ export function SettingsScreen() {
         value={theme}
         onChange={setTheme}
       />
+
+      <MessageTemplatesSection />
     </section>
   );
 }

@@ -1,7 +1,7 @@
 import { isEventClosed } from "@/domain/eventStatus";
 import { amountsSumTo, percentsSumTo100, sharesFromExactAmounts, splitByWeight, splitEqual } from "@/domain/splitEngine";
 import { db } from "../db";
-import type { Voucher, VoucherParticipant, VoucherPayer, VoucherShare } from "../types";
+import type { SplitMode, Voucher, VoucherParticipant, VoucherPayer, VoucherShare } from "../types";
 import { diffFields, logOperation, newBaseFields } from "./operationLog";
 
 const VOUCHER_LOG_FIELDS: (keyof Voucher)[] = [
@@ -16,8 +16,18 @@ const VOUCHER_LOG_FIELDS: (keyof Voucher)[] = [
   "fromPersonId",
   "toPersonId",
   "shares",
-  "status"
+  "status",
+  "splitMode"
 ];
+
+/** Maps a caller's chosen split mode to the stored, statement-facing SplitMode (docs/PLAN.md Stage 3B). */
+const SPLIT_MODE_BY_INPUT_MODE: Record<ExpenseSplit["mode"], SplitMode> = {
+  equal_all: "equal",
+  equal_selected: "equal",
+  weight: "weight",
+  percent: "percent",
+  exact: "exact"
+};
 
 export interface EqualAllSplit {
   mode: "equal_all";
@@ -167,7 +177,8 @@ export const vouchersRepository = {
         payers: input.payers,
         participants,
         shares,
-        status: "active"
+        status: "active",
+        splitMode: SPLIT_MODE_BY_INPUT_MODE[input.split.mode]
       };
 
       await db.vouchers.add(voucher);

@@ -21,9 +21,10 @@ import { EventStatusControls } from "./events/EventStatusControls";
 import { MemberRow } from "./events/MemberRow";
 import { VouchersSection } from "./events/VouchersSection";
 import { BalancesPanel } from "./events/BalancesPanel";
+import { StatementsSection } from "./events/StatementsSection";
 
 type MemberRowData = EventMember & { name: string; photo?: Blob };
-type EventTab = "members" | "vouchers";
+type EventTab = "members" | "vouchers" | "statements";
 
 /** Merges a new order for the visible subset back into the full member list, keeping hidden rows in their original slots. */
 function mergeReorderedIds(allIds: string[], visibleIdsInNewOrder: string[]): string[] {
@@ -164,7 +165,8 @@ export function EventDetailScreen() {
       <Tabs
         options={[
           { value: "members", label: "اعضا" },
-          { value: "vouchers", label: "اسناد" }
+          { value: "vouchers", label: "اسناد" },
+          { value: "statements", label: "صورت‌حساب‌ها" }
         ]}
         value={tab}
         onChange={setTab}
@@ -216,7 +218,7 @@ export function EventDetailScreen() {
 
           <BalancesPanel eventId={eventId} members={activeMemberOptions} currency={event.currency} />
         </>
-      ) : (
+      ) : tab === "vouchers" ? (
         <VouchersSection
           eventId={eventId}
           currency={event.currency}
@@ -224,6 +226,14 @@ export function EventDetailScreen() {
           eventClosed={closed}
           treasurerPersonId={event.treasurerPersonId}
           treasurerName={treasurerName}
+        />
+      ) : (
+        <StatementsSection
+          eventId={eventId}
+          eventClosed={closed}
+          treasurerPersonId={event.treasurerPersonId}
+          activeMembers={activeMemberOptions}
+          onRequestSetTreasurer={() => setEditOpen(true)}
         />
       )}
 

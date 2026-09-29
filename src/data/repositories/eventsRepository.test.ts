@@ -55,6 +55,13 @@ describe("eventsRepository", () => {
     await expect(eventsRepository.update(event.id, { treasurerPersonId: "p2" })).rejects.toThrow();
   });
 
+  it("still allows setting a treasurer for the first time on a closed event (docs/PLAN.md Stage 3B)", async () => {
+    const event = await eventsRepository.create({ title: "سفر" });
+    await eventsRepository.close(event.id);
+    await expect(eventsRepository.update(event.id, { treasurerPersonId: "p1" })).resolves.toBeUndefined();
+    expect((await db.events.get(event.id))?.treasurerPersonId).toBe("p1");
+  });
+
   it("still allows editing the title on a closed event", async () => {
     const event = await eventsRepository.create({ title: "سفر" });
     await eventsRepository.close(event.id);

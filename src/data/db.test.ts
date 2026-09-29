@@ -219,3 +219,130 @@ describe("TabPalDB schema v3 -> v4 migration", () => {
     upgraded.close();
   });
 });
+
+describe("TabPalDB schema v4 -> v5 migration", () => {
+  class V4DB extends Dexie {
+    vouchers!: Dexie.Table<Record<string, unknown>, string>;
+    constructor(name: string) {
+      super(name);
+      this.version(4).stores({
+        meta: "key",
+        persons: "id, name, archived, deleted",
+        events: "id, archived, deleted, startDate, closedAt, treasurerPersonId",
+        eventMembers: "id, eventId, personId, &[eventId+personId], active, deleted, sortOrder",
+        groups: "id, name, archived, deleted",
+        vouchers: "id, eventId, &[eventId+number], type, status, deleted, recordedAt",
+        operations: "id, entity, entityId, timestamp"
+      });
+    }
+  }
+
+  const baseFields = {
+    createdAt: "2025-01-01T00:00:00.000Z",
+    updatedAt: "2025-01-01T00:00:00.000Z",
+    deviceId: "device-1",
+    version: 1,
+    deleted: false
+  };
+
+  it("backfills splitMode on existing expense vouchers from participant weights", async () => {
+    const legacy = new V4DB(TEST_DB_NAME);
+    await legacy.vouchers.bulkPut([
+      {
+        id: "v1",
+        eventId: "e1",
+        number: 1,
+        type: "expense",
+        recordedAt: "2025-01-01T00:00:00.000Z",
+        expenseDate: "2025-01-01",
+        description: "شام",
+        totalAmount: 100,
+        payers: [{ personId: "p1", amount: 100 }],
+        participants: [
+          { personId: "p1", weight: 1 },
+          { personId: "p2", weight: 1 }
+        ],
+        shares: [
+          { personId: "p1", share: 50 },
+          { personId: "p2", share: 50 }
+        ],
+        status: "active",
+        ...baseFields
+      },
+      {
+        id: "v2",
+        eventId: "e1",
+        number: 2,
+        type: "expense",
+        recordedAt: "2025-01-01T00:00:00.000Z",
+        expenseDate: "2025-01-01",
+        description: "تاکسی",
+        totalAmount: 90,
+        payers: [{ personId: "p1", amount: 90 }],
+        participants: [
+          { personId: "p1", weight: 2 },
+          { personId: "p2", weight: 1 }
+        ],
+        shares: [
+          { personId: "p1", share: 60 },
+          { personId: "p2", share: 30 }
+        ],
+        status: "active",
+        ...baseFields
+      },
+      {
+        id: "v3",
+        eventId: "e1",
+        number: 3,
+        type: "settlement",
+        recordedAt: "2025-01-01T00:00:00.000Z",
+        expenseDate: "2025-01-01",
+        description: "تسویه",
+        totalAmount: 30,
+        payers: [],
+        participants: [],
+        fromPersonId: "p2",
+        toPersonId: "p1",
+        shares: [],
+        status: "active",
+        ...baseFields
+      }
+    ]);
+    legacy.close();
+
+    const upgraded = new TabPalDB(TEST_DB_NAME);
+    await upgraded.open();
+
+    expect((await upgraded.vouchers.get("v1"))?.splitMode).toBe("equal");
+    expect((await upgraded.vouchers.get("v2"))?.splitMode).toBe("weight");
+    expect((await upgraded.vouchers.get("v3"))?.splitMode).toBeUndefined();
+
+    upgraded.close();
+  });
+
+  it("seeds the default message templates for an existing install being upgraded", async () => {
+    const legacy = new V4DB(TEST_DB_NAME);
+    await legacy.open();
+    legacy.close();
+
+    const upgraded = new TabPalDB(TEST_DB_NAME);
+    await upgraded.open();
+
+    const templates = await upgraded.messageTemplates.toArray();
+    expect(templates.length).toBe(15);
+    expect(templates.every((t) => t.isDefault && t.enabled)).toBe(true);
+    expect(new Set(templates.map((t) => t.category))).toEqual(new Set(["debtor", "creditor", "settled", "treasurer"]));
+
+    upgraded.close();
+  });
+
+  it("seeds the default message templates for a brand-new install (populate hook)", async () => {
+    const fresh = new TabPalDB(TEST_DB_NAME);
+    await fresh.open();
+
+    const templates = await fresh.messageTemplates.toArray();
+    expect(templates.length).toBe(15);
+
+    fresh.close();
+  });
+});
