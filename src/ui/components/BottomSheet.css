@@ -21,6 +21,12 @@
   animation: sheet-slide-up var(--transition-base);
 }
 
+.sheet--full-screen {
+  height: 100dvh;
+  max-height: 100dvh;
+  border-radius: 0;
+}
+
 @keyframes sheet-fade {
   from {
     opacity: 0;

@@ -22,9 +22,11 @@ build features from a later stage while working on an earlier one.
 - Every persisted entity extends the base record type in
   `src/data/types.ts` (id ULID, createdAt, updatedAt, deviceId, version,
   deleted).
-- Never hard-delete accounting records (vouchers, revisions, ...).
-  Deletion = soft delete (`deleted: true`) or, for vouchers, a void with a
-  reason — see docs/PLAN.md #3.
+- Accounting records are never hard-deleted except by an explicit permanent
+  delete from the trash (whole closed event) or of an unreferenced archived
+  person/group; every deletion writes a tombstone operation. Short of that,
+  deletion = soft delete (`deleted: true`) or, for vouchers, a void with a
+  reason — see docs/PLAN.md #3 and Stage 3B.1.
 - Every Dexie schema change must bump the schema version
   (`this.version(n).stores(...)`) with a migration that preserves existing
   data. Never edit a past version's `stores()` in place.

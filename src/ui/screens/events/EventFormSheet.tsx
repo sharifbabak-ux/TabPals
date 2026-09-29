@@ -8,6 +8,10 @@ import type { EventInput } from "@/data/repositories/eventsRepository";
 interface PersonOption {
   id: string;
   name: string;
+  cardNumber?: string;
+  iban?: string;
+  bankName?: string;
+  accountHolder?: string;
 }
 
 interface EventFormSheetProps {
@@ -39,6 +43,8 @@ export function EventFormSheet({ open, event, closed, treasurerOptions, onClose,
   const [treasurerPersonId, setTreasurerPersonId] = useState("");
   const [treasurerCardNumber, setTreasurerCardNumber] = useState("");
   const [treasurerIban, setTreasurerIban] = useState("");
+  const [treasurerBankName, setTreasurerBankName] = useState("");
+  const [treasurerAccountHolder, setTreasurerAccountHolder] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -52,9 +58,22 @@ export function EventFormSheet({ open, event, closed, treasurerOptions, onClose,
       setTreasurerPersonId(event?.treasurerPersonId ?? "");
       setTreasurerCardNumber(event?.treasurerCardNumber ?? "");
       setTreasurerIban(event?.treasurerIban ?? "");
+      setTreasurerBankName(event?.treasurerBankName ?? "");
+      setTreasurerAccountHolder(event?.treasurerAccountHolder ?? "");
       setSubmitError(null);
     }
   }, [open, event]);
+
+  /** Choosing a treasurer prefills all four bank fields from their saved person record (docs/PLAN.md Stage 3B.1); the fields stay editable per event afterward. */
+  function handleTreasurerSelect(personId: string) {
+    setTreasurerPersonId(personId);
+    const person = treasurerOptions.find((p) => p.id === personId);
+    if (!person) return;
+    setTreasurerCardNumber(person.cardNumber ?? "");
+    setTreasurerIban(person.iban ?? "");
+    setTreasurerBankName(person.bankName ?? "");
+    setTreasurerAccountHolder(person.accountHolder ?? person.name);
+  }
 
   // Once a treasurer is set, changing it on a closed event requires reopening — but SETTING one
   // for the first time stays allowed while closed, so a statement can be issued (docs/PLAN.md Stage 3B).
@@ -82,7 +101,9 @@ export function EventFormSheet({ open, event, closed, treasurerOptions, onClose,
         currency,
         treasurerPersonId,
         treasurerCardNumber,
-        treasurerIban
+        treasurerIban,
+        treasurerBankName,
+        treasurerAccountHolder
       });
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "خطایی رخ داد");
@@ -127,7 +148,7 @@ export function EventFormSheet({ open, event, closed, treasurerOptions, onClose,
             id="event-treasurer"
             value={treasurerPersonId}
             disabled={treasurerLocked}
-            onChange={(formEvent) => setTreasurerPersonId(formEvent.target.value)}
+            onChange={(formEvent) => handleTreasurerSelect(formEvent.target.value)}
           >
             <option value="">انتخاب کنید</option>
             {treasurerOptions.map((option) => (
@@ -159,6 +180,24 @@ export function EventFormSheet({ open, event, closed, treasurerOptions, onClose,
             onChange={(formEvent) => setTreasurerIban(formEvent.target.value)}
           />
           {ibanValidation && !ibanValidation.valid && <span className="field__error">{ibanValidation.error}</span>}
+        </div>
+        <div className="field">
+          <label htmlFor="event-treasurer-bank">نام بانک مسئول صندوق (اختیاری)</label>
+          <input
+            id="event-treasurer-bank"
+            disabled={treasurerLocked}
+            value={treasurerBankName}
+            onChange={(formEvent) => setTreasurerBankName(formEvent.target.value)}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="event-treasurer-holder">نام صاحب حساب (اختیاری)</label>
+          <input
+            id="event-treasurer-holder"
+            disabled={treasurerLocked}
+            value={treasurerAccountHolder}
+            onChange={(formEvent) => setTreasurerAccountHolder(formEvent.target.value)}
+          />
         </div>
         {treasurerLocked && (
           <p className="field__hint">این ایونت پایان‌یافته است؛ برای تغییر مسئول صندوق، ابتدا آن را بازگشایی کنید.</p>

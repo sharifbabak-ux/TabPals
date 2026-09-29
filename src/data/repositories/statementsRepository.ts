@@ -1,4 +1,5 @@
 import { APP_VERSION } from "@/config/app";
+import { displayName } from "@/domain/displayName";
 import { isEventClosed } from "@/domain/eventStatus";
 import { formatAmount } from "@/domain/format";
 import { buildBalanceText, categoryForStatement, fillTemplate, pickTemplate } from "@/domain/messageTemplate";
@@ -49,16 +50,41 @@ async function loadIssueContext(eventId: string): Promise<StatementIssueContext>
   const event = await db.events.get(eventId);
   if (!event) throw new Error(`Event ${eventId} not found`);
 
-  const memberRows = await db.eventMembers
+  // displayName disambiguates by first name among ALL members of the event, active or inactive
+  // (docs/PLAN.md Stage 3B.1) — so the lookup here is not restricted to active members.
+  const allMemberRows = await db.eventMembers
     .where("eventId")
     .equals(eventId)
-    .filter((m) => !m.deleted && m.active)
+    .filter((m) => !m.deleted)
     .toArray();
+  const allPersons = await db.persons.bulkGet(allMemberRows.map((m) => m.personId));
+  const nameParts = allMemberRows.map((m, index) => ({
+    personId: m.personId,
+    firstName: allPersons[index]?.firstName ?? "؟",
+    lastName: allPersons[index]?.lastName ?? ""
+  }));
+
+  const memberRows = allMemberRows.filter((m) => m.active);
   const persons = await db.persons.bulkGet(memberRows.map((m) => m.personId));
   const members: StatementBuildMember[] = memberRows
-    .map((m, index) => ({ personId: m.personId, name: persons[index]?.name ?? "؟", defaultWeight: m.defaultWeight, sortOrder: m.sortOrder }))
+    .map((m, index) => {
+      const person = persons[index];
+      const parts = { personId: m.personId, firstName: person?.firstName ?? "؟", lastName: person?.lastName ?? "" };
+      return {
+        personId: m.personId,
+        name: displayName(parts, nameParts),
+        firstName: parts.firstName,
+        lastName: parts.lastName,
+        defaultWeight: m.defaultWeight,
+        sortOrder: m.sortOrder,
+        cardNumberGrouped: person?.cardNumber ? formatCardNumberGrouped(person.cardNumber) : undefined,
+        ibanGrouped: person?.iban ? formatIbanGrouped(person.iban) : undefined,
+        bankName: person?.bankName,
+        accountHolder: person?.accountHolder
+      };
+    })
     .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map(({ personId, name, defaultWeight }) => ({ personId, name, defaultWeight }));
+    .map(({ sortOrder: _sortOrder, ...rest }) => rest);
 
   const voucherRows = await db.vouchers
     .where("eventId")
@@ -87,7 +113,9 @@ async function loadIssueContext(eventId: string): Promise<StatementIssueContext>
     currency: event.currency,
     treasurerPersonId: event.treasurerPersonId,
     treasurerCardNumberGrouped: event.treasurerCardNumber ? formatCardNumberGrouped(event.treasurerCardNumber) : undefined,
-    treasurerIbanGrouped: event.treasurerIban ? formatIbanGrouped(event.treasurerIban) : undefined
+    treasurerIbanGrouped: event.treasurerIban ? formatIbanGrouped(event.treasurerIban) : undefined,
+    treasurerBankName: event.treasurerBankName,
+    treasurerAccountHolder: event.treasurerAccountHolder
   };
 
   return { event, buildEvent, members, vouchers };
@@ -153,7 +181,7 @@ async function issueForPerson(eventId: string, personId: string, ctx: StatementI
 
   const balanceText = buildBalanceText(data.summary.balance, ctx.buildEvent.currency);
   const closingText = fillTemplate(picked.text, {
-    name: data.member.name,
+    name: data.member.firstName,
     amount: formatAmount(Math.abs(data.summary.balance)),
     currency: ctx.buildEvent.currency,
     treasurer: data.treasurerName ?? "",

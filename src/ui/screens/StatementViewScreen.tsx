@@ -71,8 +71,8 @@ export function StatementViewScreen() {
           </div>
           {data.kind !== "comprehensive" && (
             <div className="statement-header__member">
-              <Avatar id={data.member.personId} name={data.member.name} size={48} />
-              <span>{data.member.name}</span>
+              <Avatar id={data.member.personId} name={`${data.member.firstName} ${data.member.lastName}`.trim()} size={48} />
+              <span>{`${data.member.firstName} ${data.member.lastName}`.trim()}</span>
             </div>
           )}
           <div className="statement-header__meta">

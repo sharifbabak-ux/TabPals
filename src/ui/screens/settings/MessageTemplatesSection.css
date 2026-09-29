@@ -8,6 +8,18 @@
   flex-direction: column;
 }
 
+.template-list-item .list-item__main {
+  width: 100%;
+  min-width: 0;
+}
+
+.template-list-item .list-item__title {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: visible;
+  text-overflow: unset;
+}
+
 .template-list-item__actions {
   display: flex;
   align-items: center;
@@ -21,4 +33,6 @@
   font-size: 0.8rem;
   margin: 0;
   line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }

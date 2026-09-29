@@ -46,7 +46,8 @@ describe("TabPalDB schema v1 -> v2 migration", () => {
 
     await upgraded.persons.put({
       id: "p1",
-      name: "Test Person",
+      firstName: "Test",
+      lastName: "Person",
       archived: false,
       createdAt: "2025-01-01T00:00:00.000Z",
       updatedAt: "2025-01-01T00:00:00.000Z",
@@ -344,5 +345,138 @@ describe("TabPalDB schema v4 -> v5 migration", () => {
     expect(templates.length).toBe(15);
 
     fresh.close();
+  });
+});
+
+describe("TabPalDB schema v5 -> v6 migration", () => {
+  class V5DB extends Dexie {
+    persons!: Dexie.Table<Record<string, unknown>, string>;
+    events!: Dexie.Table<Record<string, unknown>, string>;
+    vouchers!: Dexie.Table<Record<string, unknown>, string>;
+    constructor(name: string) {
+      super(name);
+      this.version(5).stores({
+        meta: "key",
+        persons: "id, name, archived, deleted",
+        events: "id, archived, deleted, startDate, closedAt, treasurerPersonId",
+        eventMembers: "id, eventId, personId, &[eventId+personId], active, deleted, sortOrder",
+        groups: "id, name, archived, deleted",
+        vouchers: "id, eventId, &[eventId+number], type, status, deleted, recordedAt",
+        statements: "id, eventId, kind, personId, &[eventId+number], status, deleted",
+        messageTemplates: "id, category, enabled, isDefault, deleted",
+        operations: "id, entity, entityId, timestamp"
+      });
+    }
+  }
+
+  const baseFields = {
+    createdAt: "2025-01-01T00:00:00.000Z",
+    updatedAt: "2025-01-01T00:00:00.000Z",
+    deviceId: "device-1",
+    version: 1,
+    deleted: false
+  };
+
+  it("splits an existing person's name on the first space and flags needsNameReview", async () => {
+    const legacy = new V5DB(TEST_DB_NAME);
+    await legacy.persons.bulkPut([
+      { id: "p1", name: "Ali Rezaei Pour", archived: false, ...baseFields },
+      { id: "p2", name: "Solo", archived: false, ...baseFields },
+      { id: "p3", name: "  Sara   Ahmadi  ", archived: false, ...baseFields }
+    ]);
+    legacy.close();
+
+    const upgraded = new TabPalDB(TEST_DB_NAME);
+    await upgraded.open();
+
+    const p1 = await upgraded.persons.get("p1");
+    expect(p1?.firstName).toBe("Ali");
+    expect(p1?.lastName).toBe("Rezaei Pour");
+    expect(p1?.needsNameReview).toBe(true);
+    expect((p1 as unknown as { name?: string })).not.toHaveProperty("name");
+
+    const p2 = await upgraded.persons.get("p2");
+    expect(p2?.firstName).toBe("Solo");
+    expect(p2?.lastName).toBe("");
+    expect(p2?.needsNameReview).toBe(true);
+
+    const p3 = await upgraded.persons.get("p3");
+    expect(p3?.firstName).toBe("Sara");
+    expect(p3?.lastName).toBe("Ahmadi");
+
+    upgraded.close();
+  });
+
+  it("backfills events.deletedAt to null", async () => {
+    const legacy = new V5DB(TEST_DB_NAME);
+    await legacy.events.put({
+      id: "e1",
+      title: "سفر شمال",
+      archived: false,
+      currency: "تومان",
+      treasurerPersonId: null,
+      closedAt: null,
+      reopenedAt: null,
+      reopenReason: null,
+      ...baseFields
+    });
+    legacy.close();
+
+    const upgraded = new TabPalDB(TEST_DB_NAME);
+    await upgraded.open();
+
+    expect((await upgraded.events.get("e1"))?.deletedAt).toBeNull();
+
+    upgraded.close();
+  });
+
+  it("backfills payerSplitMode to exact on existing multi-payer vouchers only", async () => {
+    const legacy = new V5DB(TEST_DB_NAME);
+    await legacy.vouchers.bulkPut([
+      {
+        id: "v1",
+        eventId: "e1",
+        number: 1,
+        type: "expense",
+        recordedAt: "2025-01-01T00:00:00.000Z",
+        expenseDate: "2025-01-01",
+        description: "شام",
+        totalAmount: 100,
+        payers: [
+          { personId: "p1", amount: 60 },
+          { personId: "p2", amount: 40 }
+        ],
+        participants: [{ personId: "p1", weight: 1 }],
+        shares: [{ personId: "p1", share: 100 }],
+        status: "active",
+        splitMode: "equal",
+        ...baseFields
+      },
+      {
+        id: "v2",
+        eventId: "e1",
+        number: 2,
+        type: "expense",
+        recordedAt: "2025-01-01T00:00:00.000Z",
+        expenseDate: "2025-01-01",
+        description: "تاکسی",
+        totalAmount: 90,
+        payers: [{ personId: "p1", amount: 90 }],
+        participants: [{ personId: "p1", weight: 1 }],
+        shares: [{ personId: "p1", share: 90 }],
+        status: "active",
+        splitMode: "equal",
+        ...baseFields
+      }
+    ]);
+    legacy.close();
+
+    const upgraded = new TabPalDB(TEST_DB_NAME);
+    await upgraded.open();
+
+    expect((await upgraded.vouchers.get("v1"))?.payerSplitMode).toBe("exact");
+    expect((await upgraded.vouchers.get("v2"))?.payerSplitMode).toBeUndefined();
+
+    upgraded.close();
   });
 });

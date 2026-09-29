@@ -6,6 +6,8 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { db } from "@/data/db";
 import { eventMembersRepository, eventsRepository, personsRepository } from "@/data/repositories";
 import type { EventMember } from "@/data/types";
+import { canTrashEvent } from "@/domain/deletionGuards";
+import { displayName } from "@/domain/displayName";
 import { isEventClosed } from "@/domain/eventStatus";
 import { JalaliDate } from "@/ui/components/JalaliDate";
 import { EmptyState } from "@/ui/components/EmptyState";
@@ -23,7 +25,7 @@ import { VouchersSection } from "./events/VouchersSection";
 import { BalancesPanel } from "./events/BalancesPanel";
 import { StatementsSection } from "./events/StatementsSection";
 
-type MemberRowData = EventMember & { name: string; photo?: Blob };
+type MemberRowData = EventMember & { name: string; firstName: string; lastName: string; photo?: Blob };
 type EventTab = "members" | "vouchers" | "statements";
 
 /** Merges a new order for the visible subset back into the full member list, keeping hidden rows in their original slots. */
@@ -46,6 +48,8 @@ export function EventDetailScreen() {
   const [deactivateTarget, setDeactivateTarget] = useState<MemberRowData | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [archiveTarget, setArchiveTarget] = useState(false);
+  const [trashConfirmOpen, setTrashConfirmOpen] = useState(false);
+  const [trashError, setTrashError] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -61,12 +65,27 @@ export function EventDetailScreen() {
       .filter((member) => !member.deleted)
       .toArray();
     const persons = await db.persons.bulkGet(rows.map((row) => row.personId));
+    // displayName disambiguates by first name among ALL members of the event, active or inactive (docs/PLAN.md Stage 3B.1).
+    const nameParts = rows.map((row, index) => ({
+      personId: row.personId,
+      firstName: persons[index]?.firstName ?? "؟",
+      lastName: persons[index]?.lastName ?? ""
+    }));
     return rows
-      .map((row, index) => ({ ...row, name: persons[index]?.name ?? "؟", photo: persons[index]?.photo }))
+      .map((row, index) => {
+        const parts = nameParts[index];
+        return { ...row, name: displayName(parts, nameParts), firstName: parts.firstName, lastName: parts.lastName, photo: persons[index]?.photo };
+      })
       .sort((a, b) => a.sortOrder - b.sortOrder);
   }, [eventId]);
 
   const activePersons = useLiveQuery(() => db.persons.filter((p) => !p.deleted && !p.archived).toArray(), []);
+
+  const memberPersonRecords = useLiveQuery(async () => {
+    if (!members || members.length === 0) return [];
+    const records = await db.persons.bulkGet(members.map((m) => m.personId));
+    return records.filter((p): p is NonNullable<typeof p> => Boolean(p));
+  }, [members]);
 
   const activeMemberOptions = useMemo(
     () =>
@@ -97,6 +116,17 @@ export function EventDetailScreen() {
     await eventsRepository.setArchived(eventId, !event.archived);
     setArchiveTarget(false);
     setEditOpen(false);
+  }
+
+  async function handleTrashConfirm() {
+    setTrashError(null);
+    try {
+      await eventsRepository.moveToTrash(eventId);
+      setTrashConfirmOpen(false);
+      navigate("/events");
+    } catch (e) {
+      setTrashError(e instanceof Error ? e.message : "خطایی رخ داد");
+    }
   }
 
   async function handleDragEnd(dragEvent: DragEndEvent) {
@@ -160,7 +190,13 @@ export function EventDetailScreen() {
       <div className="event-status-bar">
         {closed && <span className="badge badge--closed">پایان‌یافته</span>}
         <EventStatusControls eventId={eventId} closed={closed} />
+        {canTrashEvent(event).allowed && (
+          <button type="button" className="sheet__archive-button" onClick={() => setTrashConfirmOpen(true)}>
+            حذف ایونت
+          </button>
+        )}
       </div>
+      {trashError && <p className="field__error">{trashError}</p>}
 
       <Tabs
         options={[
@@ -249,7 +285,7 @@ export function EventDetailScreen() {
 
       <PersonFormSheet
         open={createPersonOpen}
-        existingNames={(activePersons ?? []).map((person) => person.name)}
+        existingNames={(activePersons ?? []).map((person) => ({ firstName: person.firstName, lastName: person.lastName }))}
         onClose={() => setCreatePersonOpen(false)}
         onSubmit={async (input) => {
           const person = await personsRepository.create(input);
@@ -282,7 +318,17 @@ export function EventDetailScreen() {
         open={editOpen}
         event={event}
         closed={closed}
-        treasurerOptions={members.map((m) => ({ id: m.personId, name: m.name }))}
+        treasurerOptions={members.map((m) => {
+          const person = memberPersonRecords?.find((p) => p.id === m.personId);
+          return {
+            id: m.personId,
+            name: m.name,
+            cardNumber: person?.cardNumber,
+            iban: person?.iban,
+            bankName: person?.bankName,
+            accountHolder: person?.accountHolder
+          };
+        })}
         onClose={() => setEditOpen(false)}
         onSubmit={async (input) => {
           await eventsRepository.update(eventId, input);
@@ -311,6 +357,16 @@ export function EventDetailScreen() {
         confirmLabel={deactivateTarget?.active ? "غیرفعال کردن" : "فعال کردن"}
         onConfirm={handleDeactivateConfirm}
         onCancel={() => setDeactivateTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={trashConfirmOpen}
+        title="حذف ایونت"
+        message={`«${event.title}» به سطل بازیافت منتقل شود؟ از سطل بازیافت (در تنظیمات) می‌توانید آن را بازگردانید یا برای همیشه حذف کنید.`}
+        confirmLabel="انتقال به سطل بازیافت"
+        danger
+        onConfirm={handleTrashConfirm}
+        onCancel={() => setTrashConfirmOpen(false)}
       />
     </div>
   );

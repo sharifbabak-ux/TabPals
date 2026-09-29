@@ -14,8 +14,16 @@ import { type HubSettlementPlan, computeHubSettlement } from "./hubSettlement";
 
 export interface StatementBuildMember {
   personId: string;
+  /** Display name (docs/PLAN.md Stage 3B.1): firstName, disambiguated with lastName in parentheses when another member shares the first name. Used for every "mention" of the member — tables, sهیم‌ها lines, payer/participant names, etc. */
   name: string;
+  firstName: string;
+  lastName: string;
   defaultWeight: number;
+  /** Saved bank details, formatted for display; present only when the person has them saved. */
+  cardNumberGrouped?: string;
+  ibanGrouped?: string;
+  bankName?: string;
+  accountHolder?: string;
 }
 
 export interface StatementBuildVoucher {
@@ -41,6 +49,8 @@ export interface StatementBuildEvent {
   treasurerPersonId: string | null;
   treasurerCardNumberGrouped?: string;
   treasurerIbanGrouped?: string;
+  treasurerBankName?: string;
+  treasurerAccountHolder?: string;
 }
 
 export interface StatementEventInfo {
@@ -78,6 +88,11 @@ export interface HubSettlementRow {
   personId: string;
   name: string;
   amount: number;
+  /** Only present on "paysFromTreasurer" rows, when the creditor has saved bank details (docs/PLAN.md Stage 3B.1). */
+  cardNumberGrouped?: string;
+  ibanGrouped?: string;
+  bankName?: string;
+  accountHolder?: string;
 }
 
 export interface HubSettlementSection {
@@ -90,7 +105,8 @@ export interface HubSettlementSection {
 export interface MemberStatementData {
   kind: "member" | "treasurer";
   event: StatementEventInfo;
-  member: { personId: string; name: string };
+  /** `name` is the disambiguated display name (for mentions); the header shows firstName+lastName (the full name), and {name} greetings use firstName alone. */
+  member: { personId: string; name: string; firstName: string; lastName: string };
   expenses: StatementExpenseRow[];
   expenseTotals: { totalAmount: number; totalShare: number; totalPaid: number };
   fundEntries: StatementFundEntry[];
@@ -98,12 +114,18 @@ export interface MemberStatementData {
   treasurerName: string | null;
   treasurerCardNumberGrouped: string | null;
   treasurerIbanGrouped: string | null;
+  treasurerBankName: string | null;
+  treasurerAccountHolder: string | null;
   /** Treasurer statements only. */
   hubSettlement: HubSettlementSection | null;
 }
 
 function nameOf(members: StatementBuildMember[], personId: string): string {
   return members.find((m) => m.personId === personId)?.name ?? "؟";
+}
+
+function memberOf(members: StatementBuildMember[], personId: string): StatementBuildMember | undefined {
+  return members.find((m) => m.personId === personId);
 }
 
 function hubSettlementSection(
@@ -120,7 +142,18 @@ function hubSettlementSection(
     .map((t) => ({ personId: t.fromPersonId, name: nameOf(members, t.fromPersonId), amount: t.amount }));
   const paysFromTreasurer = plan.transfers
     .filter((t) => t.fromPersonId === treasurerPersonId)
-    .map((t) => ({ personId: t.toPersonId, name: nameOf(members, t.toPersonId), amount: t.amount }));
+    .map((t) => {
+      const creditor = memberOf(members, t.toPersonId);
+      return {
+        personId: t.toPersonId,
+        name: creditor?.name ?? "؟",
+        amount: t.amount,
+        cardNumberGrouped: creditor?.cardNumberGrouped,
+        ibanGrouped: creditor?.ibanGrouped,
+        bankName: creditor?.bankName,
+        accountHolder: creditor?.accountHolder
+      };
+    });
   return { paysToTreasurer, paysFromTreasurer, totalCollected: plan.totalCollected, totalPaidOut: plan.totalPaidOut };
 }
 
@@ -224,11 +257,12 @@ export function buildMemberStatementData(params: {
   const summary = breakdowns.find((b) => b.personId === personId)!;
 
   const treasurerName = event.treasurerPersonId ? nameOf(members, event.treasurerPersonId) : null;
+  const selfMember = memberOf(members, personId);
 
   return {
     kind,
     event: { title: event.title, startDate: event.startDate, endDate: event.endDate, currency: event.currency },
-    member: { personId, name: nameOf(members, personId) },
+    member: { personId, name: selfMember?.name ?? "؟", firstName: selfMember?.firstName ?? "؟", lastName: selfMember?.lastName ?? "" },
     expenses,
     expenseTotals,
     fundEntries,
@@ -236,6 +270,8 @@ export function buildMemberStatementData(params: {
     treasurerName,
     treasurerCardNumberGrouped: event.treasurerCardNumberGrouped ?? null,
     treasurerIbanGrouped: event.treasurerIbanGrouped ?? null,
+    treasurerBankName: event.treasurerBankName ?? null,
+    treasurerAccountHolder: event.treasurerAccountHolder ?? null,
     hubSettlement: kind === "treasurer" && event.treasurerPersonId ? hubSettlementSection(members, breakdowns, event.treasurerPersonId) : null
   };
 }

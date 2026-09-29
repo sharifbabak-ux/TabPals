@@ -4,6 +4,9 @@ import { eventsRepository } from "./eventsRepository";
 
 beforeEach(async () => {
   await db.events.clear();
+  await db.eventMembers.clear();
+  await db.vouchers.clear();
+  await db.statements.clear();
   await db.operations.clear();
 });
 
@@ -106,5 +109,64 @@ describe("eventsRepository", () => {
     const event = await eventsRepository.create({ title: "سفر" });
     await eventsRepository.close(event.id);
     await expect(eventsRepository.reopen(event.id, "  ")).rejects.toThrow();
+  });
+
+  it("blocks moving an open event to trash", async () => {
+    const event = await eventsRepository.create({ title: "سفر" });
+    await expect(eventsRepository.moveToTrash(event.id)).rejects.toThrow();
+  });
+
+  it("moves a closed event to trash and logs a trash operation", async () => {
+    const event = await eventsRepository.create({ title: "سفر" });
+    await eventsRepository.close(event.id);
+    await eventsRepository.moveToTrash(event.id);
+
+    const trashed = await db.events.get(event.id);
+    expect(trashed?.deletedAt).toBeTruthy();
+
+    const ops = await db.operations.where("entityId").equals(event.id).filter((o) => o.type === "trash").toArray();
+    expect(ops).toHaveLength(1);
+  });
+
+  it("restores a trashed event, clearing deletedAt", async () => {
+    const event = await eventsRepository.create({ title: "سفر" });
+    await eventsRepository.close(event.id);
+    await eventsRepository.moveToTrash(event.id);
+    await eventsRepository.restoreFromTrash(event.id);
+
+    expect((await db.events.get(event.id))?.deletedAt).toBeNull();
+    const ops = await db.operations.where("entityId").equals(event.id).filter((o) => o.type === "restore").toArray();
+    expect(ops).toHaveLength(1);
+  });
+
+  it("blocks permanently deleting an event that is not in trash", async () => {
+    const event = await eventsRepository.create({ title: "سفر" });
+    await eventsRepository.close(event.id);
+    await expect(eventsRepository.permanentlyDelete(event.id)).rejects.toThrow();
+  });
+
+  it("permanently deletes a trashed event and everything belonging to it, writing a purge tombstone", async () => {
+    const event = await eventsRepository.create({ title: "سفر" });
+    await db.eventMembers.add({
+      id: "m1",
+      eventId: event.id,
+      personId: "p1",
+      defaultWeight: 1,
+      active: true,
+      sortOrder: 0,
+      createdAt: event.createdAt,
+      updatedAt: event.createdAt,
+      deviceId: "device-1",
+      version: 1,
+      deleted: false
+    });
+    await eventsRepository.close(event.id);
+    await eventsRepository.moveToTrash(event.id);
+    await eventsRepository.permanentlyDelete(event.id);
+
+    expect(await db.events.get(event.id)).toBeUndefined();
+    expect(await db.eventMembers.get("m1")).toBeUndefined();
+    const ops = await db.operations.where("entityId").equals(event.id).filter((o) => o.type === "purge").toArray();
+    expect(ops).toHaveLength(1);
   });
 });

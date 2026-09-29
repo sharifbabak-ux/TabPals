@@ -1,3 +1,4 @@
+import { canDeleteGroup } from "@/domain/deletionGuards";
 import { normalizeName } from "@/domain/nameNormalization";
 import { db } from "../db";
 import type { Group } from "../types";
@@ -63,6 +64,18 @@ export const groupsRepository = {
       const updated: Group = { ...existing, archived, ...touchBaseFields(existing) };
       await db.groups.put(updated);
       await logOperation(db, "groups", id, "archive", diffFields(existing, updated, ["archived"]));
+    });
+  },
+
+  /** Permanent delete (docs/PLAN.md Stage 3B.1): only an archived group. Hard-deletes the row and writes a tombstone operation. */
+  async permanentlyDelete(id: string): Promise<void> {
+    await db.transaction("rw", db.groups, db.operations, async () => {
+      const existing = await db.groups.get(id);
+      if (!existing) throw new Error(`Group ${id} not found`);
+      const check = canDeleteGroup(existing);
+      if (!check.allowed) throw new Error(check.reason ?? "حذف دائمی امکان‌پذیر نیست.");
+      await db.groups.delete(id);
+      await logOperation(db, "groups", id, "purge", {});
     });
   }
 };

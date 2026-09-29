@@ -10,9 +10,9 @@ const event: StatementBuildEvent = {
 };
 
 const members: StatementBuildMember[] = [
-  { personId: "t", name: "ترانه", defaultWeight: 1 },
-  { personId: "a", name: "آرش", defaultWeight: 1 },
-  { personId: "b", name: "بهار", defaultWeight: 1 }
+  { personId: "t", name: "ترانه", firstName: "ترانه", lastName: "تی", defaultWeight: 1 },
+  { personId: "a", name: "آرش", firstName: "آرش", lastName: "ای", defaultWeight: 1 },
+  { personId: "b", name: "بهار", firstName: "بهار", lastName: "بی", defaultWeight: 1 }
 ];
 
 const vouchers: StatementBuildVoucher[] = [

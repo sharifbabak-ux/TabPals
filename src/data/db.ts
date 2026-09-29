@@ -172,6 +172,62 @@ export class TabPalDB extends Dexie {
         await tx.table("messageTemplates").bulkAdd(buildDefaultMessageTemplateRows());
       });
 
+    // Stage 3B.1 — first/last names + name review, person bank details,
+    // multi-payer split mode, treasurer bank name/holder, and event trash.
+    // Existing persons only ever had a single free-text `name`; it's split
+    // on the FIRST space so "Ali Rezaei Pour" -> firstName "Ali",
+    // lastName "Rezaei Pour" (a name with no space at all -> lastName "").
+    // Every migrated person is flagged `needsNameReview` so the one-time
+    // "بررسی نام‌ها" screen can surface it. Vouchers with more than one
+    // payer had no recorded split mode before this stage, so they're
+    // backfilled to "exact" (the raw amounts are all that's known).
+    this.version(6)
+      .stores({
+        meta: "key",
+        persons: "id, archived, deleted, needsNameReview",
+        events: "id, archived, deleted, startDate, closedAt, treasurerPersonId, deletedAt",
+        eventMembers: "id, eventId, personId, &[eventId+personId], active, deleted, sortOrder",
+        groups: "id, name, archived, deleted",
+        vouchers: "id, eventId, &[eventId+number], type, status, deleted, recordedAt",
+        statements: "id, eventId, kind, personId, &[eventId+number], status, deleted",
+        messageTemplates: "id, category, enabled, isDefault, deleted",
+        operations: "id, entity, entityId, timestamp"
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table("persons")
+          .toCollection()
+          .modify((person) => {
+            const rawName: string = typeof person.name === "string" ? person.name.trim() : "";
+            const spaceIndex = rawName.indexOf(" ");
+            if (spaceIndex === -1) {
+              person.firstName = rawName;
+              person.lastName = "";
+            } else {
+              person.firstName = rawName.slice(0, spaceIndex);
+              person.lastName = rawName.slice(spaceIndex + 1).trim();
+            }
+            person.needsNameReview = true;
+            delete person.name;
+          });
+
+        await tx
+          .table("events")
+          .toCollection()
+          .modify((event) => {
+            if (event.deletedAt === undefined) event.deletedAt = null;
+          });
+
+        await tx
+          .table("vouchers")
+          .toCollection()
+          .modify((voucher) => {
+            if (Array.isArray(voucher.payers) && voucher.payers.length > 1 && voucher.payerSplitMode === undefined) {
+              voucher.payerSplitMode = "exact";
+            }
+          });
+      });
+
     // Dexie only runs version().upgrade() when migrating an EXISTING
     // database; a brand-new install goes straight to the latest schema
     // with no upgrade() calls at all, so first-run seeding needs this

@@ -29,12 +29,24 @@ export interface BaseRecord {
  * meaningful name.
  */
 export interface Person extends BaseRecord {
-  name: string;
+  firstName: string;
+  /** Required for persons created after Stage 3B.1; may be empty on a migrated person until reviewed (see `needsNameReview`). */
+  lastName: string;
   phone?: string;
   note?: string;
   archived: boolean;
   /** Square avatar image, max 256x256, WebP or JPEG ~0.75 quality (see src/platform image service). */
   photo?: Blob;
+  /** Normalized 16-digit card number, optional (see docs/PLAN.md Stage 3B.1). */
+  cardNumber?: string;
+  /** Normalized "IR" + 24-digit IBAN, optional. */
+  iban?: string;
+  /** Free-text bank name; auto-suggested from card/IBAN but never overwritten once the user has typed one. */
+  bankName?: string;
+  /** Defaults to the person's full name in the UI, editable, stored only if the user confirms/edits it. */
+  accountHolder?: string;
+  /** True on a person created by the v6 name-split migration until confirmed on the "بررسی نام‌ها" screen. */
+  needsNameReview?: boolean;
 }
 
 /** The two currencies TabPals events can be tracked in. */
@@ -56,12 +68,17 @@ export interface Event extends BaseRecord {
   treasurerCardNumber?: string;
   /** Normalized "IR" + 24-digit IBAN, optional. */
   treasurerIban?: string;
+  /** Prefilled from the treasurer's saved bank details when first chosen; editable per event afterward. */
+  treasurerBankName?: string;
+  treasurerAccountHolder?: string;
   /** ISO timestamp of the last manual close, or null if not manually closed. */
   closedAt: string | null;
   /** ISO timestamp of the last manual reopen, or null if never reopened. */
   reopenedAt: string | null;
   /** Reason given for the last reopen, or null if never reopened. */
   reopenReason: string | null;
+  /** ISO timestamp when this CLOSED event was moved to trash, or null. Only settable/clearable via the trash UI (see CLAUDE.md). */
+  deletedAt: string | null;
 }
 
 /**
@@ -85,10 +102,11 @@ export interface Group extends BaseRecord {
   archived: boolean;
 }
 
-/** One person's contribution toward a voucher's total amount. */
+/** One person's contribution toward a voucher's total amount. `weight` is the raw input (weight or percent) used to compute `amount` when `payerSplitMode` is "weight"/"percent"; omitted for "equal"/"exact". */
 export interface VoucherPayer {
   personId: string;
   amount: number;
+  weight?: number;
 }
 
 /** One participant sharing in an expense, weighted for the split engine. */
@@ -145,6 +163,8 @@ export interface Voucher extends BaseRecord {
   status: VoucherStatus;
   /** Expense only; undefined for contribution/settlement. */
   splitMode?: SplitMode;
+  /** Only meaningful when `payers.length > 1`; how the payer amounts were derived from the total (docs/PLAN.md Stage 3B.1). Existing multi-payer vouchers were migrated to "exact". */
+  payerSplitMode?: SplitMode;
 }
 
 /** "member" statements are per-person; "comprehensive" covers the whole event (personId is null). */
@@ -194,7 +214,7 @@ export interface MessageTemplate extends BaseRecord {
 }
 
 export type OperationEntity = "persons" | "events" | "eventMembers" | "groups" | "vouchers" | "statements" | "messageTemplates";
-export type OperationType = "create" | "update" | "archive" | "close" | "reopen" | "outdate";
+export type OperationType = "create" | "update" | "archive" | "close" | "reopen" | "outdate" | "trash" | "restore" | "purge";
 
 /** Field-level before/after values recorded for one changed field. */
 export interface FieldChange {

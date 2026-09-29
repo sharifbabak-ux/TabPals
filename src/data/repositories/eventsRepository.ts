@@ -1,3 +1,4 @@
+import { canDeleteEvent, canTrashEvent } from "@/domain/deletionGuards";
 import { isEventClosed } from "@/domain/eventStatus";
 import { validateCardNumber, validateIban } from "@/domain/paymentValidation";
 import { db } from "../db";
@@ -8,7 +9,7 @@ const DEFAULT_CURRENCY: EventCurrency = "تومان";
 const VALID_CURRENCIES: EventCurrency[] = ["تومان", "ریال"];
 
 /** Fields that describe the treasurer — changing any of these on a closed event is rejected (see CLAUDE.md). */
-const TREASURER_FIELDS = ["treasurerPersonId", "treasurerCardNumber", "treasurerIban"] as const;
+const TREASURER_FIELDS = ["treasurerPersonId", "treasurerCardNumber", "treasurerIban", "treasurerBankName", "treasurerAccountHolder"] as const;
 
 export interface EventInput {
   title: string;
@@ -19,6 +20,8 @@ export interface EventInput {
   treasurerPersonId?: string | null;
   treasurerCardNumber?: string;
   treasurerIban?: string;
+  treasurerBankName?: string;
+  treasurerAccountHolder?: string;
 }
 
 function normalize(input: Partial<EventInput>): Partial<EventInput> {
@@ -51,6 +54,8 @@ function normalize(input: Partial<EventInput>): Partial<EventInput> {
       result.treasurerIban = validation.normalized;
     }
   }
+  if (input.treasurerBankName !== undefined) result.treasurerBankName = input.treasurerBankName.trim() || undefined;
+  if (input.treasurerAccountHolder !== undefined) result.treasurerAccountHolder = input.treasurerAccountHolder.trim() || undefined;
   return result;
 }
 
@@ -80,10 +85,13 @@ export const eventsRepository = {
       treasurerPersonId: normalized.treasurerPersonId ?? null,
       treasurerCardNumber: normalized.treasurerCardNumber,
       treasurerIban: normalized.treasurerIban,
+      treasurerBankName: normalized.treasurerBankName,
+      treasurerAccountHolder: normalized.treasurerAccountHolder,
       archived: false,
       closedAt: null,
       reopenedAt: null,
-      reopenReason: null
+      reopenReason: null,
+      deletedAt: null
     };
     await db.transaction("rw", db.events, db.operations, async () => {
       await db.events.add(event);
@@ -101,6 +109,8 @@ export const eventsRepository = {
           "treasurerPersonId",
           "treasurerCardNumber",
           "treasurerIban",
+          "treasurerBankName",
+          "treasurerAccountHolder",
           "archived"
         ])
       );
@@ -122,7 +132,9 @@ export const eventsRepository = {
         "currency",
         "treasurerPersonId",
         "treasurerCardNumber",
-        "treasurerIban"
+        "treasurerIban",
+        "treasurerBankName",
+        "treasurerAccountHolder"
       ]);
       if (Object.keys(diff).length === 0) return;
       assertTreasurerEditableIfClosed(existing, diff);
@@ -182,6 +194,57 @@ export const eventsRepository = {
         await db.statements.put(updatedStatement);
         await logOperation(db, "statements", statement.id, "outdate", diffFields(statement, updatedStatement, ["status"]));
       }
+    });
+  },
+
+  /** "حذف ایونت": moves a CLOSED event to trash by setting deletedAt (docs/PLAN.md Stage 3B.1). */
+  async moveToTrash(id: string): Promise<void> {
+    await db.transaction("rw", db.events, db.operations, async () => {
+      const existing = await db.events.get(id);
+      if (!existing) throw new Error(`Event ${id} not found`);
+      const check = canTrashEvent(existing);
+      if (!check.allowed) throw new Error(check.reason ?? "این ایونت قابل انتقال به سطل بازیافت نیست.");
+      const updated: Event = { ...existing, deletedAt: new Date().toISOString(), ...touchBaseFields(existing) };
+      await db.events.put(updated);
+      await logOperation(db, "events", id, "trash", diffFields(existing, updated, ["deletedAt"]));
+    });
+  },
+
+  /** "بازگردانی": clears deletedAt, moving a trashed event back to the closed-events list. */
+  async restoreFromTrash(id: string): Promise<void> {
+    await db.transaction("rw", db.events, db.operations, async () => {
+      const existing = await db.events.get(id);
+      if (!existing) throw new Error(`Event ${id} not found`);
+      if (!existing.deletedAt) return;
+      const updated: Event = { ...existing, deletedAt: null, ...touchBaseFields(existing) };
+      await db.events.put(updated);
+      await logOperation(db, "events", id, "restore", diffFields(existing, updated, ["deletedAt"]));
+    });
+  },
+
+  /**
+   * Permanent delete from trash: removes the event and everything
+   * belonging to it (eventMembers, vouchers, statements) in one
+   * transaction and writes a tombstone operation (docs/PLAN.md Stage
+   * 3B.1) — only an event already in trash can be purged.
+   */
+  async permanentlyDelete(id: string): Promise<void> {
+    await db.transaction("rw", db.events, db.eventMembers, db.vouchers, db.statements, db.operations, async () => {
+      const existing = await db.events.get(id);
+      if (!existing) throw new Error(`Event ${id} not found`);
+      const check = canDeleteEvent(existing);
+      if (!check.allowed) throw new Error(check.reason ?? "این ایونت قابل حذف دائمی نیست.");
+
+      const memberIds = await db.eventMembers.where("eventId").equals(id).primaryKeys();
+      const voucherIds = await db.vouchers.where("eventId").equals(id).primaryKeys();
+      const statementIds = await db.statements.where("eventId").equals(id).primaryKeys();
+
+      await db.eventMembers.bulkDelete(memberIds);
+      await db.vouchers.bulkDelete(voucherIds);
+      await db.statements.bulkDelete(statementIds);
+      await db.events.delete(id);
+
+      await logOperation(db, "events", id, "purge", {});
     });
   }
 };

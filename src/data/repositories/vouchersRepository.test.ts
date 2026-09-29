@@ -158,6 +158,122 @@ describe("vouchersRepository.createExpense", () => {
     ).rejects.toThrow();
   });
 
+  it("derives equal payer amounts from payerSplit and sets payerSplitMode", async () => {
+    const event = await createOpenEvent();
+    await eventMembersRepository.addMembers(event.id, ["p1", "p2", "p3"]);
+    const voucher = await vouchersRepository.createExpense({
+      eventId: event.id,
+      expenseDate: "2025-09-28",
+      description: "شام",
+      totalAmount: 100,
+      payers: [],
+      payerSplit: { mode: "equal", payerPersonIds: ["p1", "p2", "p3"] },
+      split: { mode: "equal_all" }
+    });
+    expect(voucher.payers.reduce((sum, p) => sum + p.amount, 0)).toBe(100);
+    expect(voucher.payerSplitMode).toBe("equal");
+    expect(voucher.payers).toHaveLength(3);
+  });
+
+  it("derives weighted payer amounts from payerSplit", async () => {
+    const event = await createOpenEvent();
+    await eventMembersRepository.addMembers(event.id, ["p1", "p2"]);
+    const voucher = await vouchersRepository.createExpense({
+      eventId: event.id,
+      expenseDate: "2025-09-28",
+      description: "هتل",
+      totalAmount: 300,
+      payers: [],
+      payerSplit: { mode: "weight", weights: [{ personId: "p1", weight: 1 }, { personId: "p2", weight: 2 }] },
+      split: { mode: "equal_all" }
+    });
+    expect(voucher.payers).toEqual(
+      expect.arrayContaining([
+        { personId: "p1", amount: 100, weight: 1 },
+        { personId: "p2", amount: 200, weight: 2 }
+      ])
+    );
+    expect(voucher.payerSplitMode).toBe("weight");
+  });
+
+  it("rejects payerSplit percents that do not sum to 100", async () => {
+    const event = await createOpenEvent();
+    await eventMembersRepository.addMembers(event.id, ["p1"]);
+    await expect(
+      vouchersRepository.createExpense({
+        eventId: event.id,
+        expenseDate: "2025-09-28",
+        description: "بلیط",
+        totalAmount: 100,
+        payers: [],
+        payerSplit: { mode: "percent", percents: [{ personId: "p1", percent: 50 }] },
+        split: { mode: "equal_all" }
+      })
+    ).rejects.toThrow();
+  });
+
+  it("uses exact payerSplit amounts and rejects a mismatched sum", async () => {
+    const event = await createOpenEvent();
+    await eventMembersRepository.addMembers(event.id, ["p1", "p2"]);
+    const voucher = await vouchersRepository.createExpense({
+      eventId: event.id,
+      expenseDate: "2025-09-28",
+      description: "خرید",
+      totalAmount: 100,
+      payers: [],
+      payerSplit: { mode: "exact", amounts: [{ personId: "p1", amount: 40 }, { personId: "p2", amount: 60 }] },
+      split: { mode: "equal_all" }
+    });
+    expect(voucher.payers).toEqual([
+      { personId: "p1", amount: 40 },
+      { personId: "p2", amount: 60 }
+    ]);
+    expect(voucher.payerSplitMode).toBe("exact");
+
+    await expect(
+      vouchersRepository.createExpense({
+        eventId: event.id,
+        expenseDate: "2025-09-28",
+        description: "خرید",
+        totalAmount: 100,
+        payers: [],
+        payerSplit: { mode: "exact", amounts: [{ personId: "p1", amount: 40 }] },
+        split: { mode: "equal_all" }
+      })
+    ).rejects.toThrow();
+  });
+
+  it("sets payerSplitMode to exact when a precomputed multi-payer list is given without payerSplit", async () => {
+    const event = await createOpenEvent();
+    await eventMembersRepository.addMembers(event.id, ["p1", "p2"]);
+    const voucher = await vouchersRepository.createExpense({
+      eventId: event.id,
+      expenseDate: "2025-09-28",
+      description: "شام",
+      totalAmount: 100,
+      payers: [
+        { personId: "p1", amount: 60 },
+        { personId: "p2", amount: 40 }
+      ],
+      split: { mode: "equal_all" }
+    });
+    expect(voucher.payerSplitMode).toBe("exact");
+  });
+
+  it("leaves payerSplitMode undefined for a single payer", async () => {
+    const event = await createOpenEvent();
+    await eventMembersRepository.addMembers(event.id, ["p1"]);
+    const voucher = await vouchersRepository.createExpense({
+      eventId: event.id,
+      expenseDate: "2025-09-28",
+      description: "شام",
+      totalAmount: 100,
+      payers: [{ personId: "p1", amount: 100 }],
+      split: { mode: "equal_all" }
+    });
+    expect(voucher.payerSplitMode).toBeUndefined();
+  });
+
   it("rejects when payer amounts do not sum to the total", async () => {
     const event = await createOpenEvent();
     await expect(
