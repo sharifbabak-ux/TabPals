@@ -294,6 +294,47 @@ export class TabPalDB extends Dexie {
       operations: "id, entity, entityId, timestamp"
     });
 
+    // Stage GO-1.1 — order categories + template quote cleanup. Menu items
+    // and order lines gain `category` (existing rows → "other"); seeded
+    // default templates that are still exactly the old quoted seed text
+    // (unedited) lose their surrounding « » — edited ones are untouched.
+    this.version(9)
+      .stores({
+        meta: "key",
+        persons: "id, archived, deleted, needsNameReview",
+        events: "id, archived, deleted, startDate, closedAt, treasurerPersonId, deletedAt",
+        eventMembers: "id, eventId, personId, &[eventId+personId], active, deleted, sortOrder",
+        groups: "id, name, archived, deleted",
+        vouchers: "id, eventId, &[eventId+number], type, status, deleted, recordedAt",
+        statements: "id, eventId, kind, personId, &[eventId+number], status, deleted",
+        messageTemplates: "id, category, enabled, isDefault, deleted",
+        orderSessions: "id, eventId, status, scheduledAt, deleted",
+        sessionMenuItems: "id, sessionId, sortOrder, deleted",
+        orderLines: "id, sessionId, personId, deleted",
+        orderPersonTotals: "id, sessionId, [sessionId+personId], deleted",
+        sessionExtras: "id, sessionId, deleted",
+        operations: "id, entity, entityId, timestamp"
+      })
+      .upgrade(async (tx) => {
+        for (const table of ["sessionMenuItems", "orderLines"]) {
+          await tx
+            .table(table)
+            .toCollection()
+            .modify((row) => {
+              if (row.category === undefined) row.category = "other";
+            });
+        }
+        const quotedSeeds = new Set(DEFAULT_MESSAGE_TEMPLATES.map((t) => `«${t.text}»`));
+        await tx
+          .table("messageTemplates")
+          .toCollection()
+          .modify((template) => {
+            if (template.isDefault && quotedSeeds.has(template.text)) {
+              template.text = template.text.slice(1, -1);
+            }
+          });
+      });
+
     // Dexie only runs version().upgrade() when migrating an EXISTING
     // database; a brand-new install goes straight to the latest schema
     // with no upgrade() calls at all, so first-run seeding needs this

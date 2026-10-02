@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { orderSessionsRepository } from "@/data/repositories";
-import type { SessionMenuItem } from "@/data/types";
+import type { OrderCategory, SessionMenuItem } from "@/data/types";
+import { ORDER_CATEGORY_LABELS, suggestOrderCategory } from "@/domain/orderCategory";
 import { formatAmount } from "@/domain/format";
 import { AmountInput } from "@/ui/components/AmountInput";
 import { BottomSheet } from "@/ui/components/BottomSheet";
+import { CategoryChips } from "./CategoryChips";
 
 interface MenuEditorSheetProps {
   open: boolean;
@@ -18,6 +20,8 @@ interface MenuEditorSheetProps {
 export function MenuEditorSheet({ open, sessionId, items, currency, readOnly, onClose }: MenuEditorSheetProps) {
   const [name, setName] = useState("");
   const [price, setPrice] = useState(0);
+  const [category, setCategory] = useState<OrderCategory>("other");
+  const [categoryTouched, setCategoryTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function run(action: () => Promise<unknown>) {
@@ -31,9 +35,11 @@ export function MenuEditorSheet({ open, sessionId, items, currency, readOnly, on
 
   async function handleAdd() {
     await run(async () => {
-      await orderSessionsRepository.addMenuItem(sessionId, { name, price: price > 0 ? price : undefined });
+      await orderSessionsRepository.addMenuItem(sessionId, { name, price: price > 0 ? price : undefined, category });
       setName("");
       setPrice(0);
+      setCategory("other");
+      setCategoryTouched(false);
     });
   }
 
@@ -53,7 +59,7 @@ export function MenuEditorSheet({ open, sessionId, items, currency, readOnly, on
           <li key={item.id} className="list-item menu-editor__row">
             <div className="list-item__main">
               <span className="list-item__title">{item.name}</span>
-              <span className="list-item__subtitle">{item.price !== undefined ? `${formatAmount(item.price)} ${currency}` : "بدون قیمت"}</span>
+              <span className="list-item__subtitle">{ORDER_CATEGORY_LABELS[item.category ?? "other"]} · {item.price !== undefined ? `${formatAmount(item.price)} ${currency}` : "بدون قیمت"}</span>
             </div>
             {!readOnly && (
               <div className="menu-editor__actions">
@@ -77,11 +83,29 @@ export function MenuEditorSheet({ open, sessionId, items, currency, readOnly, on
           <h3 className="section-title">افزودن قلم</h3>
           <div className="field">
             <label htmlFor="menu-item-name">نام</label>
-            <input id="menu-item-name" value={name} onChange={(e) => setName(e.target.value)} />
+            <input
+              id="menu-item-name"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                // The suggestion only pre-selects; once the user picks a category it stays theirs.
+                if (!categoryTouched) setCategory(suggestOrderCategory(e.target.value));
+              }}
+            />
           </div>
           <div className="field">
             <label htmlFor="menu-item-price">قیمت (اختیاری)</label>
             <AmountInput id="menu-item-price" value={price} onChange={setPrice} />
+          </div>
+          <div className="field">
+            <label>دسته</label>
+            <CategoryChips
+              value={category}
+              onChange={(c) => {
+                setCategory(c);
+                setCategoryTouched(true);
+              }}
+            />
           </div>
           {error && <p className="field__error">{error}</p>}
           <div className="form-actions">

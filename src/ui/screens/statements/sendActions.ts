@@ -10,10 +10,11 @@ import { buildStatementExportFilenameBase } from "@/domain/exportNaming";
 import { normalizeIranianPhone } from "@/domain/phoneNormalization";
 import { buildStatementSummaryText } from "@/domain/sendSummary";
 import { buildSmsUrl, buildTelegramUrl, buildWhatsAppUrl } from "@/domain/sendUrls";
-import { buildStatementLink, type StatementLinkData, type StatementLinkPayload } from "@/domain/statementLink";
+import { buildStatementLink, buildSummaryLink, type StatementLinkData, type StatementLinkPayload } from "@/domain/statementLink";
 import { clipboardService, platform, qrService, shareService } from "@/platform";
 import type { ExportedFile } from "@/platform/types";
 import { captureStatementFilesOffscreen, statementPaperMeta } from "./offscreenExport";
+import type { StatementPaperMeta } from "./StatementPaper";
 
 function statementLinkBaseUrl(): string {
   return `${window.location.origin}${window.location.pathname}`;
@@ -28,9 +29,8 @@ export function memberLabelOf(data: StatementLinkData): string {
   return data.kind === "comprehensive" ? "گزارش جامع" : `${data.member.firstName} ${data.member.lastName}`.trim();
 }
 
-/** Builds the statement-link payload and its size-tiered URL, then the channel-specific summary text. */
-export function buildLinkAndSummary(statement: Statement, data: StatementLinkData, eventTitle: string, phone?: string | null) {
-  const payload: StatementLinkPayload = {
+function buildPayload(statement: Statement, data: StatementLinkData): StatementLinkPayload {
+  return {
     v: 1,
     statementId: statement.id,
     number: statement.number,
@@ -41,6 +41,11 @@ export function buildLinkAndSummary(statement: Statement, data: StatementLinkDat
     appVersion: APP_VERSION,
     data
   };
+}
+
+/** Builds the statement-link payload and its size-tiered URL, then the channel-specific summary text. */
+export function buildLinkAndSummary(statement: Statement, data: StatementLinkData, eventTitle: string, phone?: string | null) {
+  const payload = buildPayload(statement, data);
   const link = buildStatementLink(payload, statementLinkBaseUrl());
   const normalizedPhone = normalizeIranianPhone(phone);
 
@@ -61,13 +66,19 @@ export function buildLinkAndSummary(statement: Statement, data: StatementLinkDat
   return { normalizedPhone, summaryText, link };
 }
 
-/** The statement link and its offline-generated QR for the export footer (docs/PLAN.md Stage 3C); `url: null` when the statement is too large for a link. */
-export async function buildStatementShareLink(statement: Statement, data: StatementLinkData, eventTitle: string): Promise<{ url: string | null; qrDataUrl: string | null }> {
-  const { link } = buildLinkAndSummary(statement, data, eventTitle);
-  if (!link.url) return { url: null, qrDataUrl: null };
-  const qrDataUrl = await qrService.toDataUrl(link.url, 240);
+/**
+ * The export footer's link area (docs/PLAN.md GO-1.1). The QR always encodes the compact
+ * *summary* link (small enough for a phone camera); the clickable "مشاهده‌ی نسخه‌ی آنلاین"
+ * text points to the FULL statement link when it fits the size policy, else to the summary link.
+ * `url: null` = nothing could be encoded, so the footer shows the fallback message instead.
+ */
+export async function buildStatementShareLink(statement: Statement, data: StatementLinkData, _eventTitle: string): Promise<NonNullable<StatementPaperMeta["link"]>> {
+  const payload = buildPayload(statement, data);
+  const full = buildStatementLink(payload, statementLinkBaseUrl());
+  const summary = buildSummaryLink(payload, statementLinkBaseUrl());
+  const qr = await qrService.render(summary.url);
   // A link that can't be encoded as a QR is treated like "no link" so the footer never shows a dead QR.
-  return qrDataUrl ? { url: link.url, qrDataUrl } : { url: null, qrDataUrl: null };
+  return qr ? { url: full.url ?? summary.url, qr } : { url: null, qr: null };
 }
 
 /** "کپی لینک صورت‌حساب": copies the statement link; the message says what to show the user. */

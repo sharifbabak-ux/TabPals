@@ -1,5 +1,6 @@
 import type { ComprehensiveReportData } from "@/domain/statementBuilder";
 import { formatAmount, toPersianDigits } from "@/domain/format";
+import { describeFundBalance } from "@/domain/fundBalance";
 import { JalaliDate } from "@/ui/components/JalaliDate";
 import { SPLIT_MODE_LABELS, VOUCHER_TYPE_LABELS } from "./statementViewLabels";
 import "./StatementView.css";
@@ -155,9 +156,7 @@ export function ComprehensiveReportView({ data }: ComprehensiveReportViewProps) 
           جمع هزینه‌های پرداخت‌شده توسط مسئول صندوق: {formatAmount(fundAccount.totalPaidByTreasurer)} {event.currency}
         </p>
         <p>
-          <strong>
-            باقیمانده‌ی صندوق: {formatAmount(fundAccount.remaining)} {event.currency}
-          </strong>
+          <strong>{describeFundBalance(fundAccount.totalContributed, fundAccount.totalPaidByTreasurer, event.currency).text}</strong>
         </p>
       </section>
 

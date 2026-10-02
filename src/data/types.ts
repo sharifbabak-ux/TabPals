@@ -350,11 +350,15 @@ export interface OrderSession extends BaseRecord {
   voucherId: string | null;
 }
 
+/** Waiter-list category (docs/PLAN.md GO-1.1); fixed display order lives in src/domain/orderCategory.ts. */
+export type OrderCategory = "appetizer" | "salad" | "main" | "drink" | "dessert_hot" | "other";
+
 /** A "منوی سریع" chip. */
 export interface SessionMenuItem extends BaseRecord {
   sessionId: string;
   name: string;
   price?: number;
+  category: OrderCategory;
   sortOrder: number;
 }
 
@@ -373,6 +377,7 @@ export interface OrderLine extends BaseRecord {
   sharedParticipants?: SharedParticipant[];
   menuItemId?: string;
   itemName: string;
+  category: OrderCategory;
   /** Integer ≥ 1. */
   quantity: number;
   unitPrice?: number;

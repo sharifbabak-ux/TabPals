@@ -251,7 +251,7 @@ describe("itemized (group order) vouchers", () => {
     const data = buildMemberStatementData({ kind: "member", event, members, vouchers: [itemizedVoucher], personId: "a" });
     const row = data.expenses[0];
     expect(row.share).toBe(330);
-    expect(row.splitExplanation).toContain("۲ × کوبیده");
+    expect(row.splitExplanation).toContain("۲ × کوبیده (۱۰۰) = ۲۰۰");
     expect(row.splitExplanation).toContain("سهم مالیات ۱۰٪: ۲۵");
     expect(row.splitExplanation).toContain("سهم سرویس: ۵۵");
     expect(row.splitExplanation).not.toContain("جوجه");
@@ -272,8 +272,24 @@ describe("itemized (group order) vouchers", () => {
     ]);
   });
 
+  it("shows single-unit items as ۱ × name = amount in the comprehensive report", () => {
+    const report = buildComprehensiveReportData({ event, members, vouchers: [itemizedVoucher] });
+    expect(report.ledger[0].itemized?.[1].items).toContain("۱ × جوجه = ۱۵۰");
+  });
+
   it("leaves non-itemized ledger rows without an itemized breakdown", () => {
     const report = buildComprehensiveReportData({ event, members, vouchers });
     expect(report.ledger.every((row) => row.itemized === undefined)).toBe(true);
+  });
+});
+
+describe("treasurer statement fund summary (GO-1.1)", () => {
+  it("carries contributions and treasurer-paid expenses for the fund-position line", () => {
+    const data = buildMemberStatementData({ kind: "treasurer", event, members, vouchers, personId: "t" });
+    expect(data.fundSummary).toEqual({ totalContributed: 500, totalPaidByTreasurer: 3000 });
+  });
+
+  it("is absent on member statements", () => {
+    expect(buildMemberStatementData({ kind: "member", event, members, vouchers, personId: "a" }).fundSummary).toBeUndefined();
   });
 });

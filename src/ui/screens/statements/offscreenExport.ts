@@ -64,7 +64,8 @@ export async function captureStatementFilesOffscreen(
   try {
     if (!paperEl) return [];
     (paperEl as HTMLElement).setAttribute("data-exporting", "true");
-    return kind === "pdf" ? [await exportService.exportPdf(paperEl, filenameBase)] : await exportService.exportImages(paperEl, filenameBase);
+    const options = { qr: meta.link?.qr ?? null };
+    return kind === "pdf" ? [await exportService.exportPdf(paperEl, filenameBase, options)] : await exportService.exportImages(paperEl, filenameBase, options);
   } finally {
     root.unmount();
     container.remove();

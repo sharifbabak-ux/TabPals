@@ -1,12 +1,16 @@
 import type { Ref } from "react";
 import { toPersianDigits } from "@/domain/format";
 import type { StatementLinkData } from "@/domain/statementLink";
+import type { QrImage } from "@/platform/types";
 import { JalaliDate } from "@/ui/components/JalaliDate";
 import { Logo } from "@/ui/components/Logo";
 import { Avatar } from "@/ui/components/Avatar";
 import { MemberStatementView } from "./MemberStatementView";
 import { ComprehensiveReportView } from "./ComprehensiveReportView";
 import "./StatementView.css";
+
+/** The export captures at 2×, so a QR of N raster px occupies N/2 CSS px and is drawn back 1:1 (no resampling). */
+export const QR_EXPORT_SCALE = 2;
 
 export interface StatementPaperMeta {
   number: number;
@@ -16,12 +20,14 @@ export interface StatementPaperMeta {
   status: "current" | "outdated";
   appVersion: string;
   /**
-   * The statement's shareable link for the footer QR (docs/PLAN.md Stage 3C).
-   * Omitted entirely (e.g. on the shared-link view) = no link area at all;
-   * `url: null` = the statement was too large for a link, so a fallback
-   * message is shown instead of the QR.
+   * The statement's online-version block (docs/PLAN.md Stage 3C, GO-1.1):
+   * `qr` encodes the compact summary link, `url` is where the clickable
+   * "مشاهده‌ی نسخه‌ی آنلاین" text points (full link when it fits, else the
+   * summary link). Omitted entirely (e.g. on the shared-link view) = no
+   * link area at all; `url: null` = nothing could be encoded, so a
+   * fallback message is shown instead of the QR.
    */
-  link?: { url: string | null; qrDataUrl: string | null };
+  link?: { url: string | null; qr: QrImage | null };
 }
 
 interface StatementPaperProps {
@@ -39,7 +45,7 @@ interface StatementPaperProps {
  */
 export function StatementPaper({ data, meta, innerRef }: StatementPaperProps) {
   return (
-    <article className="statement-paper" ref={innerRef}>
+    <article className="statement-paper" ref={innerRef} data-export-verification={meta.verificationCode} data-export-app-version={meta.appVersion}>
       <header className="statement-header" data-export-header>
         <Logo variant="mark" size={44} />
         <div className="statement-header__title">
@@ -65,7 +71,7 @@ export function StatementPaper({ data, meta, innerRef }: StatementPaperProps) {
           <span>
             <JalaliDate date={new Date(meta.issuedAt)} weekday time />
           </span>
-          {meta.status === "outdated" ? <span className="badge">منسوخ</span> : <span className="badge badge--closed">پایان‌یافته</span>}
+          {meta.status === "outdated" ? <span className="badge">نیازمند صدور مجدد</span> : <span className="badge badge--closed">پایان‌یافته</span>}
         </div>
       </header>
 
@@ -73,16 +79,20 @@ export function StatementPaper({ data, meta, innerRef }: StatementPaperProps) {
 
       {meta.link && (
         <section className="statement-online" data-export-block>
-          {meta.link.url && meta.link.qrDataUrl ? (
+          {meta.link.url && meta.link.qr ? (
             <div className="statement-online__link" data-export-link data-href={meta.link.url}>
-              <img className="statement-online__qr" src={meta.link.qrDataUrl} alt="" width={96} height={96} />
-              <div className="statement-online__text">
-                <strong>نسخه‌ی آنلاین این صورت‌حساب</strong>
-                <span>برای مشاهده، QR را اسکن یا روی آن بزنید</span>
-                <span className="statement-online__url" dir="ltr">
-                  {meta.link.url}
-                </span>
-              </div>
+              {/* Invisible while the page is captured; the PNG is drawn on top afterwards so it stays lossless (see ExportService). */}
+              <img
+                className="statement-online__qr"
+                data-export-qr
+                src={meta.link.qr.dataUrl}
+                alt="QR"
+                width={meta.link.qr.sizePx / QR_EXPORT_SCALE}
+                height={meta.link.qr.sizePx / QR_EXPORT_SCALE}
+              />
+              <a className="statement-online__label" href={meta.link.url} target="_blank" rel="noreferrer">
+                مشاهده‌ی نسخه‌ی آنلاین
+              </a>
             </div>
           ) : (
             <p className="statement-online__fallback">برای نسخه‌ی آنلاین، فایل صورت‌حساب را ارسال کنید</p>
@@ -90,7 +100,7 @@ export function StatementPaper({ data, meta, innerRef }: StatementPaperProps) {
         </section>
       )}
 
-      <footer className="statement-footer" data-export-block>
+      <footer className="statement-footer" data-export-footer>
         <span>کد اعتبارسنجی: {meta.verificationCode}</span>
         <span>صادرشده توسط TabPals</span>
         <span>نسخه {toPersianDigits(meta.appVersion)}</span>

@@ -9,6 +9,7 @@
 import type {
   ExtraAllocation,
   ItemizedSnapshot,
+  OrderCategory,
   SessionExtraKind,
   SessionExtraMode,
   SharedParticipant,
@@ -17,6 +18,7 @@ import type {
 } from "@/data/types";
 import { formatAmount, toPersianDigits } from "./format";
 import { normalizeName } from "./nameNormalization";
+import { DEFAULT_ORDER_CATEGORY, ORDER_CATEGORIES, ORDER_CATEGORY_LABELS, categoryRank } from "./orderCategory";
 import { splitByWeight, splitEqual } from "./splitEngine";
 
 export const DIFFERENCE_EXTRA_LABEL = "اختلاف فاکتور";
@@ -30,6 +32,8 @@ export interface LineInput {
   quantity: number;
   unitPrice?: number | null;
   note?: string;
+  /** Waiter-list category; missing (pre-GO-1.1 data) counts as "other". */
+  category?: OrderCategory;
 }
 
 export interface PersonTotalInput {
@@ -309,11 +313,21 @@ export interface WaiterItem {
   key: string;
   name: string;
   quantity: number;
+  category: OrderCategory;
   /** Distinct notes with how many units carry each ("بدون پیاز"). */
   notes: { text: string; quantity: number }[];
 }
 
-/** Aggregates all lines by normalized item name, summing quantities; a shared line counts its own quantity once. */
+export interface WaiterCategoryGroup {
+  category: OrderCategory;
+  items: WaiterItem[];
+}
+
+/**
+ * Aggregates all lines by normalized item name, summing quantities; a shared line counts its own quantity once.
+ * An item's category is the first non-"other" category among its lines. Sorted by the fixed category order,
+ * then quantity (desc), then name.
+ */
 export function buildWaiterList(lines: LineInput[]): WaiterItem[] {
   const groups = new Map<string, WaiterItem>();
   for (const line of lines) {
@@ -321,8 +335,10 @@ export function buildWaiterList(lines: LineInput[]): WaiterItem[] {
     if (!key) continue;
     let item = groups.get(key);
     if (!item) {
-      item = { key, name: line.itemName.trim(), quantity: 0, notes: [] };
+      item = { key, name: line.itemName.trim(), quantity: 0, category: line.category ?? DEFAULT_ORDER_CATEGORY, notes: [] };
       groups.set(key, item);
+    } else if (item.category === DEFAULT_ORDER_CATEGORY && line.category) {
+      item.category = line.category;
     }
     item.quantity += line.quantity;
     const note = line.note?.trim();
@@ -332,7 +348,14 @@ export function buildWaiterList(lines: LineInput[]): WaiterItem[] {
       else item.notes.push({ text: note, quantity: line.quantity });
     }
   }
-  return Array.from(groups.values()).sort((a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name, "fa"));
+  return Array.from(groups.values()).sort(
+    (a, b) => categoryRank(a.category) - categoryRank(b.category) || b.quantity - a.quantity || a.name.localeCompare(b.name, "fa")
+  );
+}
+
+/** Groups a (sorted) waiter list under its category headings in the fixed order; empty categories are omitted. */
+export function groupWaiterListByCategory(items: WaiterItem[]): WaiterCategoryGroup[] {
+  return ORDER_CATEGORIES.map((category) => ({ category, items: items.filter((item) => item.category === category) })).filter((group) => group.items.length > 0);
 }
 
 /** "۳ × کوبیده" */
@@ -340,13 +363,23 @@ export function formatWaiterLine(item: WaiterItem): string {
   return `${toPersianDigits(item.quantity)} × ${item.name}`;
 }
 
-/** Plain-text waiter list for copy / share. */
+/** Headings add nothing when every item is uncategorized ("other" only — e.g. pre-GO-1.1 orders), so they are skipped then. */
+export function waiterListShowsHeadings(groups: WaiterCategoryGroup[]): boolean {
+  return !(groups.length === 1 && groups[0].category === DEFAULT_ORDER_CATEGORY);
+}
+
+/** Plain-text waiter list for copy / share: same category headings and order as the on-screen list. */
 export function buildWaiterListText(title: string, items: WaiterItem[]): string {
-  const rows = items.flatMap((item) => [
-    formatWaiterLine(item),
-    ...item.notes.map((n) => `   ↳ ${n.text}${n.quantity !== item.quantity ? ` (${toPersianDigits(n.quantity)})` : ""}`)
-  ]);
-  return [title, "", ...rows].join("\n");
+  const groups = groupWaiterListByCategory(items);
+  const showHeadings = waiterListShowsHeadings(groups);
+  const sections = groups.map((group) => {
+    const rows = group.items.flatMap((item) => [
+      formatWaiterLine(item),
+      ...item.notes.map((n) => `   ↳ ${n.text}${n.quantity !== item.quantity ? ` (${toPersianDigits(n.quantity)})` : ""}`)
+    ]);
+    return (showHeadings ? [`— ${ORDER_CATEGORY_LABELS[group.category]} —`, ...rows] : rows).join("\n");
+  });
+  return [title, "", sections.join("\n\n")].join("\n");
 }
 
 export interface MissingPriceGroup {
@@ -475,8 +508,9 @@ export function defaultExtraLabel(kind: SessionExtraKind, mode: SessionExtraMode
   return mode === "percent" && value > 0 ? `${base} ${toPersianDigits(value)}٪` : base;
 }
 
-/** "۲ × کوبیده (۱۲۰٬۰۰۰)" — one item as shown in a statement. */
+/** "۲ × کباب برگ (۵۰۰٬۰۰۰) = ۱٬۰۰۰٬۰۰۰"; a single unit: "۱ × کوبیده = ۵۰۰٬۰۰۰"; unpriced: "۲ × کوبیده". */
 export function formatItemizedItem(item: { name: string; quantity: number; unitPrice: number | null; amount: number }): string {
   if (item.unitPrice === null) return `${toPersianDigits(item.quantity)} × ${item.name}`;
-  return `${toPersianDigits(item.quantity)} × ${item.name} (${formatAmount(item.unitPrice)})`;
+  if (item.quantity === 1) return `۱ × ${item.name} = ${formatAmount(item.amount)}`;
+  return `${toPersianDigits(item.quantity)} × ${item.name} (${formatAmount(item.unitPrice)}) = ${formatAmount(item.amount)}`;
 }

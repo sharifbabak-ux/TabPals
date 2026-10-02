@@ -97,10 +97,22 @@ export interface ClipboardService {
   copyText(text: string): Promise<boolean>;
 }
 
+/** A rendered QR code: crisp black-on-white PNG (docs/PLAN.md GO-1.1), pixel-exact and lossless. */
+export interface QrImage {
+  /** `data:image/png;base64,…` — used for on-screen display and as the separate lossless image in a PDF. */
+  dataUrl: string;
+  /** Side length in pixels (the symbol is square), quiet zone included. */
+  sizePx: number;
+  moduleCount: number;
+  modulePx: number;
+  /** Row-major RGBA, `sizePx` × `sizePx`, for drawing onto an export canvas without decoding the PNG. */
+  rgba: Uint8ClampedArray;
+}
+
 /** Generates a QR code fully offline (docs/PLAN.md Stage 3C statement QR). */
 export interface QrService {
-  /** A PNG data URL encoding `text`, or null when it doesn't fit in a QR code. */
-  toDataUrl(text: string, widthPx?: number): Promise<string | null>;
+  /** Error correction "M", ≥ 4-module quiet zone, ≥ 4 px per module, ≥ 300 px wide; null when `text` doesn't fit in a QR code. */
+  render(text: string): Promise<QrImage | null>;
 }
 
 export interface ExportedFile {
@@ -117,11 +129,20 @@ export interface ExportedFile {
  * with `data-export-header` and its page-break-safe sections/rows with
  * `data-export-block`, matching the print stylesheet's own section breaks.
  */
+export interface ExportOptions {
+  /**
+   * The statement QR. The element marks its placeholder with `data-export-qr`
+   * (an invisible slot during capture); the QR is then added as a separate
+   * lossless image on top of the page — never part of the JPEG capture.
+   */
+  qr?: QrImage | null;
+}
+
 export interface ExportService {
-  /** Image-based, paginated A4 PDF (Persian shaping must be pixel-perfect, so this is a screenshot, not text). */
-  exportPdf(element: HTMLElement, filenameBase: string): Promise<ExportedFile>;
-  /** One or more 1080px-wide page images, numbered in a footer when there's more than one. */
-  exportImages(element: HTMLElement, filenameBase: string): Promise<ExportedFile[]>;
+  /** Image-based, paginated A4 PDF (Persian shaping must be pixel-perfect, so this is a screenshot, not text). The QR is a separate PNG; link areas become real link annotations. */
+  exportPdf(element: HTMLElement, filenameBase: string, options?: ExportOptions): Promise<ExportedFile>;
+  /** One or more full-resolution lossless PNG A4 pages with a fixed footer ("(۱ از ۳)", code, version). */
+  exportImages(element: HTMLElement, filenameBase: string, options?: ExportOptions): Promise<ExportedFile[]>;
 }
 
 export interface SpeechRecognitionResult {

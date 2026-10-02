@@ -81,6 +81,25 @@ describe("state machine through the repository", () => {
   });
 });
 
+describe("order categories", () => {
+  it("stores the category on menu items and lines, defaulting to 'other'", async () => {
+    const { session } = await openedSession();
+    const item = await orderSessionsRepository.addMenuItem(session.id, { name: "دوغ", category: "drink" });
+    const plain = await orderSessionsRepository.addMenuItem(session.id, { name: "چیزی" });
+    expect(item.category).toBe("drink");
+    expect(plain.category).toBe("other");
+
+    const line = await orderSessionsRepository.addLine(session.id, { personId: "a", itemName: "دوغ", category: "drink", quantity: 1 });
+    expect(line.category).toBe("drink");
+    expect((await orderSessionsRepository.addLine(session.id, { personId: "a", itemName: "x", quantity: 1 })).category).toBe("other");
+
+    await orderSessionsRepository.updateLine(line.id, { category: "dessert_hot" });
+    expect((await db.orderLines.get(line.id))?.category).toBe("dessert_hot");
+    await orderSessionsRepository.updateMenuItem(item.id, { category: "main" });
+    expect((await db.sessionMenuItems.get(item.id))?.category).toBe("main");
+  });
+});
+
 describe("order lines", () => {
   it("only accepts lines once the session is open (admin device may also edit while locked)", async () => {
     const { session } = await setup();

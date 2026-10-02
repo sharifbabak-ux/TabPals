@@ -6,6 +6,8 @@ import {
   buildItemizedSnapshot,
   buildWaiterList,
   buildWaiterListText,
+  formatItemizedItem,
+  groupWaiterListByCategory,
   bulkPriceLineIds,
   computePersonSubtotals,
   computeSession,
@@ -285,6 +287,48 @@ describe("waiter list", () => {
   it("formats as '۳ × کوبیده'", () => {
     const text = buildWaiterListText("شام", buildWaiterList([line("a", "کوبیده", 3), line("b", "دوغ", 1)]));
     expect(text).toBe("شام\n\n۳ × کوبیده\n۱ × دوغ");
+  });
+});
+
+describe("waiter list categories", () => {
+  const cat = (category: LineInput["category"]) => ({ category });
+
+  it("groups under headings in the fixed order, hides empty categories, sorts by quantity desc then name", () => {
+    const list = buildWaiterList([
+      line("a", "چای", 1, undefined, cat("dessert_hot")),
+      line("a", "دوغ", 2, undefined, cat("drink")),
+      line("b", "کباب", 1, undefined, cat("main")),
+      line("b", "کوبیده", 3, undefined, cat("main")),
+      line("c", "ماست", 1, undefined, cat("appetizer")),
+      line("c", "نوشابه", 2, undefined, cat("drink")),
+      line("c", "زرشک", 1)
+    ]);
+    const groups = groupWaiterListByCategory(list);
+    expect(groups.map((g) => g.category)).toEqual(["appetizer", "main", "drink", "dessert_hot", "other"]);
+    expect(groups.find((g) => g.category === "main")!.items.map((i) => i.name)).toEqual(["کوبیده", "کباب"]);
+    expect(groups.find((g) => g.category === "drink")!.items.map((i) => i.name)).toEqual(["دوغ", "نوشابه"]);
+  });
+
+  it("keeps the same headings and order in the copy text", () => {
+    const text = buildWaiterListText(
+      "شام",
+      buildWaiterList([line("a", "دوغ", 1, undefined, cat("drink")), line("a", "سالاد فصل", 2, undefined, cat("salad")), line("b", "کوبیده", 3, undefined, cat("main"))])
+    );
+    expect(text).toBe("شام\n\n— سالاد —\n۲ × سالاد فصل\n\n— غذای اصلی —\n۳ × کوبیده\n\n— نوشیدنی —\n۱ × دوغ");
+  });
+
+  it("takes the first non-other category when the same item appears with different ones", () => {
+    const list = buildWaiterList([line("a", "دوغ", 1), line("b", "دوغ", 1, undefined, cat("drink"))]);
+    expect(list[0].category).toBe("drink");
+  });
+});
+
+describe("itemized line format", () => {
+  it("shows quantity × unit price = amount", () => {
+    expect(formatItemizedItem({ name: "کباب برگ", quantity: 2, unitPrice: 500000, amount: 1000000 })).toBe("۲ × کباب برگ (۵۰۰٬۰۰۰) = ۱٬۰۰۰٬۰۰۰");
+  });
+  it("shows single items as ۱ × name = amount", () => {
+    expect(formatItemizedItem({ name: "کوبیده", quantity: 1, unitPrice: 500000, amount: 500000 })).toBe("۱ × کوبیده = ۵۰۰٬۰۰۰");
   });
 });
 
