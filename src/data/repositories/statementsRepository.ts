@@ -13,7 +13,7 @@ import {
 } from "@/domain/statementBuilder";
 import { canonicalJson, computeVerificationCode } from "@/domain/verificationCode";
 import { db } from "../db";
-import type { Event, Statement, StatementKind } from "../types";
+import type { Event, SendChannel, Statement, StatementKind } from "../types";
 import { diffFields, logOperation, newBaseFields, touchBaseFields } from "./operationLog";
 
 const STATEMENT_LOG_FIELDS: (keyof Statement)[] = [
@@ -157,7 +157,8 @@ async function persistStatement(
       templateId,
       closingText,
       verificationCode,
-      status: "current"
+      status: "current",
+      sendLog: []
     };
     await db.statements.add(statement);
     await logOperation(db, "statements", statement.id, "create", diffFields(undefined, statement, STATEMENT_LOG_FIELDS));
@@ -229,5 +230,17 @@ export const statementsRepository = {
 
   async get(id: string): Promise<Statement | undefined> {
     return db.statements.get(id);
+  },
+
+  /** Appends one entry to a statement's sendLog (docs/PLAN.md Stage 3C) — called after a share/send action actually completes. */
+  async logSend(statementId: string, channel: SendChannel, target: string): Promise<void> {
+    await db.transaction("rw", db.statements, db.operations, async () => {
+      const statement = await db.statements.get(statementId);
+      if (!statement) return;
+      const entry = { channel, at: new Date().toISOString(), target };
+      const updated: Statement = { ...statement, sendLog: [...statement.sendLog, entry], ...touchBaseFields(statement) };
+      await db.statements.put(updated);
+      await logOperation(db, "statements", statement.id, "update", diffFields(statement, updated, ["sendLog"]));
+    });
   }
 };

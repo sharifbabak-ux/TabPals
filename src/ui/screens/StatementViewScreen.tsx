@@ -2,30 +2,41 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/data/db";
-import { toPersianDigits } from "@/domain/format";
+import type { SendChannel } from "@/data/types";
+import { statementsRepository } from "@/data/repositories";
 import { computeVerificationCode } from "@/domain/verificationCode";
-import type { ComprehensiveReportData, MemberStatementData } from "@/domain/statementBuilder";
+import type { StatementLinkData } from "@/domain/statementLink";
 import { EmptyState } from "@/ui/components/EmptyState";
-import { JalaliDate } from "@/ui/components/JalaliDate";
-import { Logo } from "@/ui/components/Logo";
-import { Avatar } from "@/ui/components/Avatar";
-import { MemberStatementView } from "./statements/MemberStatementView";
-import { ComprehensiveReportView } from "./statements/ComprehensiveReportView";
+import { StatementPaper } from "./statements/StatementPaper";
+import { SendMenuSheet } from "./statements/SendMenuSheet";
 import "./statements/StatementView.css";
 
-type ParsedSnapshot = ((MemberStatementData & { closingText: string }) | ComprehensiveReportData) & { appVersion: string };
+type ParsedSnapshot = StatementLinkData & { appVersion: string };
 
 export function StatementViewScreen() {
   const { eventId = "", statementId = "" } = useParams();
   const navigate = useNavigate();
   const [verifyResult, setVerifyResult] = useState<"ok" | "mismatch" | null>(null);
+  const [sendMenuOpen, setSendMenuOpen] = useState(false);
 
   const statement = useLiveQuery(() => db.statements.get(statementId), [statementId]);
+  const memberPersonId = statement?.personId ?? null;
+  const memberPerson = useLiveQuery(() => (memberPersonId ? db.persons.get(memberPersonId) : undefined), [memberPersonId]);
 
   async function handleVerify() {
     if (!statement) return;
     const recomputed = await computeVerificationCode(statement.snapshot);
     setVerifyResult(recomputed === statement.verificationCode ? "ok" : "mismatch");
+  }
+
+  async function handlePrint() {
+    window.print();
+    if (statement) await statementsRepository.logSend(statement.id, "print", statement.personId ?? "event");
+  }
+
+  async function handleSent(channel: SendChannel, target: string) {
+    if (!statement) return;
+    await statementsRepository.logSend(statement.id, channel, target);
   }
 
   if (statement === undefined) return <div className="screen" />;
@@ -46,60 +57,49 @@ export function StatementViewScreen() {
         <button type="button" className="back-link" onClick={() => navigate(`/events/${eventId}`)}>
           ← بازگشت
         </button>
-        <button type="button" onClick={() => window.print()}>
-          چاپ / PDF
-        </button>
+        <div className="statement-view__toolbar-actions">
+          <button type="button" onClick={() => setSendMenuOpen(true)}>
+            ارسال
+          </button>
+          <button type="button" onClick={handlePrint}>
+            چاپ / ذخیره PDF
+          </button>
+        </div>
       </div>
 
       {statement.status === "outdated" && (
         <p className="field__warning no-print">این صورت‌حساب منسوخ شده است؛ ایونت پس از صدور آن بازگشایی شده است.</p>
       )}
 
-      <article className="statement-paper">
-        <header className="statement-header">
-          <Logo variant="mark" size={44} />
-          <div className="statement-header__title">
-            <strong>TabPals – حساب دوستانه</strong>
-            <span>{data.event.title}</span>
-            {(data.event.startDate || data.event.endDate) && (
-              <span className="statement-header__dates">
-                {data.event.startDate && <JalaliDate date={new Date(data.event.startDate)} />}
-                {data.event.startDate && data.event.endDate && " تا "}
-                {data.event.endDate && <JalaliDate date={new Date(data.event.endDate)} />}
-              </span>
-            )}
-          </div>
-          {data.kind !== "comprehensive" && (
-            <div className="statement-header__member">
-              <Avatar id={data.member.personId} name={`${data.member.firstName} ${data.member.lastName}`.trim()} size={48} />
-              <span>{`${data.member.firstName} ${data.member.lastName}`.trim()}</span>
-            </div>
-          )}
-          <div className="statement-header__meta">
-            <span>شماره {toPersianDigits(statement.number)}</span>
-            <span>نسخه {toPersianDigits(statement.issueVersion)}</span>
-            <span>
-              <JalaliDate date={new Date(statement.issuedAt)} weekday time />
-            </span>
-            <span className="badge badge--closed">پایان‌یافته</span>
-          </div>
-        </header>
+      <StatementPaper
+        data={data}
+        meta={{
+          number: statement.number,
+          issueVersion: statement.issueVersion,
+          issuedAt: statement.issuedAt,
+          verificationCode: statement.verificationCode,
+          status: statement.status,
+          appVersion: data.appVersion
+        }}
+      />
 
-        {data.kind === "comprehensive" ? <ComprehensiveReportView data={data} /> : <MemberStatementView data={data} closingText={data.closingText} />}
+      <p className="field__hint no-print statement-view__verify">
+        <button type="button" className="list-item__action" onClick={handleVerify}>
+          بررسی اعتبار
+        </button>
+        {verifyResult === "ok" && <span className="statement-footer__verify statement-footer__verify--ok"> ✓ معتبر</span>}
+        {verifyResult === "mismatch" && <span className="statement-footer__verify statement-footer__verify--bad"> ✗ عدم تطابق</span>}
+      </p>
 
-        <footer className="statement-footer">
-          <span>کد اعتبارسنجی: {statement.verificationCode}</span>
-          <span>صادرشده توسط TabPals</span>
-          <span>نسخه {toPersianDigits(data.appVersion)}</span>
-          <span className="no-print">
-            <button type="button" className="list-item__action" onClick={handleVerify}>
-              بررسی اعتبار
-            </button>
-            {verifyResult === "ok" && <span className="statement-footer__verify statement-footer__verify--ok"> ✓ معتبر</span>}
-            {verifyResult === "mismatch" && <span className="statement-footer__verify statement-footer__verify--bad"> ✗ عدم تطابق</span>}
-          </span>
-        </footer>
-      </article>
+      <SendMenuSheet
+        open={sendMenuOpen}
+        onClose={() => setSendMenuOpen(false)}
+        statement={statement}
+        data={data}
+        eventTitle={data.event.title}
+        phone={memberPerson?.phone}
+        onSent={handleSent}
+      />
     </div>
   );
 }

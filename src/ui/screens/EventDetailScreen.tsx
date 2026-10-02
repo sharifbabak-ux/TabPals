@@ -266,6 +266,7 @@ export function EventDetailScreen() {
       ) : (
         <StatementsSection
           eventId={eventId}
+          eventTitle={event.title}
           eventClosed={closed}
           treasurerPersonId={event.treasurerPersonId}
           activeMembers={activeMemberOptions}

@@ -480,3 +480,58 @@ describe("TabPalDB schema v5 -> v6 migration", () => {
     upgraded.close();
   });
 });
+
+describe("TabPalDB schema v6 -> v7 migration", () => {
+  class V6DB extends Dexie {
+    statements!: Dexie.Table<Record<string, unknown>, string>;
+    constructor(name: string) {
+      super(name);
+      this.version(6).stores({
+        meta: "key",
+        persons: "id, archived, deleted, needsNameReview",
+        events: "id, archived, deleted, startDate, closedAt, treasurerPersonId, deletedAt",
+        eventMembers: "id, eventId, personId, &[eventId+personId], active, deleted, sortOrder",
+        groups: "id, name, archived, deleted",
+        vouchers: "id, eventId, &[eventId+number], type, status, deleted, recordedAt",
+        statements: "id, eventId, kind, personId, &[eventId+number], status, deleted",
+        messageTemplates: "id, category, enabled, isDefault, deleted",
+        operations: "id, entity, entityId, timestamp"
+      });
+    }
+  }
+
+  const baseFields = {
+    createdAt: "2025-01-01T00:00:00.000Z",
+    updatedAt: "2025-01-01T00:00:00.000Z",
+    deviceId: "device-1",
+    version: 1,
+    deleted: false
+  };
+
+  it("backfills sendLog to an empty array on existing statements", async () => {
+    const legacy = new V6DB(TEST_DB_NAME);
+    await legacy.statements.put({
+      id: "s1",
+      eventId: "e1",
+      kind: "member",
+      personId: "p1",
+      number: 1,
+      issueVersion: 1,
+      issuedAt: "2025-01-01T00:00:00.000Z",
+      snapshot: "{}",
+      templateId: null,
+      closingText: "",
+      verificationCode: "AAAA-BBBB",
+      status: "current",
+      ...baseFields
+    });
+    legacy.close();
+
+    const upgraded = new TabPalDB(TEST_DB_NAME);
+    await upgraded.open();
+
+    expect((await upgraded.statements.get("s1"))?.sendLog).toEqual([]);
+
+    upgraded.close();
+  });
+});
