@@ -1,7 +1,7 @@
 import { isEventClosed } from "@/domain/eventStatus";
 import { amountsSumTo, percentsSumTo100, sharesFromExactAmounts, splitByWeight, splitEqual } from "@/domain/splitEngine";
 import { db } from "../db";
-import type { SplitMode, Voucher, VoucherParticipant, VoucherPayer, VoucherShare } from "../types";
+import type { ItemizedSnapshot, SplitMode, Voucher, VoucherParticipant, VoucherPayer, VoucherShare } from "../types";
 import { diffFields, logOperation, newBaseFields } from "./operationLog";
 
 const VOUCHER_LOG_FIELDS: (keyof Voucher)[] = [
@@ -18,7 +18,8 @@ const VOUCHER_LOG_FIELDS: (keyof Voucher)[] = [
   "shares",
   "status",
   "splitMode",
-  "payerSplitMode"
+  "payerSplitMode",
+  "itemizedSnapshot"
 ];
 
 /** Maps a caller's chosen split mode to the stored, statement-facing SplitMode (docs/PLAN.md Stage 3B). */
@@ -118,6 +119,18 @@ function computePayerSplit(totalAmount: number, split: PayerSplit): { payers: Vo
       return { payers: split.amounts.map((a) => ({ personId: a.personId, amount: a.amount })), payerSplitMode: "exact" };
     }
   }
+}
+
+/** A finalized group order (docs/PLAN.md "Group Order"): shares are each person's final total; the snapshot freezes their items and extra shares. */
+export interface CreateItemizedExpenseInput {
+  eventId: string;
+  expenseDate: string;
+  description: string;
+  totalAmount: number;
+  payers: VoucherPayer[];
+  payerSplitMode?: SplitMode;
+  shares: VoucherShare[];
+  itemizedSnapshot: ItemizedSnapshot;
 }
 
 export interface CreateTransferInput {
@@ -253,6 +266,44 @@ export const vouchersRepository = {
         payerSplitMode
       };
 
+      await db.vouchers.add(voucher);
+      await logOperation(db, "vouchers", voucher.id, "create", diffFields(undefined, voucher, VOUCHER_LOG_FIELDS));
+      return voucher;
+    });
+  },
+
+  /**
+   * The voucher a finalized group-order session produces. Validates that
+   * payers and shares both sum exactly to the total. Runs in its own
+   * transaction, which joins an enclosing one (the session finalize) when
+   * called from inside it.
+   */
+  async createItemizedExpense(input: CreateItemizedExpenseInput): Promise<Voucher> {
+    if (!amountsSumTo(input.totalAmount, input.payers.map((p) => p.amount))) {
+      throw new Error("مجموع مبلغ پرداخت‌کنندگان باید برابر مبلغ کل باشد");
+    }
+    if (!amountsSumTo(input.totalAmount, input.shares.map((s) => s.share))) {
+      throw new Error("مجموع سهم‌ها باید برابر مبلغ کل باشد");
+    }
+    return db.transaction("rw", db.events, db.vouchers, db.operations, async () => {
+      await assertEventOpenForNewVoucher(input.eventId);
+      const voucher: Voucher = {
+        ...newBaseFields(),
+        eventId: input.eventId,
+        number: await nextVoucherNumber(input.eventId),
+        type: "expense",
+        recordedAt: new Date().toISOString(),
+        expenseDate: input.expenseDate,
+        description: input.description.trim(),
+        totalAmount: input.totalAmount,
+        payers: input.payers,
+        participants: input.shares.map((s) => ({ personId: s.personId, weight: s.share })),
+        shares: input.shares,
+        status: "active",
+        splitMode: "itemized",
+        payerSplitMode: input.payers.length > 1 ? (input.payerSplitMode ?? "exact") : undefined,
+        itemizedSnapshot: input.itemizedSnapshot
+      };
       await db.vouchers.add(voucher);
       await logOperation(db, "vouchers", voucher.id, "create", diffFields(undefined, voucher, VOUCHER_LOG_FIELDS));
       return voucher;

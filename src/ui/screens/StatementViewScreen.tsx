@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/data/db";
@@ -7,7 +7,8 @@ import { statementsRepository } from "@/data/repositories";
 import { computeVerificationCode } from "@/domain/verificationCode";
 import type { StatementLinkData } from "@/domain/statementLink";
 import { EmptyState } from "@/ui/components/EmptyState";
-import { StatementPaper } from "./statements/StatementPaper";
+import { StatementPaper, type StatementPaperMeta } from "./statements/StatementPaper";
+import { buildStatementShareLink } from "./statements/sendActions";
 import { SendMenuSheet } from "./statements/SendMenuSheet";
 import "./statements/StatementView.css";
 
@@ -22,6 +23,21 @@ export function StatementViewScreen() {
   const statement = useLiveQuery(() => db.statements.get(statementId), [statementId]);
   const memberPersonId = statement?.personId ?? null;
   const memberPerson = useLiveQuery(() => (memberPersonId ? db.persons.get(memberPersonId) : undefined), [memberPersonId]);
+
+  const [link, setLink] = useState<StatementPaperMeta["link"]>(undefined);
+  const snapshot = statement?.snapshot;
+  useEffect(() => {
+    if (!statement) return;
+    let cancelled = false;
+    const parsed = JSON.parse(statement.snapshot) as ParsedSnapshot;
+    buildStatementShareLink(statement, parsed, parsed.event.title).then((result) => {
+      if (!cancelled) setLink(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statement?.id, snapshot, statement?.status, statement?.issueVersion]);
 
   async function handleVerify() {
     if (!statement) return;
@@ -79,7 +95,8 @@ export function StatementViewScreen() {
           issuedAt: statement.issuedAt,
           verificationCode: statement.verificationCode,
           status: statement.status,
-          appVersion: data.appVersion
+          appVersion: data.appVersion,
+          link
         }}
       />
 

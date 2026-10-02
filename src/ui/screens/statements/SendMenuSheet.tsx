@@ -2,7 +2,8 @@ import { useState } from "react";
 import type { SendChannel, Statement } from "@/data/types";
 import type { StatementLinkData } from "@/domain/statementLink";
 import { BottomSheet } from "@/ui/components/BottomSheet";
-import { memberLabelOf, openSms, openTelegram, openWhatsApp, shareStatementFile, targetOf } from "./sendActions";
+import { Toast } from "@/ui/components/Toast";
+import { copyStatementLink, memberLabelOf, openSms, openTelegram, openWhatsApp, shareStatementFile, targetOf } from "./sendActions";
 
 interface SendMenuSheetProps {
   open: boolean;
@@ -19,6 +20,7 @@ interface SendMenuSheetProps {
 export function SendMenuSheet({ open, onClose, statement, data, eventTitle, phone, onSent }: SendMenuSheetProps) {
   const [busy, setBusy] = useState<"pdf" | "image" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   const isPersonal = data.kind !== "comprehensive";
   const target = targetOf(data);
@@ -38,6 +40,12 @@ export function SendMenuSheet({ open, onClose, statement, data, eventTitle, phon
     } finally {
       setBusy(null);
     }
+  }
+
+  async function handleCopyLink() {
+    const result = await copyStatementLink(statement, data, eventTitle);
+    if (result.ok) setToast(result.message);
+    else setError(result.message);
   }
 
   function handleWhatsApp() {
@@ -73,6 +81,12 @@ export function SendMenuSheet({ open, onClose, statement, data, eventTitle, phon
             <span className="list-item__subtitle">{busy === "image" ? "در حال آماده‌سازی…" : "مناسب واتس‌اپ و تلگرام"}</span>
           </div>
         </li>
+        <li className="list-item" onClick={handleCopyLink}>
+          <div className="list-item__main">
+            <span className="list-item__title">کپی لینک صورت‌حساب</span>
+            <span className="list-item__subtitle">برای چسباندن در هر پیام‌رسان</span>
+          </div>
+        </li>
         {isPersonal && (
           <>
             <li className="list-item" onClick={handleWhatsApp}>
@@ -94,6 +108,7 @@ export function SendMenuSheet({ open, onClose, statement, data, eventTitle, phon
         )}
       </ul>
       {error && <p className="field__error">{error}</p>}
+      <Toast message={toast} onDismiss={() => setToast(null)} />
     </BottomSheet>
   );
 }

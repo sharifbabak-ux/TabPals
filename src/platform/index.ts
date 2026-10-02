@@ -7,6 +7,9 @@ import { WebShareService } from "./web/shareService";
 import { WebSpeechService } from "./web/speechService";
 import { WebImageService } from "./web/imageService";
 import { WebExportService } from "./web/exportService";
+import { WebClipboardService } from "./web/clipboardService";
+import { WebQrService } from "./web/qrService";
+import { WebMenuPhotoService } from "./web/menuPhotoService";
 
 /**
  * Active platform service instances. Stage 9 swaps these for
@@ -19,3 +22,6 @@ export const shareService = new WebShareService();
 export const speechService = new WebSpeechService();
 export const imageService = new WebImageService();
 export const exportService = new WebExportService();
+export const clipboardService = new WebClipboardService();
+export const qrService = new WebQrService();
+export const menuPhotoService = new WebMenuPhotoService();

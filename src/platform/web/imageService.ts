@@ -3,7 +3,7 @@ import type { ImagePickSource, ImageService } from "../types";
 const DEFAULT_MAX_SIZE = 256;
 const DEFAULT_QUALITY = 0.75;
 
-function pickFile(source: ImagePickSource): Promise<File | null> {
+export function pickFile(source: ImagePickSource): Promise<File | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
@@ -30,7 +30,7 @@ function pickFile(source: ImagePickSource): Promise<File | null> {
   });
 }
 
-function loadImage(file: File): Promise<HTMLImageElement> {
+export function loadImage(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const image = new Image();

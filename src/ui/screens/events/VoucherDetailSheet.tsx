@@ -1,6 +1,8 @@
+import { useNavigate } from "react-router-dom";
 import { BottomSheet } from "@/ui/components/BottomSheet";
 import { JalaliDate } from "@/ui/components/JalaliDate";
 import { formatAmount, toPersianDigits } from "@/domain/format";
+import { formatItemizedItem } from "@/domain/groupOrder";
 import type { Voucher } from "@/data/types";
 
 interface MemberOption {
@@ -26,7 +28,9 @@ function nameOf(members: MemberOption[], personId: string): string {
 }
 
 export function VoucherDetailSheet({ voucher, members, currency, onClose }: VoucherDetailSheetProps) {
+  const navigate = useNavigate();
   if (!voucher) return null;
+  const itemized = voucher.itemizedSnapshot;
 
   return (
     <BottomSheet open={voucher !== null} title={`سند شماره ${toPersianDigits(voucher.number)}`} onClose={onClose}>
@@ -46,6 +50,17 @@ export function VoucherDetailSheet({ voucher, members, currency, onClose }: Vouc
           <JalaliDate date={new Date(`${voucher.expenseDate}T00:00:00`)} />
         </span>
       </div>
+      {itemized && (
+        <div className="voucher-detail__field">
+          <span>از سفارش گروهی</span>
+          <span>
+            <button type="button" className="list-item__action" onClick={() => navigate(`/events/${voucher.eventId}/orders/${itemized.sessionId}`)}>
+              {itemized.sessionTitle}
+              {itemized.restaurant ? ` – ${itemized.restaurant}` : ""} ←
+            </button>
+          </span>
+        </div>
+      )}
       <div className="voucher-detail__field">
         <span>توضیحات</span>
         <span>{voucher.description || "—"}</span>
@@ -74,6 +89,45 @@ export function VoucherDetailSheet({ voucher, members, currency, onClose }: Vouc
               <span>{formatAmount(share.share)}</span>
             </div>
           ))}
+
+          {itemized && (
+            <>
+              <h3 className="section-title">ریز سفارش هر نفر</h3>
+              {itemized.people.map((person) => (
+                <div className="itemized-person" key={person.personId}>
+                  <strong>{nameOf(members, person.personId)}</strong>
+                  <ul>
+                    {person.personTotal !== null ? (
+                      <li>جمع سفارش: {formatAmount(person.personTotal)}</li>
+                    ) : (
+                      person.items.map((item, i) => (
+                        <li key={i}>
+                          {formatItemizedItem(item)}
+                          {item.unitPrice !== null ? ` = ${formatAmount(item.amount)}` : ""}
+                        </li>
+                      ))
+                    )}
+                    {person.sharedItems.map((item, i) => (
+                      <li key={`s${i}`}>
+                        سهم از {item.name} مشترک: {formatAmount(item.amount)}
+                      </li>
+                    ))}
+                    {person.extras
+                      .filter((e) => e.share !== 0)
+                      .map((e) => (
+                        <li key={e.extraId}>
+                          سهم {e.label}: {formatAmount(e.share)}
+                        </li>
+                      ))}
+                  </ul>
+                  <div className="voucher-detail__field">
+                    <span>مبلغ نهایی</span>
+                    <strong>{formatAmount(person.finalTotal)}</strong>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
         </>
       ) : (
         <>

@@ -15,6 +15,13 @@ export interface StatementPaperMeta {
   verificationCode: string;
   status: "current" | "outdated";
   appVersion: string;
+  /**
+   * The statement's shareable link for the footer QR (docs/PLAN.md Stage 3C).
+   * Omitted entirely (e.g. on the shared-link view) = no link area at all;
+   * `url: null` = the statement was too large for a link, so a fallback
+   * message is shown instead of the QR.
+   */
+  link?: { url: string | null; qrDataUrl: string | null };
 }
 
 interface StatementPaperProps {
@@ -63,6 +70,25 @@ export function StatementPaper({ data, meta, innerRef }: StatementPaperProps) {
       </header>
 
       {data.kind === "comprehensive" ? <ComprehensiveReportView data={data} /> : <MemberStatementView data={data} closingText={data.closingText} />}
+
+      {meta.link && (
+        <section className="statement-online" data-export-block>
+          {meta.link.url && meta.link.qrDataUrl ? (
+            <div className="statement-online__link" data-export-link data-href={meta.link.url}>
+              <img className="statement-online__qr" src={meta.link.qrDataUrl} alt="" width={96} height={96} />
+              <div className="statement-online__text">
+                <strong>نسخه‌ی آنلاین این صورت‌حساب</strong>
+                <span>برای مشاهده، QR را اسکن یا روی آن بزنید</span>
+                <span className="statement-online__url" dir="ltr">
+                  {meta.link.url}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <p className="statement-online__fallback">برای نسخه‌ی آنلاین، فایل صورت‌حساب را ارسال کنید</p>
+          )}
+        </section>
+      )}
 
       <footer className="statement-footer" data-export-block>
         <span>کد اعتبارسنجی: {meta.verificationCode}</span>

@@ -49,3 +49,32 @@ describe("buildSplitExplanation", () => {
     expect(buildSplitExplanation(voucher, "p1")).toBe("مبلغ مشخص");
   });
 });
+
+describe("buildSplitExplanation — itemized", () => {
+  const person = {
+    personId: "a",
+    items: [{ name: "کوبیده", quantity: 2, unitPrice: 120000, amount: 240000 }],
+    personTotal: null,
+    sharedItems: [{ name: "سالاد", quantity: 1, amount: 15000 }],
+    itemsSubtotal: 255000,
+    extras: [
+      { extraId: "x1", kind: "vat" as const, label: "مالیات ۱۰٪", share: 25500 },
+      { extraId: "x2", kind: "service" as const, label: "سرویس", share: 13000 },
+      { extraId: "x3", kind: "tip" as const, label: "انعام", share: 0 }
+    ],
+    finalTotal: 293500
+  };
+
+  it("lists the member's items and each extra's share", () => {
+    const text = buildSplitExplanation({ splitMode: "itemized", totalAmount: 1, participants: [], itemizedPeople: [person] }, "a");
+    const [itemsLine, extrasLine] = text.split("\n");
+    expect(itemsLine).toContain("۲ × کوبیده");
+    expect(itemsLine).toContain("۱۲۰٬۰۰۰");
+    expect(itemsLine).toContain("سالاد");
+    expect(extrasLine).toBe("سهم مالیات ۱۰٪: ۲۵٬۵۰۰، سهم سرویس: ۱۳٬۰۰۰");
+  });
+
+  it("falls back to a generic label when the snapshot lacks the person", () => {
+    expect(buildSplitExplanation({ splitMode: "itemized", totalAmount: 1, participants: [] }, "zzz")).toBe("بر اساس سفارش");
+  });
+});

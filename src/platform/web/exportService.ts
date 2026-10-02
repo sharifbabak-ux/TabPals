@@ -25,7 +25,17 @@ interface PageRange {
   repeatHeader: boolean;
 }
 
+interface LinkArea {
+  url: string;
+  /** CSS-px rect relative to the captured element. */
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}
+
 interface Capture {
+  linkAreas: LinkArea[];
   canvas: HTMLCanvasElement;
   containerWidthCss: number;
   headerHeightCss: number;
@@ -69,7 +79,13 @@ async function captureAndPlanPages(element: HTMLElement): Promise<Capture> {
     });
   }
 
-  return { canvas, containerWidthCss: containerRect.width, headerHeightCss, ranges };
+  // Elements marked `data-export-link` (+ `data-href`) become clickable link annotations in the PDF.
+  const linkAreas = Array.from(element.querySelectorAll<HTMLElement>("[data-export-link][data-href]")).map((el) => {
+    const rect = el.getBoundingClientRect();
+    return { url: el.dataset.href as string, top: rect.top - containerRect.top, left: rect.left - containerRect.left, width: rect.width, height: rect.height };
+  });
+
+  return { canvas, containerWidthCss: containerRect.width, headerHeightCss, ranges, linkAreas };
 }
 
 /** Slices the one full-resolution capture into per-page canvases, redrawing the header at the top of every page after the first. */
@@ -145,11 +161,19 @@ export class WebExportService implements ExportService {
     const pdf = new jsPDF({ unit: "mm", format: "a4" });
     const pageWidthMm = pdf.internal.pageSize.getWidth();
 
+    const mmPerCssPx = pageWidthMm / capture.containerWidthCss;
     pages.forEach((pageCanvas, index) => {
       if (index > 0) pdf.addPage();
       const pageHeightMm = (pageCanvas.height / pageCanvas.width) * pageWidthMm;
       const dataUrl = pageCanvas.toDataURL("image/jpeg", JPEG_QUALITY);
       pdf.addImage(dataUrl, "JPEG", 0, 0, pageWidthMm, pageHeightMm);
+
+      const range = capture.ranges[index];
+      const headerOffsetCss = range.repeatHeader ? capture.headerHeightCss : 0;
+      for (const area of capture.linkAreas) {
+        if (area.top < range.topCss || area.top + area.height > range.bottomCss + 1) continue;
+        pdf.link(area.left * mmPerCssPx, (headerOffsetCss + area.top - range.topCss) * mmPerCssPx, area.width * mmPerCssPx, area.height * mmPerCssPx, { url: area.url });
+      }
     });
 
     const blob = pdf.output("blob");
