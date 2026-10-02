@@ -197,6 +197,19 @@ export interface Statement extends BaseRecord {
   /** 8 uppercase hex chars in two groups, e.g. "A3F9-2C71". SHA-256 of `snapshot`. */
   verificationCode: string;
   status: StatementStatus;
+  /** History of sends for this exact statement issue (docs/PLAN.md Stage 3C); a re-issue starts a fresh, empty log. */
+  sendLog: SendLogEntry[];
+}
+
+/** How a statement was handed to a member (docs/PLAN.md Stage 3C). "print" logs a desktop "چاپ / ذخیره PDF" action. */
+export type SendChannel = "share" | "whatsapp" | "telegram" | "sms" | "print";
+
+/** One record of a statement being sent, appended to `Statement.sendLog`. */
+export interface SendLogEntry {
+  channel: SendChannel;
+  at: string;
+  /** Person id of the recipient, or "group" for a "همه در یک گفتگو" bulk share. */
+  target: string;
 }
 
 export type MessageTemplateCategory = "debtor" | "creditor" | "settled" | "treasurer";

@@ -228,6 +228,31 @@ export class TabPalDB extends Dexie {
           });
       });
 
+    // Stage 3C — export & sending. Statements gain `sendLog` (append-only
+    // history of shares/sends, docs/PLAN.md Stage 3C); existing statements
+    // predate the field, so it's backfilled to an empty array. Purely
+    // additive otherwise, so the stores() shape is unchanged from v6.
+    this.version(7)
+      .stores({
+        meta: "key",
+        persons: "id, archived, deleted, needsNameReview",
+        events: "id, archived, deleted, startDate, closedAt, treasurerPersonId, deletedAt",
+        eventMembers: "id, eventId, personId, &[eventId+personId], active, deleted, sortOrder",
+        groups: "id, name, archived, deleted",
+        vouchers: "id, eventId, &[eventId+number], type, status, deleted, recordedAt",
+        statements: "id, eventId, kind, personId, &[eventId+number], status, deleted",
+        messageTemplates: "id, category, enabled, isDefault, deleted",
+        operations: "id, entity, entityId, timestamp"
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table("statements")
+          .toCollection()
+          .modify((statement) => {
+            if (statement.sendLog === undefined) statement.sendLog = [];
+          });
+      });
+
     // Dexie only runs version().upgrade() when migrating an EXISTING
     // database; a brand-new install goes straight to the latest schema
     // with no upgrade() calls at all, so first-run seeding needs this

@@ -14,7 +14,7 @@ export function ComprehensiveReportView({ data }: ComprehensiveReportViewProps) 
 
   return (
     <div className="statement-body">
-      <section>
+      <section data-export-block>
         <h2 className="section-title">اعضا</h2>
         <div className="table-scroll">
         <table className="statement-table">
@@ -38,7 +38,7 @@ export function ComprehensiveReportView({ data }: ComprehensiveReportViewProps) 
         </div>
       </section>
 
-      <section>
+      <section data-export-block>
         <h2 className="section-title">دفتر کل اسناد</h2>
         <div className="table-scroll">
         <table className="statement-table">
@@ -88,7 +88,7 @@ export function ComprehensiveReportView({ data }: ComprehensiveReportViewProps) 
         </div>
       </section>
 
-      <section>
+      <section data-export-block>
         <h2 className="section-title">حساب صندوق</h2>
         <div className="table-scroll">
         <table className="statement-table">
@@ -127,7 +127,7 @@ export function ComprehensiveReportView({ data }: ComprehensiveReportViewProps) 
         </p>
       </section>
 
-      <section>
+      <section data-export-block>
         <h2 className="section-title">خلاصه هر عضو</h2>
         <div className="table-scroll">
         <table className="statement-table">
@@ -164,7 +164,7 @@ export function ComprehensiveReportView({ data }: ComprehensiveReportViewProps) 
       </section>
 
       {hubSettlement && (
-        <section>
+        <section data-export-block>
           <h2 className="section-title">برنامه‌ی تسویه‌ی صندوق</h2>
           {hubSettlement.paysToTreasurer.length > 0 && (
             <>
@@ -193,7 +193,7 @@ export function ComprehensiveReportView({ data }: ComprehensiveReportViewProps) 
         </section>
       )}
 
-      <section>
+      <section data-export-block>
         <h2 className="section-title">کنترل‌های محاسباتی</h2>
         <ul className="statement-control-checks">
           {controlChecks.map((check) => (

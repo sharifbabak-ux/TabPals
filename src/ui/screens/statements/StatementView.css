@@ -3,6 +3,20 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.statement-view__toolbar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.statement-view__verify {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .statement-paper {
@@ -184,6 +198,29 @@
 
 .statement-footer__verify--bad {
   color: var(--color-debtor);
+}
+
+/* Export capture (docs/PLAN.md Stage 3C): forces the same print-like white/black
+   appearance as @media print below while the element is captured on-screen
+   for PDF/image export (ExportService toggles this attribute, see SendMenuSheet). */
+.statement-paper[data-exporting="true"] {
+  background: #ffffff;
+  color: #000000;
+  box-shadow: none;
+  border: none;
+}
+
+.statement-paper[data-exporting="true"] .no-print {
+  display: none !important;
+}
+
+.statement-paper[data-exporting="true"] .statement-table th,
+.statement-paper[data-exporting="true"] .statement-table td {
+  border-color: #000000;
+}
+
+.statement-paper[data-exporting="true"] .table-scroll {
+  overflow: visible;
 }
 
 /* Print / A4 export (docs/PLAN.md Stage 3B UI — source for Stage 3C PDF/image export) */

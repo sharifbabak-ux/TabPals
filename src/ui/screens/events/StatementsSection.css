@@ -13,3 +13,19 @@
 .statement-status-chip--outdated {
   color: var(--color-ink-muted);
 }
+
+.send-queue-row {
+  align-items: flex-start;
+}
+
+.send-queue-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.send-queue-row__actions button {
+  padding: 6px 10px;
+  font-size: 0.8rem;
+}

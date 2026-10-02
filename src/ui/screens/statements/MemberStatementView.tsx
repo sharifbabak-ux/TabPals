@@ -19,7 +19,7 @@ export function MemberStatementView({ data, closingText }: MemberStatementViewPr
 
   return (
     <div className="statement-body">
-      <section>
+      <section data-export-block>
         <h2 className="section-title">ریز هزینه‌ها</h2>
         {expenses.length === 0 ? (
           <p className="statement-empty">در این هزینه‌ای سهیم نبوده یا پرداختی نداشته‌اید.</p>
@@ -83,7 +83,7 @@ export function MemberStatementView({ data, closingText }: MemberStatementViewPr
         )}
       </section>
 
-      <section>
+      <section data-export-block>
         <h2 className="section-title">صندوق و تسویه‌ها</h2>
         {fundEntries.length === 0 ? (
           <p className="statement-empty">واریز یا تسویه‌ای ثبت نشده است.</p>
@@ -119,7 +119,7 @@ export function MemberStatementView({ data, closingText }: MemberStatementViewPr
         )}
       </section>
 
-      <section>
+      <section data-export-block>
         <h2 className="section-title">خلاصه حساب</h2>
         <div className="table-scroll">
         <table className="statement-table statement-table--summary">
@@ -172,7 +172,7 @@ export function MemberStatementView({ data, closingText }: MemberStatementViewPr
       </section>
 
       {hubSettlement && (
-        <section>
+        <section data-export-block>
           <h2 className="section-title">وظایف تسویه‌ی صندوق</h2>
           {hubSettlement.paysToTreasurer.length > 0 && (
             <>
@@ -215,13 +215,13 @@ export function MemberStatementView({ data, closingText }: MemberStatementViewPr
         </section>
       )}
 
-      <section className="statement-closing-box">
+      <section className="statement-closing-box" data-export-block>
         <p>{closingText}</p>
         <p className="statement-closing-box__balance">{balanceText}</p>
       </section>
 
       {isDebtor && (treasurerName || data.treasurerCardNumberGrouped || data.treasurerIbanGrouped) && (
-        <section className="statement-payment-box">
+        <section className="statement-payment-box" data-export-block>
           <h2 className="section-title">اطلاعات پرداخت</h2>
           {treasurerName && (
             <p>

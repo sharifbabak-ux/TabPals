@@ -9,11 +9,15 @@
 
 export type PlatformKind = "web" | "android" | "ios";
 
+/** The device's actual OS, detected even on the web build (docs/PLAN.md Stage 3C — the sms: URI's body separator differs by OS). */
+export type PlatformOS = "ios" | "android" | "other";
+
 export interface PlatformInfo {
   /** Which runtime this build is executing on. */
   kind: PlatformKind;
   /** Whether the app is running installed/standalone (vs. a browser tab). */
   isStandalone: boolean;
+  os: PlatformOS;
 }
 
 export interface Platform {
@@ -41,14 +45,28 @@ export interface FileService {
   rotateBackups(maxCount: number): Promise<void>;
 }
 
+export interface ShareableFile {
+  data: Blob;
+  filename: string;
+  mimeType: string;
+}
+
 /**
  * Hands a file or plain text to the OS/browser share sheet
  * (WhatsApp/Telegram/etc. on Android, Web Share API on web).
  */
 export interface ShareService {
   isSupported(): boolean;
+  /** Whether files of the given MIME types can be shared in one call (docs/PLAN.md Stage 3C "همه در یک گفتگو"). */
+  canShareFiles(mimeTypes: string[]): boolean;
   shareFile(data: Blob, filename: string, mimeType: string): Promise<void>;
+  /** Shares several files in one share-sheet call; falls back to sequential single-file shares if the platform can't share them together. */
+  shareFiles(files: ShareableFile[]): Promise<void>;
   shareText(text: string, title?: string): Promise<void>;
+  /** Saves a file straight to the user's downloads — the fallback when file sharing isn't supported at all. */
+  downloadFile(data: Blob, filename: string): void;
+  /** Opens a wa.me/t.me/sms: link. Native Android replaces this in Stage 9 with a direct app Intent carrying the file. */
+  openUrl(url: string): void;
 }
 
 export type ImagePickSource = "camera" | "gallery";
@@ -62,6 +80,27 @@ export type ImagePickSource = "camera" | "gallery";
  */
 export interface ImageService {
   pickSquarePhoto(source: ImagePickSource, maxSize?: number, quality?: number): Promise<Blob | null>;
+}
+
+export interface ExportedFile {
+  blob: Blob;
+  filename: string;
+  mimeType: string;
+}
+
+/**
+ * Renders an already-laid-out statement/report DOM element (the print/A4
+ * view) to downloadable/shareable files (docs/PLAN.md Stage 3C). Web
+ * implementation now; native Android/iOS can replace it in Stage 9 without
+ * touching UI code. The element is expected to mark its repeated header
+ * with `data-export-header` and its page-break-safe sections/rows with
+ * `data-export-block`, matching the print stylesheet's own section breaks.
+ */
+export interface ExportService {
+  /** Image-based, paginated A4 PDF (Persian shaping must be pixel-perfect, so this is a screenshot, not text). */
+  exportPdf(element: HTMLElement, filenameBase: string): Promise<ExportedFile>;
+  /** One or more 1080px-wide page images, numbered in a footer when there's more than one. */
+  exportImages(element: HTMLElement, filenameBase: string): Promise<ExportedFile[]>;
 }
 
 export interface SpeechRecognitionResult {
