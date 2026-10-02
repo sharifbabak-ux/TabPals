@@ -190,3 +190,90 @@ describe("buildComprehensiveReportData", () => {
     expect(report.hubSettlement?.totalPaidOut).toBe(0);
   });
 });
+
+describe("itemized (group order) vouchers", () => {
+  const itemizedVoucher: StatementBuildVoucher = {
+    number: 1,
+    type: "expense",
+    expenseDate: "2025-01-03",
+    recordedAt: "2025-01-03T20:00:00.000Z",
+    description: "شام – نایب",
+    totalAmount: 600,
+    payers: [{ personId: "t", amount: 600 }],
+    participants: [
+      { personId: "a", weight: 330 },
+      { personId: "b", weight: 270 }
+    ],
+    shares: [
+      { personId: "a", share: 330 },
+      { personId: "b", share: 270 }
+    ],
+    splitMode: "itemized",
+    itemizedSnapshot: {
+      sessionId: "s1",
+      sessionTitle: "شام",
+      restaurant: "نایب",
+      billTotal: 600,
+      extras: [
+        { extraId: "x1", kind: "vat", label: "مالیات ۱۰٪", mode: "percent", value: 10, allocation: "proportional", amount: 55 },
+        { extraId: "x2", kind: "service", label: "سرویس", mode: "amount", value: 45, allocation: "equal", amount: 45 }
+      ],
+      people: [
+        {
+          personId: "a",
+          items: [{ name: "کوبیده", quantity: 2, unitPrice: 100, amount: 200 }],
+          personTotal: null,
+          sharedItems: [{ name: "سالاد", quantity: 1, amount: 50 }],
+          itemsSubtotal: 250,
+          extras: [
+            { extraId: "x1", kind: "vat", label: "مالیات ۱۰٪", share: 25 },
+            { extraId: "x2", kind: "service", label: "سرویس", share: 55 }
+          ],
+          finalTotal: 330
+        },
+        {
+          personId: "b",
+          items: [{ name: "جوجه", quantity: 1, unitPrice: 150, amount: 150 }],
+          personTotal: null,
+          sharedItems: [{ name: "سالاد", quantity: 1, amount: 50 }],
+          itemsSubtotal: 200,
+          extras: [
+            { extraId: "x1", kind: "vat", label: "مالیات ۱۰٪", share: 30 },
+            { extraId: "x2", kind: "service", label: "سرویس", share: 40 }
+          ],
+          finalTotal: 270
+        }
+      ]
+    }
+  };
+
+  it("explains a member's row with their items and each extra's share", () => {
+    const data = buildMemberStatementData({ kind: "member", event, members, vouchers: [itemizedVoucher], personId: "a" });
+    const row = data.expenses[0];
+    expect(row.share).toBe(330);
+    expect(row.splitExplanation).toContain("۲ × کوبیده");
+    expect(row.splitExplanation).toContain("سهم مالیات ۱۰٪: ۲۵");
+    expect(row.splitExplanation).toContain("سهم سرویس: ۵۵");
+    expect(row.splitExplanation).not.toContain("جوجه");
+  });
+
+  it("carries the full per-person breakdown into the comprehensive report", () => {
+    const report = buildComprehensiveReportData({ event, members, vouchers: [itemizedVoucher] });
+    const row = report.ledger[0];
+    expect(row.splitMode).toBe("itemized");
+    expect(row.itemized?.map((p) => [p.name, p.total])).toEqual([
+      ["آرش", 330],
+      ["بهار", 270]
+    ]);
+    expect(row.itemized?.[0].items.join(" ")).toContain("کوبیده");
+    expect(row.itemized?.[0].extras).toEqual([
+      { label: "مالیات ۱۰٪", share: 25 },
+      { label: "سرویس", share: 55 }
+    ]);
+  });
+
+  it("leaves non-itemized ledger rows without an itemized breakdown", () => {
+    const report = buildComprehensiveReportData({ event, members, vouchers });
+    expect(report.ledger.every((row) => row.itemized === undefined)).toBe(true);
+  });
+});

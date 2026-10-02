@@ -1,0 +1,16 @@
+.toast {
+  position: fixed;
+  inset-inline: 16px;
+  bottom: calc(var(--nav-height) + 24px);
+  z-index: 1000;
+  margin-inline: auto;
+  width: fit-content;
+  max-width: calc(100vw - 32px);
+  background: var(--color-ink);
+  color: var(--color-background);
+  border-radius: var(--radius-control);
+  padding: 10px 16px;
+  font-size: 0.9rem;
+  box-shadow: var(--shadow-card);
+  text-align: center;
+}

@@ -49,7 +49,7 @@ export function MemberStatementView({ data, closingText }: MemberStatementViewPr
                     <td>
                       {formatAmount(row.totalAmount)} {event.currency}
                     </td>
-                    <td>{row.splitExplanation || "—"}</td>
+                    <td className="statement-table__explanation">{row.splitExplanation || "—"}</td>
                     <td>
                       {formatAmount(row.share)} {event.currency}
                     </td>

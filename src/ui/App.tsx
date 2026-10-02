@@ -6,6 +6,8 @@ import { BottomNav } from "./components/BottomNav";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { EventsScreen } from "./screens/EventsScreen";
 import { EventDetailScreen } from "./screens/EventDetailScreen";
+import { OrderSessionScreen } from "./screens/orders/OrderSessionScreen";
+import { OrderPricingScreen } from "./screens/orders/OrderPricingScreen";
 import { StatementViewScreen } from "./screens/StatementViewScreen";
 import { SharedStatementScreen } from "./screens/SharedStatementScreen";
 import { SendQueueScreen } from "./screens/SendQueueScreen";
@@ -46,6 +48,8 @@ export function App() {
           <Route path="/" element={<Navigate to="/events" replace />} />
           <Route path="/events" element={<EventsScreen />} />
           <Route path="/events/:eventId" element={<EventDetailScreen />} />
+          <Route path="/events/:eventId/orders/:sessionId" element={<OrderSessionScreen />} />
+          <Route path="/events/:eventId/orders/:sessionId/pricing" element={<OrderPricingScreen />} />
           <Route path="/events/:eventId/statements/send-queue" element={<SendQueueScreen />} />
           <Route path="/events/:eventId/statements/:statementId" element={<StatementViewScreen />} />
           <Route path="/s/:payload" element={<SharedStatementScreen />} />

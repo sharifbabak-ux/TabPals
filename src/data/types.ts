@@ -131,7 +131,7 @@ export type VoucherStatus = "active";
  * already holds the percent (0-100) or exact amount used, so it stays
  * available for statement display as-is.
  */
-export type SplitMode = "equal" | "weight" | "percent" | "exact";
+export type SplitMode = "equal" | "weight" | "percent" | "exact" | "itemized";
 
 /**
  * An accounting voucher (docs/PLAN.md #2 and #4). Expenses carry payers,
@@ -165,6 +165,64 @@ export interface Voucher extends BaseRecord {
   splitMode?: SplitMode;
   /** Only meaningful when `payers.length > 1`; how the payer amounts were derived from the total (docs/PLAN.md Stage 3B.1). Existing multi-payer vouchers were migrated to "exact". */
   payerSplitMode?: SplitMode;
+  /** Only for `splitMode: "itemized"` (Group Order, docs/PLAN.md): per-person items and extra shares, written once at finalize. */
+  itemizedSnapshot?: ItemizedSnapshot;
+}
+
+/** One line item of a person's order as frozen into an itemized voucher. */
+export interface ItemizedItemSnapshot {
+  name: string;
+  quantity: number;
+  /** Null when the person's amount came from their per-person total instead of item prices. */
+  unitPrice: number | null;
+  amount: number;
+}
+
+/** A shared item's share for one person (the item's name/quantity and this person's weighted part of its amount). */
+export interface ItemizedSharedItemSnapshot {
+  name: string;
+  quantity: number;
+  amount: number;
+}
+
+export interface ItemizedExtraShareSnapshot {
+  extraId: string;
+  kind: SessionExtraKind;
+  label: string;
+  share: number;
+}
+
+export interface ItemizedPersonSnapshot {
+  personId: string;
+  items: ItemizedItemSnapshot[];
+  /** Set when the person's items subtotal came from their per-person total ("جمع سفارش این نفر"). */
+  personTotal: number | null;
+  sharedItems: ItemizedSharedItemSnapshot[];
+  /** Own items + shared-item shares, before extras. */
+  itemsSubtotal: number;
+  extras: ItemizedExtraShareSnapshot[];
+  finalTotal: number;
+}
+
+export interface ItemizedExtraSnapshot {
+  extraId: string;
+  kind: SessionExtraKind;
+  label: string;
+  mode: SessionExtraMode;
+  value: number;
+  allocation: ExtraAllocation;
+  /** The extra's total amount (negative for discounts). */
+  amount: number;
+}
+
+/** Everything about a group-order bill needed to re-render a member's itemized breakdown forever (docs/PLAN.md Group Order). */
+export interface ItemizedSnapshot {
+  sessionId: string;
+  sessionTitle: string;
+  restaurant?: string;
+  billTotal: number;
+  extras: ItemizedExtraSnapshot[];
+  people: ItemizedPersonSnapshot[];
 }
 
 /** "member" statements are per-person; "comprehensive" covers the whole event (personId is null). */
@@ -226,8 +284,20 @@ export interface MessageTemplate extends BaseRecord {
   isDefault: boolean;
 }
 
-export type OperationEntity = "persons" | "events" | "eventMembers" | "groups" | "vouchers" | "statements" | "messageTemplates";
-export type OperationType = "create" | "update" | "archive" | "close" | "reopen" | "outdate" | "trash" | "restore" | "purge";
+export type OperationEntity =
+  | "persons"
+  | "events"
+  | "eventMembers"
+  | "groups"
+  | "vouchers"
+  | "statements"
+  | "messageTemplates"
+  | "orderSessions"
+  | "sessionMenuItems"
+  | "orderLines"
+  | "orderPersonTotals"
+  | "sessionExtras";
+export type OperationType = "create" | "update" | "archive" | "close" | "reopen" | "outdate" | "trash" | "restore" | "purge" | "delete" | "cancel" | "finalize";
 
 /** Field-level before/after values recorded for one changed field. */
 export interface FieldChange {
@@ -249,4 +319,87 @@ export interface Operation {
   changes: Record<string, FieldChange>;
   timestamp: string;
   deviceId: string;
+}
+
+// --- Group Order (docs/PLAN.md "Group Order", Stage GO-1) -----------------
+
+export type OrderSessionStatus = "draft" | "open" | "locked" | "pricing" | "finalized" | "cancelled";
+
+/** One meal's group order inside an event. Read-only once the event is closed (enforced in the repository). */
+export interface OrderSession extends BaseRecord {
+  eventId: string;
+  title: string;
+  restaurant?: string;
+  /** ISO timestamp of the meal. */
+  scheduledAt: string;
+  status: OrderSessionStatus;
+  cancelReason?: string;
+  /** Compressed image of the printed menu. */
+  menuPhoto?: Blob;
+  /** The event's treasurer at creation; only they finalize. */
+  adminPersonId: string;
+  /** Can manage the session in the admin's absence (GO-3); finalize still happens on the treasurer's device. */
+  deputyPersonId: string | null;
+  /** The restaurant's bill total, entered during pricing. */
+  billTotal: number | null;
+  /** Editable ISO date ("YYYY-MM-DD") copied onto the voucher. */
+  expenseDate: string;
+  payers: VoucherPayer[];
+  payerSplitMode?: SplitMode;
+  /** Set when finalized. */
+  voucherId: string | null;
+}
+
+/** A "منوی سریع" chip. */
+export interface SessionMenuItem extends BaseRecord {
+  sessionId: string;
+  name: string;
+  price?: number;
+  sortOrder: number;
+}
+
+export type OrderLineSource = "admin-device" | "package" | "online";
+
+export interface SharedParticipant {
+  personId: string;
+  weight: number;
+}
+
+export interface OrderLine extends BaseRecord {
+  sessionId: string;
+  /** Null for shared lines. */
+  personId: string | null;
+  /** Shared lines only. */
+  sharedParticipants?: SharedParticipant[];
+  menuItemId?: string;
+  itemName: string;
+  /** Integer ≥ 1. */
+  quantity: number;
+  unitPrice?: number;
+  note?: string;
+  source: OrderLineSource;
+  /** Bumped by package/online submissions so a newer version replaces an older one from the same person (GO-2/GO-3). */
+  sourceVersion: number;
+}
+
+/** Optional per-person total used when that person's lines have no item prices. */
+export interface OrderPersonTotal extends BaseRecord {
+  sessionId: string;
+  personId: string;
+  total: number;
+}
+
+export type SessionExtraKind = "vat" | "service" | "tip" | "discount" | "other";
+export type SessionExtraMode = "percent" | "amount";
+export type ExtraAllocation = "proportional" | "equal" | "weight";
+
+export interface SessionExtra extends BaseRecord {
+  sessionId: string;
+  kind: SessionExtraKind;
+  label: string;
+  mode: SessionExtraMode;
+  value: number;
+  allocation: ExtraAllocation;
+  /** Used when allocation = "weight". */
+  weights?: { personId: string; weight: number }[];
 }

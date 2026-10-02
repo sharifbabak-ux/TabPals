@@ -229,7 +229,21 @@ export const eventsRepository = {
    * 3B.1) — only an event already in trash can be purged.
    */
   async permanentlyDelete(id: string): Promise<void> {
-    await db.transaction("rw", db.events, db.eventMembers, db.vouchers, db.statements, db.operations, async () => {
+    await db.transaction(
+      "rw",
+      [
+        db.events,
+        db.eventMembers,
+        db.vouchers,
+        db.statements,
+        db.orderSessions,
+        db.sessionMenuItems,
+        db.orderLines,
+        db.orderPersonTotals,
+        db.sessionExtras,
+        db.operations
+      ],
+      async () => {
       const existing = await db.events.get(id);
       if (!existing) throw new Error(`Event ${id} not found`);
       const check = canDeleteEvent(existing);
@@ -238,6 +252,16 @@ export const eventsRepository = {
       const memberIds = await db.eventMembers.where("eventId").equals(id).primaryKeys();
       const voucherIds = await db.vouchers.where("eventId").equals(id).primaryKeys();
       const statementIds = await db.statements.where("eventId").equals(id).primaryKeys();
+
+      // Group-order sessions and everything under them go with the event (tombstoned by the event's purge entry).
+      const sessionIds = (await db.orderSessions.where("eventId").equals(id).primaryKeys()) as string[];
+      for (const sessionId of sessionIds) {
+        await db.sessionMenuItems.where("sessionId").equals(sessionId).delete();
+        await db.orderLines.where("sessionId").equals(sessionId).delete();
+        await db.orderPersonTotals.where("sessionId").equals(sessionId).delete();
+        await db.sessionExtras.where("sessionId").equals(sessionId).delete();
+      }
+      await db.orderSessions.bulkDelete(sessionIds);
 
       await db.eventMembers.bulkDelete(memberIds);
       await db.vouchers.bulkDelete(voucherIds);

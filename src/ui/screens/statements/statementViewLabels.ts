@@ -5,7 +5,8 @@ export const SPLIT_MODE_LABELS: Record<SplitMode, string> = {
   equal: "مساوی",
   weight: "ضریبی",
   percent: "درصدی",
-  exact: "مبلغ مشخص"
+  exact: "مبلغ مشخص",
+  itemized: "بر اساس سفارش"
 };
 
 export const VOUCHER_TYPE_LABELS: Record<VoucherType, string> = {

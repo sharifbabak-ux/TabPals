@@ -280,3 +280,52 @@
     margin: 14mm;
   }
 }
+
+.statement-table__explanation {
+  white-space: pre-line;
+}
+
+/* Statement QR / online link footer (docs/PLAN.md Stage 3C). */
+.statement-online {
+  border-top: 1px solid var(--color-border);
+  padding-top: 12px;
+}
+
+.statement-online__link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: inherit;
+}
+
+.statement-online__qr {
+  flex-shrink: 0;
+  background: #ffffff;
+  padding: 2px;
+  border-radius: 4px;
+}
+
+.statement-online__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 0.8rem;
+}
+
+.statement-online__url {
+  font-size: 0.55rem;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-all;
+  text-align: left;
+}
+
+.statement-online__fallback {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}

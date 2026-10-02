@@ -535,3 +535,87 @@ describe("TabPalDB schema v6 -> v7 migration", () => {
     upgraded.close();
   });
 });
+
+describe("TabPalDB schema v7 -> v8 migration (Group Order)", () => {
+  class V7DB extends Dexie {
+    events!: Dexie.Table<Record<string, unknown>, string>;
+    vouchers!: Dexie.Table<Record<string, unknown>, string>;
+    constructor(name: string) {
+      super(name);
+      this.version(7).stores({
+        meta: "key",
+        persons: "id, archived, deleted, needsNameReview",
+        events: "id, archived, deleted, startDate, closedAt, treasurerPersonId, deletedAt",
+        eventMembers: "id, eventId, personId, &[eventId+personId], active, deleted, sortOrder",
+        groups: "id, name, archived, deleted",
+        vouchers: "id, eventId, &[eventId+number], type, status, deleted, recordedAt",
+        statements: "id, eventId, kind, personId, &[eventId+number], status, deleted",
+        messageTemplates: "id, category, enabled, isDefault, deleted",
+        operations: "id, entity, entityId, timestamp"
+      });
+    }
+  }
+
+  const baseFields = {
+    createdAt: "2025-01-01T00:00:00.000Z",
+    updatedAt: "2025-01-01T00:00:00.000Z",
+    deviceId: "device-1",
+    version: 1,
+    deleted: false
+  };
+
+  it("keeps existing events and vouchers untouched and adds the empty group-order tables", async () => {
+    const legacy = new V7DB(TEST_DB_NAME);
+    await legacy.events.put({ id: "e1", title: "سفر شمال", archived: false, currency: "تومان", treasurerPersonId: "p1", closedAt: null, reopenedAt: null, reopenReason: null, deletedAt: null, ...baseFields });
+    await legacy.vouchers.put({
+      id: "v1",
+      eventId: "e1",
+      number: 1,
+      type: "expense",
+      recordedAt: "2025-01-01T00:00:00.000Z",
+      expenseDate: "2025-01-01",
+      description: "شام",
+      totalAmount: 100,
+      payers: [{ personId: "p1", amount: 100 }],
+      participants: [{ personId: "p1", weight: 1 }],
+      shares: [{ personId: "p1", share: 100 }],
+      status: "active",
+      splitMode: "equal",
+      ...baseFields
+    });
+    legacy.close();
+
+    const upgraded = new TabPalDB(TEST_DB_NAME);
+    await upgraded.open();
+
+    expect((await upgraded.events.get("e1"))?.title).toBe("سفر شمال");
+    const voucher = await upgraded.vouchers.get("v1");
+    expect(voucher?.totalAmount).toBe(100);
+    expect(voucher?.splitMode).toBe("equal");
+    expect(voucher?.itemizedSnapshot).toBeUndefined();
+
+    expect(await upgraded.orderSessions.count()).toBe(0);
+    expect(await upgraded.sessionMenuItems.count()).toBe(0);
+    expect(await upgraded.orderLines.count()).toBe(0);
+    expect(await upgraded.orderPersonTotals.count()).toBe(0);
+    expect(await upgraded.sessionExtras.count()).toBe(0);
+
+    await upgraded.orderSessions.put({
+      id: "s1",
+      eventId: "e1",
+      title: "شام",
+      scheduledAt: "2025-01-02T18:00:00.000Z",
+      status: "draft",
+      adminPersonId: "p1",
+      deputyPersonId: null,
+      billTotal: null,
+      expenseDate: "2025-01-02",
+      payers: [],
+      voucherId: null,
+      ...baseFields
+    });
+    expect((await upgraded.orderSessions.where("eventId").equals("e1").toArray()).map((s) => s.id)).toEqual(["s1"]);
+
+    upgraded.close();
+  });
+});

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -24,9 +24,11 @@ import { MemberRow } from "./events/MemberRow";
 import { VouchersSection } from "./events/VouchersSection";
 import { BalancesPanel } from "./events/BalancesPanel";
 import { StatementsSection } from "./events/StatementsSection";
+import { OrderSessionsSection } from "./orders/OrderSessionsSection";
 
 type MemberRowData = EventMember & { name: string; firstName: string; lastName: string; photo?: Blob };
-type EventTab = "members" | "vouchers" | "statements";
+type EventTab = "members" | "vouchers" | "orders" | "statements";
+const EVENT_TABS: EventTab[] = ["members", "vouchers", "orders", "statements"];
 
 /** Merges a new order for the visible subset back into the full member list, keeping hidden rows in their original slots. */
 function mergeReorderedIds(allIds: string[], visibleIdsInNewOrder: string[]): string[] {
@@ -39,7 +41,9 @@ export function EventDetailScreen() {
   const { eventId = "" } = useParams();
   const navigate = useNavigate();
 
-  const [tab, setTab] = useState<EventTab>("members");
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const [tab, setTab] = useState<EventTab>(EVENT_TABS.includes(tabParam as EventTab) ? (tabParam as EventTab) : "members");
   const [showInactive, setShowInactive] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [createPersonOpen, setCreatePersonOpen] = useState(false);
@@ -202,6 +206,7 @@ export function EventDetailScreen() {
         options={[
           { value: "members", label: "اعضا" },
           { value: "vouchers", label: "اسناد" },
+          { value: "orders", label: "سفارش‌ها" },
           { value: "statements", label: "صورت‌حساب‌ها" }
         ]}
         value={tab}
@@ -262,6 +267,17 @@ export function EventDetailScreen() {
           eventClosed={closed}
           treasurerPersonId={event.treasurerPersonId}
           treasurerName={treasurerName}
+          onRequestSetTreasurer={() => setEditOpen(true)}
+          initialVoucherId={searchParams.get("voucher")}
+        />
+      ) : tab === "orders" ? (
+        <OrderSessionsSection
+          eventId={eventId}
+          currency={event.currency}
+          eventClosed={closed}
+          treasurerPersonId={event.treasurerPersonId}
+          treasurerName={treasurerName}
+          onRequestSetTreasurer={() => setEditOpen(true)}
         />
       ) : (
         <StatementsSection

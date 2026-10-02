@@ -88,6 +88,40 @@ export function ComprehensiveReportView({ data }: ComprehensiveReportViewProps) 
         </div>
       </section>
 
+      {ledger
+        .filter((row) => row.itemized && row.itemized.length > 0)
+        .map((row) => (
+          <section key={`itemized-${row.number}`} data-export-block>
+            <h2 className="section-title">
+              ریز سفارش گروهی — سند {toPersianDigits(row.number)}: {row.description || "—"}
+            </h2>
+            <div className="table-scroll">
+              <table className="statement-table">
+                <thead>
+                  <tr>
+                    <th>نام</th>
+                    <th>اقلام</th>
+                    <th>سهم هزینه‌های مشترک</th>
+                    <th>مبلغ نهایی</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {row.itemized?.map((person) => (
+                    <tr key={person.name}>
+                      <td>{person.name}</td>
+                      <td>{person.items.join("، ") || "—"}</td>
+                      <td>{person.extras.map((e) => `سهم ${e.label}: ${formatAmount(e.share)}`).join("، ") || "—"}</td>
+                      <td>
+                        {formatAmount(person.total)} {event.currency}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ))}
+
       <section data-export-block>
         <h2 className="section-title">حساب صندوق</h2>
         <div className="table-scroll">

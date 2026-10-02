@@ -2,7 +2,21 @@ import Dexie, { type EntityTable } from "dexie";
 import { ulid } from "ulid";
 import { DEFAULT_MESSAGE_TEMPLATES } from "@/domain/messageTemplateDefaults";
 import { getDeviceId } from "./deviceId";
-import type { Event, EventMember, Group, MessageTemplate, Operation, Person, Statement, Voucher } from "./types";
+import type {
+  Event,
+  EventMember,
+  Group,
+  MessageTemplate,
+  Operation,
+  OrderLine,
+  OrderPersonTotal,
+  OrderSession,
+  Person,
+  SessionExtra,
+  SessionMenuItem,
+  Statement,
+  Voucher
+} from "./types";
 
 /** Default currency label backfilled onto events created before Stage 2. */
 const DEFAULT_CURRENCY_LABEL = "تومان";
@@ -47,6 +61,11 @@ export class TabPalDB extends Dexie {
   vouchers!: EntityTable<Voucher, "id">;
   statements!: EntityTable<Statement, "id">;
   messageTemplates!: EntityTable<MessageTemplate, "id">;
+  orderSessions!: EntityTable<OrderSession, "id">;
+  sessionMenuItems!: EntityTable<SessionMenuItem, "id">;
+  orderLines!: EntityTable<OrderLine, "id">;
+  orderPersonTotals!: EntityTable<OrderPersonTotal, "id">;
+  sessionExtras!: EntityTable<SessionExtra, "id">;
   operations!: EntityTable<Operation, "id">;
 
   constructor(name = "tabpal") {
@@ -252,6 +271,28 @@ export class TabPalDB extends Dexie {
             if (statement.sendLog === undefined) statement.sendLog = [];
           });
       });
+
+    // Stage GO-1 — Group Order. Purely additive: five new empty tables
+    // (sessions, quick-menu items, order lines, per-person totals, extras).
+    // Vouchers gain the optional `itemizedSnapshot` field and splitMode
+    // "itemized", which need no index and no backfill, so existing data is
+    // untouched and no upgrade() function is required.
+    this.version(8).stores({
+      meta: "key",
+      persons: "id, archived, deleted, needsNameReview",
+      events: "id, archived, deleted, startDate, closedAt, treasurerPersonId, deletedAt",
+      eventMembers: "id, eventId, personId, &[eventId+personId], active, deleted, sortOrder",
+      groups: "id, name, archived, deleted",
+      vouchers: "id, eventId, &[eventId+number], type, status, deleted, recordedAt",
+      statements: "id, eventId, kind, personId, &[eventId+number], status, deleted",
+      messageTemplates: "id, category, enabled, isDefault, deleted",
+      orderSessions: "id, eventId, status, scheduledAt, deleted",
+      sessionMenuItems: "id, sessionId, sortOrder, deleted",
+      orderLines: "id, sessionId, personId, deleted",
+      orderPersonTotals: "id, sessionId, [sessionId+personId], deleted",
+      sessionExtras: "id, sessionId, deleted",
+      operations: "id, entity, entityId, timestamp"
+    });
 
     // Dexie only runs version().upgrade() when migrating an EXISTING
     // database; a brand-new install goes straight to the latest schema

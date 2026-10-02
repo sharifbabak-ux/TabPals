@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/data/db";
 import type { Voucher, VoucherType } from "@/data/types";
@@ -6,7 +7,9 @@ import { formatAmount, toPersianDigits } from "@/domain/format";
 import { EmptyState } from "@/ui/components/EmptyState";
 import { JalaliDate } from "@/ui/components/JalaliDate";
 import { ContributionIcon, ExpenseIcon, SettlementIcon } from "@/ui/components/icons";
+import { SessionFormSheet } from "../orders/SessionFormSheet";
 import { NewVoucherMenuSheet } from "./NewVoucherMenuSheet";
+import { RecordedByMenuSheet } from "./RecordedByMenuSheet";
 import { ExpenseWizardSheet } from "./ExpenseWizardSheet";
 import { TransferFormSheet } from "./TransferFormSheet";
 import { VoucherDetailSheet } from "./VoucherDetailSheet";
@@ -23,6 +26,9 @@ interface VouchersSectionProps {
   eventClosed: boolean;
   treasurerPersonId: string | null;
   treasurerName: string | null;
+  onRequestSetTreasurer?: () => void;
+  /** Opens this voucher's detail on first render (deep link from a finalized group order). */
+  initialVoucherId?: string | null;
 }
 
 const TYPE_LABELS: Record<Voucher["type"], string> = {
@@ -43,8 +49,13 @@ export function VouchersSection({
   activeMembers,
   eventClosed,
   treasurerPersonId,
-  treasurerName
+  treasurerName,
+  onRequestSetTreasurer,
+  initialVoucherId
 }: VouchersSectionProps) {
+  const navigate = useNavigate();
+  const [recordedByOpen, setRecordedByOpen] = useState(false);
+  const [sessionFormOpen, setSessionFormOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeFlow, setActiveFlow] = useState<VoucherType | null>(null);
   const [detailVoucher, setDetailVoucher] = useState<Voucher | null>(null);
@@ -58,6 +69,13 @@ export function VouchersSection({
         .toArray(),
     [eventId]
   );
+
+  useEffect(() => {
+    if (!initialVoucherId || !vouchers) return;
+    const target = vouchers.find((v) => v.id === initialVoucherId);
+    if (target) setDetailVoucher(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialVoucherId, vouchers === undefined]);
 
   const sorted = useMemo(() => (vouchers ?? []).slice().sort((a, b) => b.number - a.number), [vouchers]);
 
@@ -84,7 +102,7 @@ export function VouchersSection({
           اسناد
         </h2>
         {!eventClosed && (
-          <button type="button" className="icon-button" onClick={() => setMenuOpen(true)} aria-label="سند جدید">
+          <button type="button" className="icon-button" onClick={() => setRecordedByOpen(true)} aria-label="سند جدید">
             +
           </button>
         )}
@@ -109,6 +127,7 @@ export function VouchersSection({
               </span>
             </div>
             <div className="list-item__meta">
+              {voucher.splitMode === "itemized" && <span className="badge">سفارش گروهی</span>}
               <span className="voucher-row__amount">
                 {formatAmount(voucher.totalAmount)} {currency}
               </span>
@@ -117,6 +136,39 @@ export function VouchersSection({
           );
         })}
       </ul>
+
+      <RecordedByMenuSheet
+        open={recordedByOpen}
+        onClose={() => setRecordedByOpen(false)}
+        onSelectGroupOrder={() => {
+          setRecordedByOpen(false);
+          setSessionFormOpen(true);
+        }}
+        onSelectTreasurer={() => {
+          setRecordedByOpen(false);
+          setMenuOpen(true);
+        }}
+      />
+
+      <SessionFormSheet
+        open={sessionFormOpen}
+        eventId={eventId}
+        treasurerPersonId={treasurerPersonId}
+        treasurerName={treasurerName}
+        onClose={() => setSessionFormOpen(false)}
+        onRequestSetTreasurer={
+          onRequestSetTreasurer
+            ? () => {
+                setSessionFormOpen(false);
+                onRequestSetTreasurer();
+              }
+            : undefined
+        }
+        onCreated={(id) => {
+          setSessionFormOpen(false);
+          navigate(`/events/${eventId}/orders/${id}`);
+        }}
+      />
 
       <NewVoucherMenuSheet open={menuOpen} onClose={() => setMenuOpen(false)} onSelect={handleTypeSelect} />
 

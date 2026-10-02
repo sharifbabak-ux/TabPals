@@ -38,7 +38,7 @@ export interface StatementLinkResult {
 /** Drops the bulkiest, least essential per-row detail — never the totals/summary a recipient actually needs. */
 function reduceStatementData(data: StatementLinkData): StatementLinkData {
   if (data.kind === "comprehensive") {
-    return { ...data, ledger: data.ledger.map((row) => ({ ...row, participantShares: [] })) };
+    return { ...data, ledger: data.ledger.map(({ itemized: _itemized, ...row }) => ({ ...row, participantShares: [] })) };
   }
   return { ...data, expenses: data.expenses.map((row) => ({ ...row, participantNames: [], splitExplanation: "" })) };
 }

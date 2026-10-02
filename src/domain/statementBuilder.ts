@@ -7,8 +7,10 @@
  * formatting and closing-message template selection happen elsewhere
  * (src/domain/format.ts, src/domain/messageTemplate.ts).
  */
-import type { SplitMode, VoucherPayer, VoucherParticipant, VoucherShare, VoucherType } from "@/data/types";
+import type { ItemizedSnapshot, SplitMode, VoucherPayer, VoucherParticipant, VoucherShare, VoucherType } from "@/data/types";
 import { type MemberBalanceBreakdown, computeBalanceBreakdown } from "./balanceEngine";
+import { formatAmount } from "./format";
+import { formatItemizedItem } from "./groupOrder";
 import { buildSplitExplanation } from "./splitExplanation";
 import { type HubSettlementPlan, computeHubSettlement } from "./hubSettlement";
 
@@ -37,6 +39,7 @@ export interface StatementBuildVoucher {
   participants: VoucherParticipant[];
   shares: VoucherShare[];
   splitMode?: SplitMode;
+  itemizedSnapshot?: ItemizedSnapshot;
   fromPersonId?: string;
   toPersonId?: string;
 }
@@ -179,7 +182,12 @@ export function buildMemberStatementData(params: {
     const isParticipant = voucher.participants.some((p) => p.personId === personId);
     const splitExplanation =
       isParticipant && voucher.splitMode
-        ? buildSplitExplanation({ splitMode: voucher.splitMode, totalAmount: voucher.totalAmount, participants: voucher.participants }, personId)
+        ? buildSplitExplanation({
+            splitMode: voucher.splitMode,
+            totalAmount: voucher.totalAmount,
+            participants: voucher.participants,
+            itemizedPeople: voucher.itemizedSnapshot?.people
+          }, personId)
         : "";
     return {
       voucherNumber: voucher.number,
@@ -285,6 +293,13 @@ export interface ComprehensiveMemberRow {
   isTreasurer: boolean;
 }
 
+export interface LedgerItemizedPerson {
+  name: string;
+  items: string[];
+  extras: { label: string; share: number }[];
+  total: number;
+}
+
 export interface LedgerRow {
   number: number;
   type: VoucherType;
@@ -295,6 +310,8 @@ export interface LedgerRow {
   splitMode: SplitMode | null;
   payers: { name: string; amount: number }[];
   participantShares: { name: string; share: number }[];
+  /** Itemized (group-order) vouchers only: the full per-person breakdown. */
+  itemized?: LedgerItemizedPerson[];
   fromName: string | null;
   toName: string | null;
 }
@@ -355,6 +372,19 @@ export function buildComprehensiveReportData(params: {
       splitMode: voucher.splitMode ?? null,
       payers: voucher.payers.map((p) => ({ name: nameOf(members, p.personId), amount: p.amount })),
       participantShares: voucher.shares.map((s) => ({ name: nameOf(members, s.personId), share: s.share })),
+      ...(voucher.itemizedSnapshot
+        ? {
+            itemized: voucher.itemizedSnapshot.people.map((p) => ({
+              name: nameOf(members, p.personId),
+              items: [
+                ...(p.personTotal !== null ? [`جمع سفارش: ${formatAmount(p.personTotal)}`] : p.items.map(formatItemizedItem)),
+                ...p.sharedItems.map((s) => `سهم از ${s.name} مشترک: ${formatAmount(s.amount)}`)
+              ],
+              extras: p.extras.filter((e) => e.share !== 0).map((e) => ({ label: e.label, share: e.share })),
+              total: p.finalTotal
+            }))
+          }
+        : {}),
       fromName: voucher.fromPersonId ? nameOf(members, voucher.fromPersonId) : null,
       toName: voucher.toPersonId ? nameOf(members, voucher.toPersonId) : null
     }));

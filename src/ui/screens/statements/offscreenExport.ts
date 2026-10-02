@@ -8,14 +8,15 @@ import { StatementPaper, type StatementPaperMeta } from "./StatementPaper";
 import type { StatementLinkData } from "@/domain/statementLink";
 
 /** The `StatementPaper` meta a `Statement` record maps to, for the offscreen export render. */
-export function statementPaperMeta(statement: Statement): StatementPaperMeta {
+export function statementPaperMeta(statement: Statement, link?: StatementPaperMeta["link"]): StatementPaperMeta {
   return {
     number: statement.number,
     issueVersion: statement.issueVersion,
     issuedAt: statement.issuedAt,
     verificationCode: statement.verificationCode,
     status: statement.status,
-    appVersion: APP_VERSION
+    appVersion: APP_VERSION,
+    link
   };
 }
 

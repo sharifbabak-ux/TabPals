@@ -1,6 +1,6 @@
 {
   "name": "tabpal",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,11 +17,13 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@fontsource/fraunces": "^5.1.1",
     "@fontsource/vazirmatn": "^5.1.0",
+    "@types/qrcode": "^1.5.6",
     "dexie": "^4.0.10",
     "dexie-react-hooks": "^4.4.0",
     "jspdf": "^4.2.1",
     "lz-string": "^1.5.0",
     "modern-screenshot": "^4.7.0",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.18.4",

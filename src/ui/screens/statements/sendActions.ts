@@ -11,7 +11,7 @@ import { normalizeIranianPhone } from "@/domain/phoneNormalization";
 import { buildStatementSummaryText } from "@/domain/sendSummary";
 import { buildSmsUrl, buildTelegramUrl, buildWhatsAppUrl } from "@/domain/sendUrls";
 import { buildStatementLink, type StatementLinkData, type StatementLinkPayload } from "@/domain/statementLink";
-import { platform, shareService } from "@/platform";
+import { clipboardService, platform, qrService, shareService } from "@/platform";
 import type { ExportedFile } from "@/platform/types";
 import { captureStatementFilesOffscreen, statementPaperMeta } from "./offscreenExport";
 
@@ -61,6 +61,23 @@ export function buildLinkAndSummary(statement: Statement, data: StatementLinkDat
   return { normalizedPhone, summaryText, link };
 }
 
+/** The statement link and its offline-generated QR for the export footer (docs/PLAN.md Stage 3C); `url: null` when the statement is too large for a link. */
+export async function buildStatementShareLink(statement: Statement, data: StatementLinkData, eventTitle: string): Promise<{ url: string | null; qrDataUrl: string | null }> {
+  const { link } = buildLinkAndSummary(statement, data, eventTitle);
+  if (!link.url) return { url: null, qrDataUrl: null };
+  const qrDataUrl = await qrService.toDataUrl(link.url, 240);
+  // A link that can't be encoded as a QR is treated like "no link" so the footer never shows a dead QR.
+  return qrDataUrl ? { url: link.url, qrDataUrl } : { url: null, qrDataUrl: null };
+}
+
+/** "کپی لینک صورت‌حساب": copies the statement link; the message says what to show the user. */
+export async function copyStatementLink(statement: Statement, data: StatementLinkData, eventTitle: string): Promise<{ ok: boolean; message: string }> {
+  const { link } = buildLinkAndSummary(statement, data, eventTitle);
+  if (!link.url) return { ok: false, message: "برای نسخه‌ی آنلاین، فایل صورت‌حساب را ارسال کنید" };
+  const copied = await clipboardService.copyText(link.url);
+  return copied ? { ok: true, message: "لینک کپی شد" } : { ok: false, message: "کپی لینک انجام نشد" };
+}
+
 export function openWhatsApp(statement: Statement, data: StatementLinkData, eventTitle: string, phone?: string | null): void {
   const { normalizedPhone, summaryText } = buildLinkAndSummary(statement, data, eventTitle, phone);
   shareService.openUrl(buildWhatsAppUrl(normalizedPhone, summaryText));
@@ -90,7 +107,8 @@ export async function shareStatementFile(
   kind: "pdf" | "image"
 ): Promise<FileShareResult> {
   const filenameBase = buildStatementExportFilenameBase(eventTitle, memberLabelOf(data), statement.number);
-  const files = await captureStatementFilesOffscreen(data, statementPaperMeta(statement), kind, filenameBase);
+  const link = await buildStatementShareLink(statement, data, eventTitle);
+  const files = await captureStatementFilesOffscreen(data, statementPaperMeta(statement, link), kind, filenameBase);
   if (files.length === 0) return { ok: false, message: "محتوایی برای خروجی گرفتن پیدا نشد." };
 
   if (shareService.canShareFiles(files.map((f) => f.mimeType))) {
@@ -111,7 +129,8 @@ export async function shareStatementFilesBulk(
   const allFiles: ExportedFile[] = [];
   for (const { statement, data } of entries) {
     const filenameBase = buildStatementExportFilenameBase(eventTitle, memberLabelOf(data), statement.number);
-    const files = await captureStatementFilesOffscreen(data, statementPaperMeta(statement), kind, filenameBase);
+    const link = await buildStatementShareLink(statement, data, eventTitle);
+    const files = await captureStatementFilesOffscreen(data, statementPaperMeta(statement, link), kind, filenameBase);
     allFiles.push(...files);
   }
   if (allFiles.length === 0) return { ok: false, message: "محتوایی برای خروجی گرفتن پیدا نشد." };

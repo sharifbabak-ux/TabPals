@@ -82,6 +82,27 @@ export interface ImageService {
   pickSquarePhoto(source: ImagePickSource, maxSize?: number, quality?: number): Promise<Blob | null>;
 }
 
+/**
+ * Picks an image (camera or gallery) and returns it scaled down so its longer
+ * side is at most `maxDimension` and compressed (WebP, ~0.8 quality) — for
+ * non-avatar photos such as a restaurant menu (docs/PLAN.md Group Order).
+ * Returns null if the user cancels.
+ */
+export interface MenuPhotoService {
+  pickScaledPhoto(source: ImagePickSource, maxDimension?: number, quality?: number): Promise<Blob | null>;
+}
+
+/** Copies plain text to the clipboard. Resolves false when the platform refuses. */
+export interface ClipboardService {
+  copyText(text: string): Promise<boolean>;
+}
+
+/** Generates a QR code fully offline (docs/PLAN.md Stage 3C statement QR). */
+export interface QrService {
+  /** A PNG data URL encoding `text`, or null when it doesn't fit in a QR code. */
+  toDataUrl(text: string, widthPx?: number): Promise<string | null>;
+}
+
 export interface ExportedFile {
   blob: Blob;
   filename: string;

@@ -102,6 +102,7 @@ async function loadIssueContext(eventId: string): Promise<StatementIssueContext>
     participants: v.participants,
     shares: v.shares,
     splitMode: v.splitMode,
+    itemizedSnapshot: v.itemizedSnapshot,
     fromPersonId: v.fromPersonId,
     toPersonId: v.toPersonId
   }));
