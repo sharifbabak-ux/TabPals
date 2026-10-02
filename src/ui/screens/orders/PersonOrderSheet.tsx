@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { orderSessionsRepository } from "@/data/repositories";
+import type { OrderCategory } from "@/data/types";
 import { computePersonSubtotals } from "@/domain/groupOrder";
+import { ORDER_CATEGORIES, ORDER_CATEGORY_LABELS, suggestOrderCategory } from "@/domain/orderCategory";
 import { formatAmount, toPersianDigits } from "@/domain/format";
 import { AmountInput } from "@/ui/components/AmountInput";
 import { Avatar } from "@/ui/components/Avatar";
 import { BottomSheet } from "@/ui/components/BottomSheet";
 import { useWizardBackTrap } from "@/ui/hooks/useWizardBackTrap";
+import { CategoryChips } from "./CategoryChips";
 import { QuantityStepper } from "./QuantityStepper";
 import type { OrderSessionData } from "./useOrderSession";
 
@@ -28,6 +31,8 @@ export function PersonOrderSheet({ open, person, data, currency, editable, onClo
   const [quantity, setQuantity] = useState(1);
   const [price, setPrice] = useState(0);
   const [note, setNote] = useState("");
+  const [category, setCategory] = useState<OrderCategory>("other");
+  const [categoryTouched, setCategoryTouched] = useState(false);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,6 +63,8 @@ export function PersonOrderSheet({ open, person, data, currency, editable, onClo
     setQuantity(1);
     setPrice(0);
     setNote("");
+    setCategory("other");
+    setCategoryTouched(false);
   }
 
   async function run(action: () => Promise<unknown>) {
@@ -74,7 +81,7 @@ export function PersonOrderSheet({ open, person, data, currency, editable, onClo
     const existing = ownLines.find((l) => l.menuItemId === item.id && !l.note);
     if (existing) return run(() => orderSessionsRepository.updateLine(existing.id, { quantity: existing.quantity + 1 }));
     return run(() =>
-      orderSessionsRepository.addLine(data.session.id, { personId, menuItemId: item.id, itemName: item.name, quantity: 1, unitPrice: item.price })
+      orderSessionsRepository.addLine(data.session.id, { personId, menuItemId: item.id, itemName: item.name, category: item.category, quantity: 1, unitPrice: item.price })
     );
   }
 
@@ -83,6 +90,7 @@ export function PersonOrderSheet({ open, person, data, currency, editable, onClo
       await orderSessionsRepository.addLine(data.session.id, {
         personId,
         itemName: name,
+        category,
         quantity,
         unitPrice: price > 0 ? price : undefined,
         note
@@ -113,14 +121,23 @@ export function PersonOrderSheet({ open, person, data, currency, editable, onClo
           {editable && data.menuItems.length > 0 && (
             <>
               <h3 className="section-title">منوی سریع</h3>
-              <div className="menu-chips">
-                {data.menuItems.map((item) => (
-                  <button key={item.id} type="button" className="menu-chip" onClick={() => addFromMenu(item)}>
-                    {item.name}
-                    {item.price !== undefined && <small>{formatAmount(item.price)}</small>}
-                  </button>
-                ))}
-              </div>
+              {ORDER_CATEGORIES.map((cat) => {
+                const items = data.menuItems.filter((item) => (item.category ?? "other") === cat);
+                if (items.length === 0) return null;
+                return (
+                  <div key={cat}>
+                    <h4 className="menu-category-heading">{ORDER_CATEGORY_LABELS[cat]}</h4>
+                    <div className="menu-chips">
+                      {items.map((item) => (
+                        <button key={item.id} type="button" className="menu-chip" onClick={() => addFromMenu(item)}>
+                          {item.name}
+                          {item.price !== undefined && <small>{formatAmount(item.price)}</small>}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </>
           )}
 
@@ -183,7 +200,25 @@ export function PersonOrderSheet({ open, person, data, currency, editable, onClo
           </button>
           <div className="field">
             <label htmlFor="free-item-name">نام قلم</label>
-            <input id="free-item-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+            <input
+              id="free-item-name"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                if (!categoryTouched) setCategory(suggestOrderCategory(e.target.value));
+              }}
+              autoFocus
+            />
+          </div>
+          <div className="field">
+            <label>دسته</label>
+            <CategoryChips
+              value={category}
+              onChange={(c) => {
+                setCategory(c);
+                setCategoryTouched(true);
+              }}
+            />
           </div>
           <div className="field">
             <label>تعداد</label>

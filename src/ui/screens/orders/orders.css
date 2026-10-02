@@ -389,3 +389,35 @@
   font-size: 0.85rem;
   color: var(--color-ink-muted);
 }
+
+/* Category selector chips and grouped quick menu (GO-1.1). */
+.category-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.category-chip {
+  padding: 6px 12px;
+  border: 1px solid var(--color-border, #c9c2ae);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.category-chip--selected {
+  background: var(--color-primary, #4e5d2f);
+  border-color: var(--color-primary, #4e5d2f);
+  color: #fff;
+}
+
+.menu-category-heading,
+.waiter-list__heading {
+  margin: 12px 0 6px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  opacity: 0.75;
+}

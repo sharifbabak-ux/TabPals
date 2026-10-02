@@ -1,6 +1,6 @@
 {
   "name": "tabpal",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -31,12 +31,15 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "@types/pngjs": "^6.0.5",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^25.0.1",
+    "jsqr": "^1.4.0",
     "playwright": "^1.56.1",
+    "pngjs": "^7.0.0",
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
     "vite-plugin-pwa": "^0.21.1",

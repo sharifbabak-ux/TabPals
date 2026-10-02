@@ -121,6 +121,8 @@ export interface MemberStatementData {
   treasurerAccountHolder: string | null;
   /** Treasurer statements only. */
   hubSettlement: HubSettlementSection | null;
+  /** Treasurer statements only: totals behind the fund-position line (absent on statements issued before GO-1.1). */
+  fundSummary?: { totalContributed: number; totalPaidByTreasurer: number };
 }
 
 function nameOf(members: StatementBuildMember[], personId: string): string {
@@ -280,7 +282,17 @@ export function buildMemberStatementData(params: {
     treasurerIbanGrouped: event.treasurerIbanGrouped ?? null,
     treasurerBankName: event.treasurerBankName ?? null,
     treasurerAccountHolder: event.treasurerAccountHolder ?? null,
-    hubSettlement: kind === "treasurer" && event.treasurerPersonId ? hubSettlementSection(members, breakdowns, event.treasurerPersonId) : null
+    hubSettlement: kind === "treasurer" && event.treasurerPersonId ? hubSettlementSection(members, breakdowns, event.treasurerPersonId) : null,
+    ...(kind === "treasurer"
+      ? {
+          fundSummary: {
+            totalContributed: vouchers.filter((v) => v.type === "contribution").reduce((sum, v) => sum + v.totalAmount, 0),
+            totalPaidByTreasurer: vouchers
+              .filter((v) => v.type === "expense")
+              .reduce((sum, v) => sum + v.payers.filter((p) => p.personId === personId).reduce((s, p) => s + p.amount, 0), 0)
+          }
+        }
+      : {})
   };
 }
 

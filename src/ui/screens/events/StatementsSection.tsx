@@ -219,7 +219,7 @@ export function StatementsSection({ eventId, eventTitle, eventClosed, treasurerP
               </div>
               <div className="list-item__meta">
                 <span className={`badge statement-status-chip statement-status-chip--${statement.status}`}>
-                  {statement.status === "current" ? "معتبر" : "منسوخ"}
+                  {statement.status === "current" ? "معتبر" : "نیازمند صدور مجدد"}
                 </span>
               </div>
             </li>
@@ -290,7 +290,7 @@ export function StatementsSection({ eventId, eventTitle, eventClosed, treasurerP
       <ConfirmDialog
         open={issueConfirmIds !== null}
         title="صدور صورت‌حساب‌های صادرنشده"
-        message="برای برخی از اعضای انتخاب‌شده صورت‌حساب معتبری وجود ندارد (صادر نشده یا منسوخ است). ابتدا صادر شود؟"
+        message="برای برخی از اعضای انتخاب‌شده صورت‌حساب معتبری وجود ندارد (صادر نشده یا نیازمند صدور مجدد است). ابتدا صادر شود؟"
         confirmLabel="صدور و ادامه"
         onConfirm={handleIssueMissingConfirm}
         onCancel={() => setIssueConfirmIds(null)}

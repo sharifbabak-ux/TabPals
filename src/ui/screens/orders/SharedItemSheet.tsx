@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { orderSessionsRepository } from "@/data/repositories";
-import type { OrderLine } from "@/data/types";
+import type { OrderCategory, OrderLine } from "@/data/types";
+import { suggestOrderCategory } from "@/domain/orderCategory";
 import { AmountInput } from "@/ui/components/AmountInput";
 import { BottomSheet } from "@/ui/components/BottomSheet";
 import type { EventMemberOption } from "@/ui/hooks/useEventMembers";
+import { CategoryChips } from "./CategoryChips";
 import { QuantityStepper } from "./QuantityStepper";
 
 interface SharedItemSheetProps {
@@ -20,6 +22,8 @@ export function SharedItemSheet({ open, sessionId, members, line, onClose }: Sha
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [price, setPrice] = useState(0);
+  const [category, setCategory] = useState<OrderCategory>("other");
+  const [categoryTouched, setCategoryTouched] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [useWeights, setUseWeights] = useState(false);
   const [weights, setWeights] = useState<Record<string, number>>({});
@@ -30,6 +34,8 @@ export function SharedItemSheet({ open, sessionId, members, line, onClose }: Sha
     setName(line?.itemName ?? "");
     setQuantity(line?.quantity ?? 1);
     setPrice(line?.unitPrice ?? 0);
+    setCategory(line?.category ?? "other");
+    setCategoryTouched(Boolean(line));
     setSelected(new Set((line?.sharedParticipants ?? []).map((p) => p.personId)));
     const w: Record<string, number> = {};
     for (const p of line?.sharedParticipants ?? []) w[p.personId] = p.weight;
@@ -55,9 +61,9 @@ export function SharedItemSheet({ open, sessionId, members, line, onClose }: Sha
       .map((m) => ({ personId: m.personId, weight: useWeights ? (weights[m.personId] ?? 1) : 1 }));
     try {
       if (line) {
-        await orderSessionsRepository.updateLine(line.id, { itemName: name, quantity, unitPrice: price > 0 ? price : null, sharedParticipants });
+        await orderSessionsRepository.updateLine(line.id, { itemName: name, category, quantity, unitPrice: price > 0 ? price : null, sharedParticipants });
       } else {
-        await orderSessionsRepository.addLine(sessionId, { personId: null, itemName: name, quantity, unitPrice: price > 0 ? price : undefined, sharedParticipants });
+        await orderSessionsRepository.addLine(sessionId, { personId: null, itemName: name, category, quantity, unitPrice: price > 0 ? price : undefined, sharedParticipants });
       }
       onClose();
     } catch (e) {
@@ -69,7 +75,25 @@ export function SharedItemSheet({ open, sessionId, members, line, onClose }: Sha
     <BottomSheet open={open} title={line ? "ویرایش قلم مشترک" : "قلم مشترک"} onClose={onClose}>
       <div className="field">
         <label htmlFor="shared-name">نام قلم</label>
-        <input id="shared-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="مثلاً پیتزا" />
+        <input
+          id="shared-name"
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            if (!categoryTouched) setCategory(suggestOrderCategory(e.target.value));
+          }}
+          placeholder="مثلاً پیتزا"
+        />
+      </div>
+      <div className="field">
+        <label>دسته</label>
+        <CategoryChips
+          value={category}
+          onChange={(c) => {
+            setCategory(c);
+            setCategoryTouched(true);
+          }}
+        />
       </div>
       <div className="field">
         <label>تعداد</label>

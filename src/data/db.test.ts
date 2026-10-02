@@ -1,5 +1,6 @@
 import Dexie from "dexie";
 import { afterEach, describe, expect, it } from "vitest";
+import { DEFAULT_MESSAGE_TEMPLATES } from "@/domain/messageTemplateDefaults";
 import { TabPalDB } from "./db";
 
 const TEST_DB_NAME = "tabpal-migration-test";
@@ -617,5 +618,81 @@ describe("TabPalDB schema v7 -> v8 migration (Group Order)", () => {
     expect((await upgraded.orderSessions.where("eventId").equals("e1").toArray()).map((s) => s.id)).toEqual(["s1"]);
 
     upgraded.close();
+  });
+});
+
+describe("TabPalDB schema v8 -> v9 migration (GO-1.1)", () => {
+  class V8DB extends Dexie {
+    sessionMenuItems!: Dexie.Table<Record<string, unknown>, string>;
+    orderLines!: Dexie.Table<Record<string, unknown>, string>;
+    messageTemplates!: Dexie.Table<Record<string, unknown>, string>;
+    constructor(name: string) {
+      super(name);
+      this.version(8).stores({
+        meta: "key",
+        persons: "id, archived, deleted, needsNameReview",
+        events: "id, archived, deleted, startDate, closedAt, treasurerPersonId, deletedAt",
+        eventMembers: "id, eventId, personId, &[eventId+personId], active, deleted, sortOrder",
+        groups: "id, name, archived, deleted",
+        vouchers: "id, eventId, &[eventId+number], type, status, deleted, recordedAt",
+        statements: "id, eventId, kind, personId, &[eventId+number], status, deleted",
+        messageTemplates: "id, category, enabled, isDefault, deleted",
+        orderSessions: "id, eventId, status, scheduledAt, deleted",
+        sessionMenuItems: "id, sessionId, sortOrder, deleted",
+        orderLines: "id, sessionId, personId, deleted",
+        orderPersonTotals: "id, sessionId, [sessionId+personId], deleted",
+        sessionExtras: "id, sessionId, deleted",
+        operations: "id, entity, entityId, timestamp"
+      });
+    }
+  }
+
+  const baseFields = {
+    createdAt: "2025-01-01T00:00:00.000Z",
+    updatedAt: "2025-01-01T00:00:00.000Z",
+    deviceId: "device-1",
+    version: 1,
+    deleted: false
+  };
+
+  it("backfills category 'other' on existing menu items and order lines", async () => {
+    const legacy = new V8DB(TEST_DB_NAME);
+    await legacy.sessionMenuItems.put({ id: "m1", sessionId: "s1", name: "دوغ", sortOrder: 0, ...baseFields });
+    await legacy.orderLines.put({ id: "l1", sessionId: "s1", personId: "p1", itemName: "دوغ", quantity: 1, source: "admin-device", sourceVersion: 1, ...baseFields });
+    legacy.close();
+
+    const upgraded = new TabPalDB(TEST_DB_NAME);
+    await upgraded.open();
+    expect((await upgraded.sessionMenuItems.get("m1"))?.category).toBe("other");
+    expect((await upgraded.orderLines.get("l1"))?.category).toBe("other");
+    expect((await upgraded.sessionMenuItems.get("m1"))?.name).toBe("دوغ");
+    upgraded.close();
+  });
+
+  it("strips « » only from unedited default templates, never from edited or custom ones", async () => {
+    const seed = DEFAULT_MESSAGE_TEMPLATES[0];
+    const legacy = new V8DB(TEST_DB_NAME);
+    await legacy.messageTemplates.bulkPut([
+      { id: "t-default", category: seed.category, text: `«${seed.text}»`, enabled: true, isDefault: true, ...baseFields },
+      { id: "t-edited", category: "debtor", text: "«متن ویرایش‌شده توسط کاربر»", enabled: true, isDefault: true, ...baseFields },
+      { id: "t-custom", category: "debtor", text: `«${seed.text}»`, enabled: true, isDefault: false, ...baseFields }
+    ]);
+    legacy.close();
+
+    const upgraded = new TabPalDB(TEST_DB_NAME);
+    await upgraded.open();
+    expect((await upgraded.messageTemplates.get("t-default"))?.text).toBe(seed.text);
+    expect((await upgraded.messageTemplates.get("t-edited"))?.text).toBe("«متن ویرایش‌شده توسط کاربر»");
+    expect((await upgraded.messageTemplates.get("t-custom"))?.text).toBe(`«${seed.text}»`);
+    upgraded.close();
+  });
+
+  it("seeds default templates without quote marks on a fresh install", async () => {
+    const fresh = new TabPalDB(TEST_DB_NAME);
+    await fresh.open();
+    const templates = await fresh.messageTemplates.toArray();
+    expect(templates.length).toBe(DEFAULT_MESSAGE_TEMPLATES.length);
+    expect(templates.every((t) => !t.text.includes("«") && !t.text.includes("»"))).toBe(true);
+    fresh.close();
   });
 });

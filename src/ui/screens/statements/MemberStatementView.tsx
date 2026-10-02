@@ -1,6 +1,7 @@
 import { Fragment } from "react";
 import type { MemberStatementData } from "@/domain/statementBuilder";
 import { formatAmount, toPersianDigits } from "@/domain/format";
+import { describeFundBalance } from "@/domain/fundBalance";
 import { buildBalanceText } from "@/domain/messageTemplate";
 import { JalaliDate } from "@/ui/components/JalaliDate";
 import { FUND_ENTRY_LABELS } from "./statementViewLabels";
@@ -116,6 +117,11 @@ export function MemberStatementView({ data, closingText }: MemberStatementViewPr
             </tbody>
           </table>
           </div>
+        )}
+        {data.kind === "treasurer" && data.fundSummary && (
+          <p className="statement-fund-line">
+            <strong>{describeFundBalance(data.fundSummary.totalContributed, data.fundSummary.totalPaidByTreasurer, event.currency).text}</strong>
+          </p>
         )}
       </section>
 

@@ -19,6 +19,7 @@ import { db } from "../db";
 import type {
   Event,
   ExtraAllocation,
+  OrderCategory,
   OrderLine,
   OrderLineSource,
   OrderPersonTotal,
@@ -33,6 +34,7 @@ import type {
   Voucher,
   VoucherPayer
 } from "../types";
+import { DEFAULT_ORDER_CATEGORY, isOrderCategory } from "@/domain/orderCategory";
 import { diffFields, logOperation, newBaseFields, touchBaseFields } from "./operationLog";
 import { vouchersRepository } from "./vouchersRepository";
 
@@ -51,13 +53,14 @@ const SESSION_LOG_FIELDS: (keyof OrderSession)[] = [
   "payerSplitMode",
   "voucherId"
 ];
-const MENU_ITEM_LOG_FIELDS: (keyof SessionMenuItem)[] = ["sessionId", "name", "price", "sortOrder", "deleted"];
+const MENU_ITEM_LOG_FIELDS: (keyof SessionMenuItem)[] = ["sessionId", "name", "price", "category", "sortOrder", "deleted"];
 const LINE_LOG_FIELDS: (keyof OrderLine)[] = [
   "sessionId",
   "personId",
   "sharedParticipants",
   "menuItemId",
   "itemName",
+  "category",
   "quantity",
   "unitPrice",
   "note",
@@ -101,6 +104,7 @@ export interface UpdateSessionInput {
 export interface MenuItemInput {
   name: string;
   price?: number;
+  category?: OrderCategory;
 }
 
 export interface OrderLineInput {
@@ -108,6 +112,7 @@ export interface OrderLineInput {
   sharedParticipants?: SharedParticipant[];
   menuItemId?: string;
   itemName: string;
+  category?: OrderCategory;
   quantity: number;
   unitPrice?: number;
   note?: string;
@@ -135,6 +140,10 @@ function cleanPrice(price: number | undefined | null): number | undefined {
   if (price === undefined || price === null) return undefined;
   if (!Number.isFinite(price) || price < 0) throw new Error("قیمت نامعتبر است");
   return Math.round(price);
+}
+
+function cleanCategory(category: OrderCategory | undefined): OrderCategory {
+  return isOrderCategory(category) ? category : DEFAULT_ORDER_CATEGORY;
 }
 
 async function loadEvent(eventId: string): Promise<Event> {
@@ -168,7 +177,7 @@ async function loadLineEditableSession(sessionId: string, source: OrderLineSourc
   return session;
 }
 
-function normalizeLineInput(input: OrderLineInput): Pick<OrderLine, "personId" | "sharedParticipants" | "itemName" | "quantity" | "unitPrice" | "note" | "menuItemId"> {
+function normalizeLineInput(input: OrderLineInput): Pick<OrderLine, "personId" | "sharedParticipants" | "itemName" | "category" | "quantity" | "unitPrice" | "note" | "menuItemId"> {
   const itemName = input.itemName.trim();
   if (!itemName) throw new Error("نام قلم را وارد کنید");
   if (!Number.isInteger(input.quantity) || input.quantity < 1) throw new Error("تعداد باید عدد صحیح و حداقل ۱ باشد");
@@ -182,6 +191,7 @@ function normalizeLineInput(input: OrderLineInput): Pick<OrderLine, "personId" |
     personId: input.personId,
     sharedParticipants,
     itemName,
+    category: cleanCategory(input.category),
     quantity: input.quantity,
     unitPrice: cleanPrice(input.unitPrice),
     note: input.note?.trim() || undefined,
@@ -338,6 +348,7 @@ export const orderSessionsRepository = {
         sessionId,
         name,
         price: cleanPrice(input.price),
+        category: cleanCategory(input.category),
         sortOrder: siblings.reduce((max, i) => Math.max(max, i.sortOrder), -1) + 1
       };
       await db.sessionMenuItems.add(item);
@@ -358,6 +369,7 @@ export const orderSessionsRepository = {
         updated.name = name;
       }
       if ("price" in input) updated.price = cleanPrice(input.price);
+      if (input.category !== undefined) updated.category = cleanCategory(input.category);
       const diff = diffFields(existing, updated, MENU_ITEM_LOG_FIELDS);
       if (Object.keys(diff).length === 0) return;
       await db.sessionMenuItems.put(updated);
@@ -404,7 +416,7 @@ export const orderSessionsRepository = {
     });
   },
 
-  async updateLine(lineId: string, patch: Partial<Pick<OrderLineInput, "itemName" | "quantity" | "note" | "sharedParticipants">> & { unitPrice?: number | null }): Promise<void> {
+  async updateLine(lineId: string, patch: Partial<Pick<OrderLineInput, "itemName" | "category" | "quantity" | "note" | "sharedParticipants">> & { unitPrice?: number | null }): Promise<void> {
     await db.transaction("rw", db.events, db.orderSessions, db.orderLines, db.operations, async () => {
       const existing = await db.orderLines.get(lineId);
       if (!existing || existing.deleted) throw new Error("قلم سفارش پیدا نشد");
@@ -413,6 +425,7 @@ export const orderSessionsRepository = {
         personId: existing.personId,
         sharedParticipants: patch.sharedParticipants ?? existing.sharedParticipants,
         itemName: patch.itemName ?? existing.itemName,
+        category: patch.category ?? existing.category,
         quantity: patch.quantity ?? existing.quantity,
         unitPrice: "unitPrice" in patch ? (patch.unitPrice ?? undefined) : existing.unitPrice,
         note: "note" in patch ? patch.note : existing.note,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildStatementLink, decodeStatementPayload, encodeStatementPayload, type StatementLinkPayload } from "./statementLink";
+import { buildStatementLink, buildSummaryLink, decodeSharedPayload, decodeStatementPayload, encodeStatementPayload, type StatementLinkPayload } from "./statementLink";
 import type { MemberStatementData } from "./statementBuilder";
 
 function baseMemberData(expenseCount: number): MemberStatementData & { closingText: string } {
@@ -102,5 +102,67 @@ describe("statement link size-policy tiers", () => {
     expect(result.tier).toBe("none");
     expect(result.url).toBeNull();
     expect(result.encoded).toBeNull();
+  });
+});
+
+describe("summary link (GO-1.1)", () => {
+  const BASE = "https://sharifbabak-ux.github.io/TabPals/";
+
+  function summaryPayload(): StatementLinkPayload {
+    const data = {
+      ...baseMemberData(30),
+      member: { personId: "p1", name: "آرش", firstName: "آرش", lastName: "احمدی‌نژاد" },
+      event: { title: "سفر شمال – تابستان", currency: "تومان" },
+      treasurerName: "ترانه تی",
+      treasurerCardNumberGrouped: "6037 9972 1234 5678",
+      treasurerIbanGrouped: "IR12 0170 0000 0010 0123 4567 89"
+    };
+    return payloadFor(data);
+  }
+
+  it("stays within 300 characters and is independent of the number of expenses", () => {
+    const small = buildSummaryLink(summaryPayload(), BASE);
+    expect(small.url.length).toBeLessThanOrEqual(300);
+    const big = buildSummaryLink({ ...summaryPayload(), data: baseMemberData(500) }, BASE);
+    expect(big.url.length).toBeLessThanOrEqual(300);
+  });
+
+  it("carries name, event, issue date, balance, currency, treasurer, card, IBAN and verification code", () => {
+    const { url } = buildSummaryLink(summaryPayload(), BASE);
+    expect(url.startsWith(`${BASE}#/s/`)).toBe(true);
+    const decoded = decodeSharedPayload(url.split("#/s/")[1]);
+    expect(decoded?.tier).toBe("summary");
+    expect(decoded?.payload).toMatchObject({
+      k: "m",
+      n: "آرش احمدی‌نژاد",
+      e: "سفر شمال – تابستان",
+      d: "2025-01-05",
+      b: -15000,
+      c: "تومان",
+      r: "ترانه تی",
+      cd: "6037997212345678",
+      ib: "IR120170000000100123456789",
+      vc: "A1B2-C3D4"
+    });
+  });
+
+  it("omits card and IBAN when the treasurer has none", () => {
+    const { payload } = buildSummaryLink(payloadFor(baseMemberData(1)), BASE);
+    expect(payload.cd).toBeUndefined();
+    expect(payload.ib).toBeUndefined();
+  });
+
+  it("drops the IBAN, then the card, to honor a tighter URL budget", () => {
+    const loose = buildSummaryLink(summaryPayload(), BASE, 10_000);
+    const tight = buildSummaryLink(summaryPayload(), BASE, loose.url.length - 1);
+    expect(tight.payload.ib).toBeUndefined();
+    expect(tight.payload.n).toBe("آرش احمدی‌نژاد");
+    expect(tight.payload.vc).toBe("A1B2-C3D4");
+  });
+
+  it("decodeSharedPayload still decodes full links and rejects garbage", () => {
+    const full = buildStatementLink(payloadFor(baseMemberData(1)), BASE);
+    expect(decodeSharedPayload(full.encoded!)?.tier).toBe("full");
+    expect(decodeSharedPayload("garbage")).toBeNull();
   });
 });

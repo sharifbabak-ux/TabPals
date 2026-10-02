@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { buildWaiterList, buildWaiterListText } from "@/domain/groupOrder";
+import { buildWaiterList, buildWaiterListText, groupWaiterListByCategory, waiterListShowsHeadings } from "@/domain/groupOrder";
+import { ORDER_CATEGORY_LABELS } from "@/domain/orderCategory";
 import { toPersianDigits } from "@/domain/format";
 import { clipboardService, shareService } from "@/platform";
 import { BottomSheet } from "@/ui/components/BottomSheet";
@@ -16,6 +17,7 @@ interface WaiterListSheetProps {
 export function WaiterListSheet({ open, data, onClose }: WaiterListSheetProps) {
   const [toast, setToast] = useState<string | null>(null);
   const items = useMemo(() => buildWaiterList(data.lines), [data.lines]);
+  const groups = useMemo(() => groupWaiterListByCategory(items), [items]);
   const title = `${data.session.title}${data.session.restaurant ? ` – ${data.session.restaurant}` : ""}`;
   const text = useMemo(() => buildWaiterListText(title, items), [title, items]);
 
@@ -40,21 +42,26 @@ export function WaiterListSheet({ open, data, onClose }: WaiterListSheetProps) {
           <p className="field__hint">
             مجموع: {toPersianDigits(items.reduce((s, i) => s + i.quantity, 0))} مورد در {toPersianDigits(items.length)} قلم
           </p>
-          <ul className="waiter-list">
-            {items.map((item) => (
-              <li key={item.key} className="waiter-list__row">
-                <span className="waiter-list__line">
-                  <span className="waiter-list__qty">{toPersianDigits(item.quantity)} ×</span> {item.name}
-                </span>
-                {item.notes.map((note) => (
-                  <span key={note.text} className="waiter-list__note">
-                    ↳ {note.text}
-                    {note.quantity !== item.quantity ? ` (${toPersianDigits(note.quantity)})` : ""}
-                  </span>
+          {groups.map((group) => (
+            <section key={group.category}>
+              {waiterListShowsHeadings(groups) && <h3 className="waiter-list__heading">{ORDER_CATEGORY_LABELS[group.category]}</h3>}
+              <ul className="waiter-list">
+                {group.items.map((item) => (
+                  <li key={item.key} className="waiter-list__row">
+                    <span className="waiter-list__line">
+                      <span className="waiter-list__qty">{toPersianDigits(item.quantity)} ×</span> {item.name}
+                    </span>
+                    {item.notes.map((note) => (
+                      <span key={note.text} className="waiter-list__note">
+                        ↳ {note.text}
+                        {note.quantity !== item.quantity ? ` (${toPersianDigits(note.quantity)})` : ""}
+                      </span>
+                    ))}
+                  </li>
                 ))}
-              </li>
-            ))}
-          </ul>
+              </ul>
+            </section>
+          ))}
           <div className="form-actions">
             <button type="button" className="form-actions__secondary" onClick={handleCopy}>
               کپی
