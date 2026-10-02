@@ -55,7 +55,10 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2,json}"],
+          // Standalone network-test page: never precached, never served as the SPA fallback.
+          globIgnores: ["nettest.html", "nettest-fonts/**"],
           navigateFallback: `${base}index.html`,
+          navigateFallbackDenylist: [/nettest\.html$/],
           cleanupOutdatedCaches: true
         },
         devOptions: {
