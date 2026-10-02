@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>آزمایش شبکه — TabPals</title>
+<!--
+  TabPals network test page (standalone; touches no app code or data).
+  Purpose: find out which hosting/realtime providers are reachable from the
+  user's network in Iran. Only public, account-free endpoints are used.
+
+  HTTPS reachability = fetch(url, {mode:"no-cors", cache:"no-store"}); success = no network error.
+  Realtime = WebSocket "open" event, only where an account-free endpoint exists.
+
+  ENDPOINTS
+  Baselines
+    GitHub Pages (this site) HTTPS: https://sharifbabak-ux.github.io/TabPals/favicon.svg
+    google.com               HTTPS: https://www.google.com/generate_204
+    WebSocket echo service   HTTPS: https://echo.websocket.org/   WS: wss://echo.websocket.org/
+  Foreign
+    Supabase                 HTTPS: https://api.supabase.com/     (project hosts <ref>.supabase.co need an account)
+    Firebase (Google)        HTTPS: https://firebase.google.com/  (Realtime DB / Firestore need a project)
+    Cloudflare Pages         HTTPS: https://pages.dev/
+    Cloudflare Workers       HTTPS: https://workers.dev/
+  Iranian
+    Liara                    HTTPS: https://liara.ir/
+    ArvanCloud               HTTPS: https://www.arvancloud.ir/
+  Realtime for every provider except the echo service needs an account (stage 2).
+-->
+<style>
+@font-face{font-family:"Vazirmatn";font-weight:400;font-display:swap;src:url("nettest-fonts/vazirmatn-arabic-400-normal.woff2") format("woff2")}
+@font-face{font-family:"Vazirmatn";font-weight:700;font-display:swap;src:url("nettest-fonts/vazirmatn-arabic-700-normal.woff2") format("woff2")}
+:root{--bg:#f3eddf;--surface:#fbf8f1;--surface2:#efe8d8;--ink:#26261f;--muted:#5e5d52;--primary:#4e5d2f;--accent:#b8913a;--border:#e2d9c5;--ok:#3f6b2a;--warn:#9a6b00;--bad:#a4452c}
+@media (prefers-color-scheme:dark){:root{--bg:#1d1d17;--surface:#26261f;--surface2:#302f27;--ink:#f3eddf;--muted:#b9b4a4;--primary:#9aa66b;--accent:#d3ac55;--border:#3d3d33;--ok:#8fc271;--warn:#e0b04a;--bad:#e8856c}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Vazirmatn",system-ui,sans-serif;line-height:1.7}
+main{max-width:720px;margin:0 auto;padding:16px}
+h1{font-size:1.25rem;margin:0 0 4px}
+p.lead{margin:0 0 12px;color:var(--muted);font-size:.9rem}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px;margin-bottom:12px}
+label{display:block;font-size:.85rem;color:var(--muted);margin:8px 0 4px}
+select,input{width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--ink);font-size:1rem}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+button{padding:10px 16px;border-radius:10px;border:1px solid var(--primary);background:var(--primary);color:#f3eddf;font-size:1rem;cursor:pointer}
+button.alt{background:transparent;color:var(--primary)}
+button:disabled{opacity:.5;cursor:default}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th,td{padding:8px 6px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap}
+th{color:var(--muted);font-weight:400}
+.cell{display:inline-flex;align-items:center;gap:6px}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--border);display:inline-block}
+.g .dot{background:var(--ok)}.a .dot{background:var(--warn)}.r .dot{background:var(--bad)}
+.g{color:var(--ok)}.a{color:var(--warn)}.r{color:var(--bad)}.n{color:var(--muted)}
+.run .dot{background:var(--accent);animation:p 1s infinite}
+@keyframes p{50%{opacity:.3}}
+dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:.85rem}
+dt{color:var(--muted)}dd{margin:0}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .2s}
+#toast.on{opacity:1}
+.ltr{direction:ltr;unicode-bidi:isolate}
+</style>
+</head>
+<body>
+<main>
+<h1>آزمایش شبکه</h1>
+<p class="lead">بررسی دسترسی به سرویس‌های آنلاین از شبکه‌ی شما. هیچ داده‌ای از برنامه خوانده یا ارسال نمی‌شود.</p>
+
+<section class="card">
+  <label for="conn">نوع اتصال</label>
+  <select id="conn"><option>اینترنت همراه</option><option>وای‌فای</option></select>
+  <label for="vpn">VPN</label>
+  <select id="vpn"><option>خیر</option><option>بله</option></select>
+  <div class="row2">
+    <div><label for="op">اپراتور</label><input id="op" placeholder="مثلاً همراه اول، ایرانسل"></div>
+    <div><label for="city">شهر (اختیاری)</label><input id="city"></div>
+  </div>
+</section>
+
+<div class="btns">
+  <button id="start">شروع آزمایش</button>
+  <button id="again" class="alt" disabled>اجرای دوباره</button>
+  <button id="copy" class="alt" disabled>کپی نتیجه</button>
+</div>
+
+<section class="card tw">
+  <table>
+    <thead><tr><th>سرویس</th><th>HTTPS</th><th>بلادرنگ</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+</section>
+
+<section class="card"><dl id="info"></dl></section>
+</main>
+<div id="toast" role="status">نتیجه کپی شد</div>
+
+<script>
+(function(){
+"use strict";
+var ATTEMPTS=3, TIMEOUT=8000, NEED="نیازمند حساب — مرحله‌ی دوم";
+var PROVIDERS=[
+ {id:"gh",name:"GitHub Pages (همین سایت)",group:"مبنا",https:"https://sharifbabak-ux.github.io/TabPals/favicon.svg",ws:null,wsNA:true},
+ {id:"g",name:"google.com",group:"مبنا",https:"https://www.google.com/generate_204",ws:null,wsNA:true},
+ {id:"echo",name:"سرویس echo وب‌سوکت",group:"مبنا",https:"https://echo.websocket.org/",ws:"wss://echo.websocket.org/"},
+ {id:"sb",name:"Supabase",group:"خارجی",https:"https://api.supabase.com/",ws:null},
+ {id:"fb",name:"Firebase (Google)",group:"خارجی",https:"https://firebase.google.com/",ws:null},
+ {id:"cfp",name:"Cloudflare Pages",group:"خارجی",https:"https://pages.dev/",ws:null},
+ {id:"cfw",name:"Cloudflare Workers",group:"خارجی",https:"https://workers.dev/",ws:null},
+ {id:"li",name:"لیارا",group:"ایرانی",https:"https://liara.ir/",ws:null},
+ {id:"ar",name:"آروان‌کلاود",group:"ایرانی",https:"https://www.arvancloud.ir/",ws:null}
+];
+var FA="fa-IR", FAC="fa-IR-u-ca-persian";
+function $(i){return document.getElementById(i)}
+function fa(n){return String(n).replace(/\d/g,function(d){return "۰۱۲۳۴۵۶۷۸۹"[d]})}
+// Same format as src/domain/format.ts formatJalaliDateTime
+function jalali(d){
+  var wd=new Intl.DateTimeFormat(FAC,{weekday:"long"}).format(d);
+  var dt=new Intl.DateTimeFormat(FAC,{year:"numeric",month:"2-digit",day:"2-digit"}).format(d);
+  var t=new Intl.DateTimeFormat(FA,{hour:"2-digit",minute:"2-digit",hour12:false}).format(d);
+  return wd+" "+dt+" "+t;
+}
+function shortUA(){
+  var u=navigator.userAgent,b="مرورگر نامشخص",o="سیستم نامشخص";
+  if(/SamsungBrowser/.test(u))b="Samsung Internet";
+  else if(/Edg\//.test(u))b="Edge";
+  else if(/OPR\//.test(u))b="Opera";
+  else if(/Firefox|FxiOS/.test(u))b="Firefox";
+  else if(/Chrome|CriOS/.test(u))b="Chrome";
+  else if(/Safari/.test(u))b="Safari";
+  if(/Android/.test(u))o="Android";
+  else if(/iPhone|iPad|iPod/.test(u))o="iOS";
+  else if(/Windows/.test(u))o="Windows";
+  else if(/Mac OS X|Macintosh/.test(u))o="macOS";
+  else if(/Linux|CrOS/.test(u))o="Linux";
+  return b+" / "+o;
+}
+function median(a){
+  if(!a.length)return null;
+  var s=a.slice().sort(function(x,y){return x-y}),m=s.length>>1;
+  return s.length%2?s[m]:Math.round((s[m-1]+s[m])/2);
+}
+function tryHttps(url){
+  var c=new AbortController(),t0=performance.now();
+  var timer=setTimeout(function(){c.abort()},TIMEOUT);
+  return fetch(url,{mode:"no-cors",cache:"no-store",signal:c.signal})
+    .then(function(){return Math.round(performance.now()-t0)},function(){return null})
+    .then(function(r){clearTimeout(timer);return r});
+}
+function tryWs(url){
+  return new Promise(function(res){
+    var t0=performance.now(),done=false,ws;
+    function fin(v){if(done)return;done=true;clearTimeout(timer);try{ws&&ws.close()}catch(e){}res(v)}
+    var timer=setTimeout(function(){fin(null)},TIMEOUT);
+    try{ws=new WebSocket(url)}catch(e){return fin(null)}
+    ws.onopen=function(){fin(Math.round(performance.now()-t0))};
+    ws.onerror=function(){fin(null)};
+    ws.onclose=function(){fin(null)};
+  });
+}
+function runTest(fn,url,onStep){
+  var oks=[],i=0;
+  return (function next(){
+    if(i>=ATTEMPTS)return Promise.resolve({ok:oks.length,ms:median(oks)});
+    return fn(url).then(function(r){i++;if(r!==null)oks.push(r);onStep({done:i,ok:oks.length});return next()});
+  })();
+}
+function cls(r){return r.ok===ATTEMPTS?"g":r.ok>0?"a":"r"}
+function txt(r){return fa(r.ok)+" از "+fa(ATTEMPTS)+(r.ms!==null?" · "+fa(r.ms)+" ms":"")}
+function cellHtml(r,state){
+  if(state==="need")return '<span class="cell n">'+NEED+'</span>';
+  if(state==="na")return '<span class="cell n">—</span>';
+  if(state==="wait")return '<span class="cell n">—</span>';
+  if(state==="run")return '<span class="cell run"><span class="dot"></span>'+fa(r.done)+" از "+fa(ATTEMPTS)+'…</span>';
+  return '<span class="cell '+cls(r)+'"><span class="dot"></span>'+txt(r)+'</span>';
+}
+var results={},running=false,stamp=null,ctx=null;
+function buildRows(){
+  $("rows").innerHTML=PROVIDERS.map(function(p){
+    return '<tr id="r-'+p.id+'"><td>'+p.name+'</td><td data-h></td><td data-w></td></tr>';
+  }).join("");
+  PROVIDERS.forEach(function(p){
+    var r=$("r-"+p.id);
+    r.querySelector("[data-h]").innerHTML=cellHtml(null,"wait");
+    r.querySelector("[data-w]").innerHTML=cellHtml(null,p.ws?"wait":p.wsNA?"na":"need");
+  });
+}
+function setCell(p,k,html){$("r-"+p.id).querySelector(k==="h"?"[data-h]":"[data-w]").innerHTML=html}
+function info(){
+  var c=navigator.connection&&navigator.connection.effectiveType;
+  var rows=[["آنلاین (navigator.onLine)",navigator.onLine?"بله":"خیر"],
+   ["نوع شبکه (effectiveType)",c||"نامشخص"],
+   ["زمان",stamp?jalali(stamp):"—"],
+   ["مرورگر / سیستم",shortUA()]];
+  $("info").innerHTML=rows.map(function(r){return "<dt>"+r[0]+"</dt><dd>"+r[1]+"</dd>"}).join("");
+}
+function lock(on){running=on;$("start").disabled=on;$("again").disabled=on||!stamp;$("copy").disabled=on||!stamp}
+function start(){
+  if(running)return;
+  stamp=new Date();
+  ctx={conn:$("conn").value,vpn:$("vpn").value,op:$("op").value.trim(),city:$("city").value.trim()};
+  results={};buildRows();info();lock(true);
+  var chain=Promise.resolve();
+  PROVIDERS.forEach(function(p){
+    chain=chain.then(function(){
+      setCell(p,"h",cellHtml({done:0},"run"));
+      return runTest(tryHttps,p.https,function(s){setCell(p,"h",cellHtml(s,"run"))});
+    }).then(function(r){
+      results[p.id]={h:r};setCell(p,"h",cellHtml(r));
+      if(!p.ws)return;
+      setCell(p,"w",cellHtml({done:0},"run"));
+      return runTest(tryWs,p.ws,function(s){setCell(p,"w",cellHtml(s,"run"))}).then(function(w){
+        results[p.id].w=w;setCell(p,"w",cellHtml(w));
+      });
+    });
+  });
+  chain.then(function(){lock(false)},function(){lock(false)});
+}
+function line(r){return fa(r.ok)+" از "+fa(ATTEMPTS)+(r.ms!==null?" ("+fa(r.ms)+" ms)":"")}
+function report(){
+  var L=["گزارش آزمایش شبکه — TabPals",
+   "زمان: "+jalali(stamp),
+   "اتصال: "+ctx.conn+" | VPN: "+ctx.vpn+" | اپراتور: "+(ctx.op||"—")+" | شهر: "+(ctx.city||"—"),
+   "آنلاین: "+(navigator.onLine?"بله":"خیر")+" | نوع شبکه: "+((navigator.connection&&navigator.connection.effectiveType)||"نامشخص"),
+   "مرورگر: "+shortUA(),"",
+   "نتایج (HTTPS | بلادرنگ):"];
+  PROVIDERS.forEach(function(p){
+    var r=results[p.id]||{};
+    var w=p.ws?(r.w?line(r.w):"—"):p.wsNA?"—":NEED;
+    L.push("- "+p.name+": HTTPS "+(r.h?line(r.h):"—")+" | "+w);
+  });
+  L.push("","نشانی‌های آزمایش‌شده:");
+  PROVIDERS.forEach(function(p){L.push("- "+p.name+": "+p.https+(p.ws?" ، "+p.ws:""))});
+  return L.join("\n");
+}
+function toast(){var t=$("toast");t.classList.add("on");setTimeout(function(){t.classList.remove("on")},1800)}
+function copy(){
+  var s=report();
+  function fallback(){
+    var a=document.createElement("textarea");a.value=s;a.style.position="fixed";a.style.opacity="0";
+    document.body.appendChild(a);a.select();
+    try{document.execCommand("copy")}catch(e){}
+    document.body.removeChild(a);toast();
+  }
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(s).then(toast,fallback);
+  else fallback();
+}
+$("start").onclick=start;$("again").onclick=start;$("copy").onclick=copy;
+buildRows();info();
+})();
+</script>
+</body>
+</html>
