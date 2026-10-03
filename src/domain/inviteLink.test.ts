@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildInviteUrl, formatShortCode, isValidShortCode, normalizeShortCode, parseInviteToken } from "./inviteLink";
+import { buildInviteUrl, formatShortCode, isValidShortCode, normalizeShortCode, parseInviteLinkCode, parseInviteToken } from "./inviteLink";
 
 describe("invite URL building", () => {
   it("builds APP_BASE_URL + #/join?t=<token>", () => {
@@ -13,6 +13,20 @@ describe("invite URL building", () => {
     const url = buildInviteUrl("https://x.example/", "a+b/c=d&e");
     expect(url).toContain("t=a%2Bb%2Fc%3Dd%26e");
     expect(parseInviteToken(url)).toBe("a+b/c=d&e");
+  });
+});
+
+describe("short code inside the link", () => {
+  it("is appended as &c= (normalized) and read back; the token stays first", () => {
+    const url = buildInviteUrl("https://x.example/TabPals/", "tok", "abcd-2345");
+    expect(url).toBe("https://x.example/TabPals/#/join?t=tok&c=ABCD2345");
+    expect(parseInviteToken(url)).toBe("tok");
+    expect(parseInviteLinkCode(url)).toBe("ABCD2345");
+  });
+  it("ignores a missing or malformed code", () => {
+    expect(parseInviteLinkCode("https://x.example/#/join?t=tok")).toBeNull();
+    expect(parseInviteLinkCode("https://x.example/#/join?t=tok&c=12")).toBeNull();
+    expect(parseInviteLinkCode("https://x.example/#/events?c=ABCD2345")).toBeNull();
   });
 });
 

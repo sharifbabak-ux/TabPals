@@ -41,6 +41,9 @@ export interface EventSyncState {
   lastError: string | null;
 }
 
+/** Shared, stable object for events without engine state (useSyncExternalStore needs a cached snapshot). */
+const IDLE_STATE: EventSyncState = Object.freeze({ connected: false, syncing: false, lastError: null });
+
 export type RevokeReason = "device-revoked" | "event-purged" | "unauthorized";
 
 export interface SyncEngineDeps {
@@ -176,7 +179,7 @@ export class SyncEngine {
   // --- state for the UI ---------------------------------------------------
 
   getState(localEventId: string): EventSyncState {
-    return this.states.get(localEventId) ?? { connected: false, syncing: false, lastError: null };
+    return this.states.get(localEventId) ?? IDLE_STATE;
   }
 
   subscribe(listener: () => void): () => void {

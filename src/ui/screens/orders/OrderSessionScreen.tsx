@@ -14,6 +14,7 @@ import { ConfirmDialog } from "@/ui/components/ConfirmDialog";
 import { EmptyState } from "@/ui/components/EmptyState";
 import { JalaliDate } from "@/ui/components/JalaliDate";
 import { useEventMembers } from "@/ui/hooks/useEventMembers";
+import { useOnlineEvent } from "@/ui/hooks/useOnlineEvent";
 import { MenuEditorSheet } from "./MenuEditorSheet";
 import { MenuPhotoViewer } from "./MenuPhotoViewer";
 import { PersonOrderSheet } from "./PersonOrderSheet";
@@ -33,6 +34,7 @@ export function OrderSessionScreen() {
   const event = useLiveQuery(() => db.events.get(eventId), [eventId]);
   const members = useEventMembers(eventId);
   const data = useOrderSession(sessionId);
+  const online = useOnlineEvent(eventId);
 
   const [personId, setPersonId] = useState<string | null>(null);
   const [sharedOpen, setSharedOpen] = useState(false);
@@ -61,9 +63,11 @@ export function OrderSessionScreen() {
 
   const { session } = data;
   const closed = isEventClosed(event, new Date());
+  // Members of an online event are read-only: same gating as a closed event, different note.
+  const locked = closed || online.readOnly;
   const terminal = isTerminalStatus(session.status);
-  const canManage = !closed && !terminal;
-  const canEditLines = !closed && (session.status === "open" || session.status === "locked" || session.status === "pricing");
+  const canManage = !locked && !terminal;
+  const canEditLines = !locked && (session.status === "open" || session.status === "locked" || session.status === "pricing");
   const nameOf = (id: string) => members.find((m) => m.personId === id)?.name ?? "؟";
   const sharedLines = data.lines.filter((l) => l.personId === null);
   const editingSharedLine = sharedLines.find((l) => l.id === editingSharedLineId);
@@ -118,6 +122,7 @@ export function OrderSessionScreen() {
       </div>
 
       {closed && <p className="field__hint">این ایونت پایان‌یافته است؛ نشست فقط‌خواندنی است.</p>}
+      {!closed && online.readOnly && <p className="field__hint">شما در این ایونت آنلاین عضو هستید؛ نشست فقط‌خواندنی است.</p>}
       {session.status === "cancelled" && <p className="field__warning">این نشست لغو شده است{session.cancelReason ? `: ${session.cancelReason}` : "."}</p>}
       {session.status === "finalized" && (
         <p className="field__hint">

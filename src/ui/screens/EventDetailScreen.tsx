@@ -1,9 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import { DndContext, PointerSensor, TouchSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { ONLINE_ENABLED } from "@/config/app";
 import { db } from "@/data/db";
+import { onlineService } from "@/data/online/onlineService";
 import { eventMembersRepository, eventsRepository, personsRepository } from "@/data/repositories";
 import type { EventMember } from "@/data/types";
 import { canTrashEvent } from "@/domain/deletionGuards";
@@ -25,6 +27,11 @@ import { VouchersSection } from "./events/VouchersSection";
 import { BalancesPanel } from "./events/BalancesPanel";
 import { StatementsSection } from "./events/StatementsSection";
 import { OrderSessionsSection } from "./orders/OrderSessionsSection";
+import { useOnlineEvent } from "@/ui/hooks/useOnlineEvent";
+import { GoOnlineSheet } from "./online/GoOnlineSheet";
+import { InviteSheet } from "./online/InviteSheet";
+import { OnlineBadge } from "./online/OnlineBadge";
+import { SyncIndicator } from "./online/SyncIndicator";
 
 type MemberRowData = EventMember & { name: string; firstName: string; lastName: string; photo?: Blob };
 type EventTab = "members" | "vouchers" | "orders" | "statements";
@@ -54,6 +61,12 @@ export function EventDetailScreen() {
   const [archiveTarget, setArchiveTarget] = useState(false);
   const [trashConfirmOpen, setTrashConfirmOpen] = useState(false);
   const [trashError, setTrashError] = useState<string | null>(null);
+  const online = useOnlineEvent(eventId);
+  const [goOnlineOpen, setGoOnlineOpen] = useState(false);
+  const [inviteTarget, setInviteTarget] = useState<{ personId: string; name: string } | null>(null);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [onlineError, setOnlineError] = useState<string | null>(null);
+  const [activeDevices, setActiveDevices] = useState<Map<string, number>>(new Map());
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -108,6 +121,42 @@ export function EventDetailScreen() {
     if (!members) return undefined;
     return members.filter((member) => showInactive || member.active);
   }, [members, showInactive]);
+
+  const memberCount = members?.length;
+  // Admin only: which members already have an active device (those without one get «دعوت»).
+  useEffect(() => {
+    if (!online.isAdmin) return;
+    let cancelled = false;
+    onlineService
+      .listMembers(eventId)
+      .then((list) => !cancelled && setActiveDevices(new Map(list.map((m) => [m.memberId, m.activeDevices]))))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId, online.isAdmin, inviteTarget, memberCount]);
+
+  async function handleGoOnlineClick() {
+    setOnlineError(null);
+    if (!event) return;
+    const blocker = await onlineService.goOnlineBlocker(event);
+    if (blocker) {
+      setOnlineError(blocker);
+      if (!event.treasurerPersonId) setEditOpen(true);
+      return;
+    }
+    setGoOnlineOpen(true);
+  }
+
+  async function handleLeaveConfirm() {
+    setLeaveOpen(false);
+    try {
+      await onlineService.leave(eventId);
+      navigate("/events");
+    } catch (e) {
+      setOnlineError(e instanceof Error ? e.message : "خروج ناموفق بود");
+    }
+  }
 
   async function handleDeactivateConfirm() {
     if (!deactivateTarget) return;
@@ -164,6 +213,9 @@ export function EventDetailScreen() {
   }
 
   const closed = isEventClosed(event, new Date());
+  // Members of an online event can only look: every add/edit/close/issue control is hidden.
+  const readOnly = online.readOnly;
+  const locked = closed || readOnly;
 
   return (
     <div className="screen">
@@ -173,14 +225,16 @@ export function EventDetailScreen() {
 
       <div className="screen-header">
         <h1>{event.title}</h1>
-        <button
-          type="button"
-          className="icon-button icon-button--ghost icon-button--label"
-          onClick={() => setEditOpen(true)}
-          aria-label="ویرایش ایونت"
-        >
-          ویرایش
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            className="icon-button icon-button--ghost icon-button--label"
+            onClick={() => setEditOpen(true)}
+            aria-label="ویرایش ایونت"
+          >
+            ویرایش
+          </button>
+        )}
       </div>
 
       {(event.startDate || event.endDate) && (
@@ -191,16 +245,34 @@ export function EventDetailScreen() {
         </p>
       )}
 
+      {online.online && (
+        <div className="online-bar">
+          <OnlineBadge roles={online.roles} />
+          <SyncIndicator eventId={eventId} canSeeRejected={!readOnly} />
+          {online.isAdmin && (
+            <button type="button" className="list-item__action" onClick={() => navigate(`/events/${eventId}/access`)}>
+              اعضا و دسترسی‌ها
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="event-status-bar">
         {closed && <span className="badge badge--closed">پایان‌یافته</span>}
-        <EventStatusControls eventId={eventId} closed={closed} />
-        {canTrashEvent(event).allowed && (
+        {!readOnly && <EventStatusControls eventId={eventId} closed={closed} />}
+        {ONLINE_ENABLED && online.loaded && !online.online && !event.deletedAt && (
+          <button type="button" onClick={handleGoOnlineClick}>
+            آنلاین کردن ایونت
+          </button>
+        )}
+        {!readOnly && canTrashEvent(event).allowed && (
           <button type="button" className="sheet__archive-button" onClick={() => setTrashConfirmOpen(true)}>
             حذف ایونت
           </button>
         )}
       </div>
       {trashError && <p className="field__error">{trashError}</p>}
+      {onlineError && <p className="field__error">{onlineError}</p>}
 
       <Tabs
         options={[
@@ -216,21 +288,24 @@ export function EventDetailScreen() {
       {tab === "members" ? (
         <>
           {closed && <p className="field__hint event-detail__closed-note">این ایونت پایان‌یافته است؛ برای تغییر، ابتدا آن را بازگشایی کنید.</p>}
+          {readOnly && <p className="field__hint event-detail__closed-note">شما در این ایونت آنلاین عضو هستید؛ اطلاعات به‌صورت زنده و فقط‌خواندنی نمایش داده می‌شود.</p>}
 
-          <div className={`action-grid${closed ? " action-grid--disabled" : ""}`}>
-            <button type="button" disabled={closed} onClick={() => setAddOpen(true)}>
-              + افزودن از اشخاص
-            </button>
-            <button type="button" disabled={closed} onClick={() => setCreatePersonOpen(true)}>
-              + شخص جدید
-            </button>
-            <button type="button" disabled={closed} onClick={() => setImportOpen(true)}>
-              وارد کردن از ایونت قبلی
-            </button>
-            <button type="button" disabled={closed} onClick={() => setGroupOpen(true)}>
-              + افزودن گروه
-            </button>
-          </div>
+          {!readOnly && (
+            <div className={`action-grid${closed ? " action-grid--disabled" : ""}`}>
+              <button type="button" disabled={closed} onClick={() => setAddOpen(true)}>
+                + افزودن از اشخاص
+              </button>
+              <button type="button" disabled={closed} onClick={() => setCreatePersonOpen(true)}>
+                + شخص جدید
+              </button>
+              <button type="button" disabled={closed} onClick={() => setImportOpen(true)}>
+                وارد کردن از ایونت قبلی
+              </button>
+              <button type="button" disabled={closed} onClick={() => setGroupOpen(true)}>
+                + افزودن گروه
+              </button>
+            </div>
+          )}
 
           <h2 className="section-title">اعضا</h2>
           <Switch checked={showInactive} onChange={setShowInactive} label="نمایش غیرفعال‌ها" />
@@ -249,7 +324,13 @@ export function EventDetailScreen() {
                     photo={member.photo}
                     active={member.active}
                     isTreasurer={member.personId === event.treasurerPersonId}
-                    disabled={closed}
+                    disabled={locked}
+                    readOnly={readOnly}
+                    onInvite={
+                      online.isAdmin && member.personId !== online.link?.memberId && (activeDevices.get(member.personId) ?? 0) === 0
+                        ? () => setInviteTarget({ personId: member.personId, name: member.name })
+                        : undefined
+                    }
                     onToggleActive={() => setDeactivateTarget(member)}
                   />
                 ))}
@@ -258,6 +339,14 @@ export function EventDetailScreen() {
           </DndContext>
 
           <BalancesPanel eventId={eventId} members={activeMemberOptions} currency={event.currency} />
+
+          {online.online && (
+            <div className="danger-zone">
+              <button type="button" className="danger-button" onClick={() => setLeaveOpen(true)}>
+                خروج از ایونت آنلاین
+              </button>
+            </div>
+          )}
         </>
       ) : tab === "vouchers" ? (
         <VouchersSection
@@ -265,6 +354,7 @@ export function EventDetailScreen() {
           currency={event.currency}
           activeMembers={activeMemberOptions}
           eventClosed={closed}
+          readOnly={readOnly}
           treasurerPersonId={event.treasurerPersonId}
           treasurerName={treasurerName}
           onRequestSetTreasurer={() => setEditOpen(true)}
@@ -275,6 +365,7 @@ export function EventDetailScreen() {
           eventId={eventId}
           currency={event.currency}
           eventClosed={closed}
+          readOnly={readOnly}
           treasurerPersonId={event.treasurerPersonId}
           treasurerName={treasurerName}
           onRequestSetTreasurer={() => setEditOpen(true)}
@@ -284,6 +375,8 @@ export function EventDetailScreen() {
           eventId={eventId}
           eventTitle={event.title}
           eventClosed={closed}
+          readOnly={readOnly}
+          myPersonId={online.link?.memberId ?? null}
           treasurerPersonId={event.treasurerPersonId}
           activeMembers={activeMemberOptions}
           onRequestSetTreasurer={() => setEditOpen(true)}
@@ -374,6 +467,18 @@ export function EventDetailScreen() {
         confirmLabel={deactivateTarget?.active ? "غیرفعال کردن" : "فعال کردن"}
         onConfirm={handleDeactivateConfirm}
         onCancel={() => setDeactivateTarget(null)}
+      />
+
+      <GoOnlineSheet open={goOnlineOpen} eventId={eventId} onClose={() => setGoOnlineOpen(false)} />
+      <InviteSheet open={inviteTarget !== null} eventId={eventId} eventTitle={event.title} member={inviteTarget} onClose={() => setInviteTarget(null)} />
+      <ConfirmDialog
+        open={leaveOpen}
+        title="خروج از ایونت آنلاین"
+        message={`از «${event.title}» خارج می‌شوید: دسترسی این دستگاه روی سرور حذف و نسخه‌ی محلی ایونت از این دستگاه پاک می‌شود. برای ورود دوباره به دعوت‌نامه‌ی جدید نیاز دارید.`}
+        confirmLabel="خروج"
+        danger
+        onConfirm={handleLeaveConfirm}
+        onCancel={() => setLeaveOpen(false)}
       />
 
       <ConfirmDialog

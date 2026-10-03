@@ -136,12 +136,13 @@ describe("local permission guard", () => {
     expect(treasurer.id).toBeTruthy();
   });
 
-  it("only admin may purge; revoked links are not guarded", async () => {
+  it("an online event cannot be permanently deleted locally; a revoked link no longer blocks or guards", async () => {
     const { event } = await setup();
     await eventsRepository.close(event.id);
     await eventsRepository.moveToTrash(event.id);
-    await goOnlineAs(event.id, ["treasurer"]);
-    await expect(eventsRepository.permanentlyDelete(event.id)).rejects.toBeInstanceOf(OnlinePermissionError);
+    await goOnlineAs(event.id, ["admin"]);
+    await expect(eventsRepository.permanentlyDelete(event.id)).rejects.toThrow("آنلاین");
+    expect(await db.events.get(event.id)).toBeTruthy();
     await db.onlineLinks.update(event.id, { status: "revoked" });
     await expect(eventsRepository.permanentlyDelete(event.id)).resolves.toBeUndefined();
   });

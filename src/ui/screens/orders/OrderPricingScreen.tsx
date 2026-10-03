@@ -5,6 +5,7 @@ import { db } from "@/data/db";
 import { FinalizeBlockedError, orderSessionsRepository } from "@/data/repositories";
 import type { ExtraAllocation, SessionExtra } from "@/data/types";
 import { isEventClosed } from "@/domain/eventStatus";
+import { useOnlineEvent } from "@/ui/hooks/useOnlineEvent";
 import { formatAmount, toPersianDigits } from "@/domain/format";
 import {
   DIFFERENCE_EXTRA_LABEL,
@@ -37,6 +38,7 @@ export function OrderPricingScreen() {
   const event = useLiveQuery(() => db.events.get(eventId), [eventId]);
   const members = useEventMembers(eventId);
   const data = useOrderSession(sessionId);
+  const online = useOnlineEvent(eventId);
 
   const [prices, setPrices] = useState<Record<string, number>>({});
   const [bill, setBill] = useState<number | null>(null);
@@ -76,7 +78,7 @@ export function OrderPricingScreen() {
   const { session } = data;
   const currency = event.currency;
   const closed = isEventClosed(event, new Date());
-  const editable = !closed && session.status === "pricing";
+  const editable = !closed && !online.readOnly && session.status === "pricing";
   const back = () => navigate(`/events/${eventId}/orders/${session.id}`);
 
   if (session.status !== "pricing" && session.status !== "finalized") {
@@ -162,6 +164,7 @@ export function OrderPricingScreen() {
         {session.restaurant ? ` · ${session.restaurant}` : ""}
       </p>
       {closed && <p className="field__hint">این ایونت پایان‌یافته است؛ فقط‌خواندنی.</p>}
+      {!closed && online.readOnly && <p className="field__hint">شما در این ایونت آنلاین عضو هستید؛ این صفحه فقط‌خواندنی است.</p>}
       {calc.error && <p className="field__error">{calc.error}</p>}
 
       {/* (a) missing prices */}

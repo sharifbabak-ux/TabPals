@@ -50,3 +50,35 @@ const AUDIT_LABELS: Record<string, string> = {
 export function auditActionLabel(action: string): string {
   return AUDIT_LABELS[action] ?? action;
 }
+
+/** Persian name of a synced entity, for the rejected-ops list. */
+const ENTITY_LABELS: Record<string, string> = {
+  events: "ایونت",
+  persons: "شخص",
+  eventMembers: "عضو ایونت",
+  vouchers: "سند",
+  statements: "صورت‌حساب",
+  orderSessions: "نشست سفارش",
+  sessionMenuItems: "منوی سریع",
+  orderLines: "سفارش",
+  orderPersonTotals: "جمع سفارش",
+  sessionExtras: "هزینه‌ی اضافه"
+};
+
+export function entityLabel(entity: string): string {
+  return ENTITY_LABELS[entity] ?? entity;
+}
+
+const OP_TYPE_LABELS: Record<string, string> = {
+  create: "ایجاد",
+  update: "ویرایش",
+  delete: "حذف",
+  archive: "آرشیو",
+  restore: "بازگردانی",
+  purge: "حذف دائمی",
+  logSend: "ثبت ارسال"
+};
+
+export function opTypeLabel(type: string): string {
+  return OP_TYPE_LABELS[type] ?? type;
+}

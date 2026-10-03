@@ -1,0 +1,248 @@
+.badge--online {
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+}
+
+.online-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+
+.sync-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.sync-indicator__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-ink-muted);
+}
+.sync-indicator--online .sync-indicator__dot {
+  background: var(--color-creditor);
+}
+.sync-indicator--syncing .sync-indicator__dot {
+  background: var(--color-accent);
+  animation: sync-pulse 1s ease-in-out infinite;
+}
+.sync-indicator--queued .sync-indicator__dot {
+  background: var(--color-accent);
+}
+.sync-indicator--warn {
+  border-color: var(--color-debtor);
+}
+
+@keyframes sync-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.online-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 12px 14px;
+  margin: 0 0 12px;
+}
+
+.online-card h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.online-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.online-list__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.online-list__row:last-child {
+  border-bottom: 0;
+}
+
+.role-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.role-chip {
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.role-chip--on {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-primary-contrast);
+}
+.role-chip:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.online-progress {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--color-surface-2);
+  overflow: hidden;
+  margin: 10px 0 4px;
+}
+.online-progress__bar {
+  height: 100%;
+  background: var(--color-primary);
+  transition: width var(--transition-base);
+}
+
+.invite-sheet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.invite-qr {
+  width: 240px;
+  height: 240px;
+  image-rendering: pixelated;
+  background: #fff;
+  border-radius: 8px;
+}
+.invite-code {
+  font-size: 2.2rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  direction: ltr;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  text-align: center;
+}
+.invite-link {
+  direction: ltr;
+  font-size: 0.78rem;
+  word-break: break-all;
+  color: var(--color-ink-muted);
+  text-align: left;
+}
+.invite-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  width: 100%;
+}
+.invite-actions button {
+  padding: 10px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.join-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.join-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.join-steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.join-steps svg {
+  flex: none;
+  color: var(--color-primary);
+}
+.join-code-box {
+  text-align: center;
+}
+
+.scan-video {
+  width: 100%;
+  max-height: 280px;
+  border-radius: var(--radius-card);
+  background: #000;
+  object-fit: cover;
+}
+
+.online-notice {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--color-surface-2);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-ink);
+}
+.online-notice button {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.danger-zone {
+  border: 1px solid var(--color-debtor);
+  border-radius: var(--radius-card);
+  padding: 12px 14px;
+  margin-top: 16px;
+}
+.danger-zone h3 {
+  margin: 0 0 6px;
+  color: var(--color-debtor);
+}
+.danger-button {
+  padding: 10px 14px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-debtor);
+  background: transparent;
+  color: var(--color-debtor);
+  font: inherit;
+  cursor: pointer;
+}
+.danger-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

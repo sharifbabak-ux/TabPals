@@ -190,7 +190,7 @@ describe("invite + redeem + read-only member", () => {
   it("admin invites; the member redeems with the short code, catches up fully and is read-only", async () => {
     const { sara, event, admin, member } = await setupTwoDevices();
     const invite = await admin.service.createInvite(event.id, sara.id);
-    expect(invite.url).toBe(`https://sharifbabak-ux.github.io/TabPals/#/join?t=${invite.inviteToken}`);
+    expect(invite.url).toBe(`https://sharifbabak-ux.github.io/TabPals/#/join?t=${invite.inviteToken}&c=${invite.shortCode}`);
     expect(invite.shortCode).toMatch(/^[A-HJ-NP-Z2-9]{8}$/);
     // the server learned about sara before the invite (members were registered)
     expect(mock.events.get(event.id)!.members.has(sara.id)).toBe(true);

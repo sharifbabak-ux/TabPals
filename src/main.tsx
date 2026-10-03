@@ -12,9 +12,13 @@ import { App } from "./ui/App";
 import { ThemeProvider } from "./ui/theme";
 import { getDeviceId } from "./data/deviceId";
 import { requestPersistentStorageOnce } from "./platform";
+import { ONLINE_ENABLED } from "./config/app";
+import { syncEngine } from "./data/online/syncEngine";
 
 getDeviceId();
 void requestPersistentStorageOnce();
+// Online events: reconnect sockets, catch up and drain the outbox for every linked event.
+if (ONLINE_ENABLED) void syncEngine.start();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

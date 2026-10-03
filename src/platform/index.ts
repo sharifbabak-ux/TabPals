@@ -10,6 +10,7 @@ import { WebExportService } from "./web/exportService";
 import { WebClipboardService } from "./web/clipboardService";
 import { WebQrService } from "./web/qrService";
 import { WebMenuPhotoService } from "./web/menuPhotoService";
+import { WebQrScanService } from "./web/qrScanService";
 
 /**
  * Active platform service instances. Stage 9 swaps these for
@@ -25,3 +26,4 @@ export const exportService = new WebExportService();
 export const clipboardService = new WebClipboardService();
 export const qrService = new WebQrService();
 export const menuPhotoService = new WebMenuPhotoService();
+export const qrScanService = new WebQrScanService();

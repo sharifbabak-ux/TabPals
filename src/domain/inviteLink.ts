@@ -8,11 +8,25 @@ import { normalizeDigits } from "./paymentValidation";
 export const SHORT_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export const SHORT_CODE_LENGTH = 8;
 
-/** Builds `<appBase>#/join?t=<token>`; the base's own hash/query is dropped and a missing trailing slash tolerated. */
-export function buildInviteUrl(appBaseUrl: string, inviteToken: string): string {
+/**
+ * Builds `<appBase>#/join?t=<token>`; the base's own hash/query is dropped
+ * and a missing trailing slash tolerated. The optional short code rides
+ * along as `&c=` so the "install the app first" page can show it large
+ * (the server only reveals the code once, at invite creation).
+ */
+export function buildInviteUrl(appBaseUrl: string, inviteToken: string, shortCode?: string): string {
   const base = appBaseUrl.split("#")[0].split("?")[0];
   const withSlash = base.endsWith("/") ? base : `${base}/`;
-  return `${withSlash}#/join?t=${encodeURIComponent(inviteToken)}`;
+  const code = shortCode ? normalizeShortCode(shortCode) : "";
+  return `${withSlash}#/join?t=${encodeURIComponent(inviteToken)}${code ? `&c=${code}` : ""}`;
+}
+
+/** The short code carried in a join link's `c` parameter (valid codes only), or null. */
+export function parseInviteLinkCode(input: string): string | null {
+  const queryStart = input.indexOf("?");
+  if (queryStart === -1 || parseInviteToken(input) === null) return null;
+  const code = new URLSearchParams(input.slice(queryStart + 1).split("#")[0]).get("c");
+  return code && isValidShortCode(code) ? normalizeShortCode(code) : null;
 }
 
 /** Extracts the invite token from a join link, a bare `#/join?t=…` hash/path, or a full URL. Null when absent. */

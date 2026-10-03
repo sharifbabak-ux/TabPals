@@ -229,6 +229,10 @@ export const eventsRepository = {
    * 3B.1) — only an event already in trash can be purged.
    */
   async permanentlyDelete(id: string): Promise<void> {
+    const link = await db.onlineLinks.get(id);
+    if (link && link.status !== "revoked") {
+      throw new Error("این ایونت آنلاین است؛ ابتدا از ایونت آنلاین خارج شوید (یا مدیر آن را از سرور حذف کند).");
+    }
     await db.transaction(
       "rw",
       [

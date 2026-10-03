@@ -16,6 +16,10 @@ import { BackupScreen } from "./screens/BackupScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { NameReviewScreen } from "./screens/NameReviewScreen";
 import { TrashScreen } from "./screens/TrashScreen";
+import { AccessScreen } from "./screens/online/AccessScreen";
+import { JoinScreen } from "./screens/online/JoinScreen";
+import { MyStatementPreviewScreen } from "./screens/online/MyStatementPreviewScreen";
+import { OnlineNoticeBanner } from "./screens/online/OnlineNoticeBanner";
 
 const NAME_REVIEW_PROMPT_META_KEY = "nameReviewPromptShown";
 
@@ -27,7 +31,7 @@ function useAutoNameReviewPrompt() {
 
   useEffect(() => {
     // Never redirect away from the no-server shared statement link (docs/PLAN.md Stage 3C) — it must render standalone.
-    if (!needsReviewCount || location.pathname.startsWith("/s/")) return;
+    if (!needsReviewCount || location.pathname.startsWith("/s/") || location.pathname.startsWith("/join")) return;
     (async () => {
       const alreadyShown = await db.meta.get(NAME_REVIEW_PROMPT_META_KEY);
       if (alreadyShown) return;
@@ -43,11 +47,15 @@ export function App() {
   return (
     <div className="app-shell">
       <UpdateBanner />
+      <OnlineNoticeBanner />
       <main className="app-main">
         <Routes>
           <Route path="/" element={<Navigate to="/events" replace />} />
           <Route path="/events" element={<EventsScreen />} />
           <Route path="/events/:eventId" element={<EventDetailScreen />} />
+          <Route path="/join" element={<JoinScreen />} />
+          <Route path="/events/:eventId/access" element={<AccessScreen />} />
+          <Route path="/events/:eventId/my-statement" element={<MyStatementPreviewScreen />} />
           <Route path="/events/:eventId/orders/:sessionId" element={<OrderSessionScreen />} />
           <Route path="/events/:eventId/orders/:sessionId/pricing" element={<OrderPricingScreen />} />
           <Route path="/events/:eventId/statements/send-queue" element={<SendQueueScreen />} />

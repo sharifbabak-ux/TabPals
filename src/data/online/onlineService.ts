@@ -221,7 +221,7 @@ export function createOnlineService(deps: OnlineServiceDeps) {
     async createInvite(localEventId: string, memberId: string): Promise<InviteCreated & { url: string }> {
       await engine.registerMembers(localEventId).catch(() => undefined);
       const created = await authed(localEventId, (link) => api.createInvite(link.deviceToken, link.serverEventId, memberId));
-      return { ...created, url: buildInviteUrl(getAppBaseUrl(), created.inviteToken) };
+      return { ...created, url: buildInviteUrl(getAppBaseUrl(), created.inviteToken, created.shortCode) };
     },
 
     async revokeInvite(localEventId: string, inviteId: string | number): Promise<void> {

@@ -24,6 +24,8 @@ interface VouchersSectionProps {
   currency: string;
   activeMembers: MemberOption[];
   eventClosed: boolean;
+  /** Member of an online event: vouchers can be viewed but not created. */
+  readOnly?: boolean;
   treasurerPersonId: string | null;
   treasurerName: string | null;
   onRequestSetTreasurer?: () => void;
@@ -48,6 +50,7 @@ export function VouchersSection({
   currency,
   activeMembers,
   eventClosed,
+  readOnly = false,
   treasurerPersonId,
   treasurerName,
   onRequestSetTreasurer,
@@ -101,7 +104,7 @@ export function VouchersSection({
         <h2 className="section-title" style={{ margin: 0 }}>
           اسناد
         </h2>
-        {!eventClosed && (
+        {!eventClosed && !readOnly && (
           <button type="button" className="icon-button" onClick={() => setRecordedByOpen(true)} aria-label="سند جدید">
             +
           </button>

@@ -19,6 +19,8 @@ export interface StatementPaperMeta {
   verificationCode: string;
   status: "current" | "outdated";
   appVersion: string;
+  /** A live, unissued preview (a member's «صورت‌حساب من»): no number/version/verification code. */
+  preview?: boolean;
   /**
    * The statement's online-version block (docs/PLAN.md Stage 3C, GO-1.1):
    * `qr` encodes the compact summary link, `url` is where the clickable
@@ -66,12 +68,23 @@ export function StatementPaper({ data, meta, innerRef }: StatementPaperProps) {
           </div>
         )}
         <div className="statement-header__meta">
-          <span>شماره {toPersianDigits(meta.number)}</span>
-          <span>نسخه {toPersianDigits(meta.issueVersion)}</span>
-          <span>
-            <JalaliDate date={new Date(meta.issuedAt)} weekday time />
-          </span>
-          {meta.status === "outdated" ? <span className="badge">نیازمند صدور مجدد</span> : <span className="badge badge--closed">پایان‌یافته</span>}
+          {meta.preview ? (
+            <>
+              <span>
+                <JalaliDate date={new Date(meta.issuedAt)} weekday time />
+              </span>
+              <span className="badge">پیش‌نمایش زنده — صادر نشده</span>
+            </>
+          ) : (
+            <>
+              <span>شماره {toPersianDigits(meta.number)}</span>
+              <span>نسخه {toPersianDigits(meta.issueVersion)}</span>
+              <span>
+                <JalaliDate date={new Date(meta.issuedAt)} weekday time />
+              </span>
+              {meta.status === "outdated" ? <span className="badge">نیازمند صدور مجدد</span> : <span className="badge badge--closed">پایان‌یافته</span>}
+            </>
+          )}
         </div>
       </header>
 
@@ -101,7 +114,7 @@ export function StatementPaper({ data, meta, innerRef }: StatementPaperProps) {
       )}
 
       <footer className="statement-footer" data-export-footer>
-        <span>کد اعتبارسنجی: {meta.verificationCode}</span>
+        <span>{meta.preview ? "پیش‌نمایش — هنوز صادر نشده" : `کد اعتبارسنجی: ${meta.verificationCode}`}</span>
         <span>صادرشده توسط TabPals</span>
         <span>نسخه {toPersianDigits(meta.appVersion)}</span>
       </footer>
