@@ -752,7 +752,7 @@ describe("TabPalDB schema v9 -> v10 migration (online events)", () => {
     await upgraded.onlineLinks.put({ localEventId: "e1", serverEventId: "e1", memberId: "p1", roles: ["admin"], deviceToken: "t", lastSeq: 0, status: "uploading", createdAt: "x" });
     const first = await upgraded.outbox.add({ opId: "op1", localEventId: "e1", op: { id: "op1", entity: "events", entityId: "e1", type: "create", changes: {}, timestamp: 1, deviceId: "d1" }, attempts: 0, lastError: null, createdAt: "x" });
     const second = await upgraded.outbox.add({ opId: "op2", localEventId: "e1", op: { id: "op2", entity: "events", entityId: "e1", type: "update", changes: {}, timestamp: 2, deviceId: "d1" }, attempts: 0, lastError: null, createdAt: "x" });
-    expect(second).toBeGreaterThan(first); // FIFO order key
+    expect(second).toBeGreaterThan(first as number); // FIFO order key
     // the same op id may be queued once per event but not twice for one event
     await expect(upgraded.outbox.add({ opId: "op1", localEventId: "e1", op: { id: "op1", entity: "events", entityId: "e1", type: "create", changes: {}, timestamp: 1, deviceId: "d1" }, attempts: 0, lastError: null, createdAt: "x" })).rejects.toThrow();
     await upgraded.appliedRemoteOps.put({ localEventId: "e1", opId: "op9", seq: 9, appliedAt: "x" });
