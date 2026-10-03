@@ -696,3 +696,68 @@ describe("TabPalDB schema v8 -> v9 migration (GO-1.1)", () => {
     fresh.close();
   });
 });
+
+describe("TabPalDB schema v9 -> v10 migration (online events)", () => {
+  const V9_STORES = {
+    meta: "key",
+    persons: "id, archived, deleted, needsNameReview",
+    events: "id, archived, deleted, startDate, closedAt, treasurerPersonId, deletedAt",
+    eventMembers: "id, eventId, personId, &[eventId+personId], active, deleted, sortOrder",
+    groups: "id, name, archived, deleted",
+    vouchers: "id, eventId, &[eventId+number], type, status, deleted, recordedAt",
+    statements: "id, eventId, kind, personId, &[eventId+number], status, deleted",
+    messageTemplates: "id, category, enabled, isDefault, deleted",
+    orderSessions: "id, eventId, status, scheduledAt, deleted",
+    sessionMenuItems: "id, sessionId, sortOrder, deleted",
+    orderLines: "id, sessionId, personId, deleted",
+    orderPersonTotals: "id, sessionId, [sessionId+personId], deleted",
+    sessionExtras: "id, sessionId, deleted",
+    operations: "id, entity, entityId, timestamp"
+  };
+  const base = { createdAt: "2025-01-01T00:00:00.000Z", updatedAt: "2025-01-01T00:00:00.000Z", deviceId: "d1", version: 1, deleted: false };
+
+  it("keeps every existing row and adds usable, empty onlineLinks / outbox / appliedRemoteOps tables", async () => {
+    class V9DB extends Dexie {
+      constructor() {
+        super(TEST_DB_NAME);
+        this.version(9).stores(V9_STORES);
+      }
+    }
+    const legacy = new V9DB();
+    await legacy.table("persons").put({ id: "p1", firstName: "علی", lastName: "رضایی", archived: false, phone: "0912", cardNumber: "6037991234567802", ...base });
+    await legacy.table("events").put({ id: "e1", title: "سفر", currency: "تومان", archived: false, treasurerPersonId: "p1", closedAt: null, reopenedAt: null, reopenReason: null, deletedAt: null, ...base });
+    await legacy.table("eventMembers").put({ id: "m1", eventId: "e1", personId: "p1", defaultWeight: 1, active: true, sortOrder: 0, ...base });
+    await legacy.table("vouchers").put({ id: "v1", eventId: "e1", number: 1, type: "expense", totalAmount: 100, status: "active", recordedAt: "2025-01-01T00:00:00.000Z", payers: [], participants: [], shares: [], ...base });
+    await legacy.table("operations").put({ id: "o1", entity: "vouchers", entityId: "v1", type: "create", changes: {}, timestamp: "2025-01-01T00:00:00.000Z", deviceId: "d1" });
+    await legacy.table("meta").put({ key: "nameReviewPromptShown", value: "true" });
+    legacy.close();
+
+    const upgraded = new TabPalDB(TEST_DB_NAME);
+    await upgraded.open();
+    expect(upgraded.verno).toBe(10);
+
+    expect((await upgraded.persons.get("p1"))?.cardNumber).toBe("6037991234567802");
+    expect((await upgraded.events.get("e1"))?.title).toBe("سفر");
+    expect(await upgraded.eventMembers.count()).toBe(1);
+    expect((await upgraded.vouchers.get("v1"))?.totalAmount).toBe(100);
+    expect(await upgraded.operations.count()).toBe(1);
+    expect((await upgraded.meta.get("nameReviewPromptShown"))?.value).toBe("true");
+    // indexes of existing tables still work
+    expect(await upgraded.vouchers.where("[eventId+number]").equals(["e1", 1]).count()).toBe(1);
+
+    expect(await upgraded.onlineLinks.count()).toBe(0);
+    expect(await upgraded.outbox.count()).toBe(0);
+    expect(await upgraded.appliedRemoteOps.count()).toBe(0);
+
+    await upgraded.onlineLinks.put({ localEventId: "e1", serverEventId: "e1", memberId: "p1", roles: ["admin"], deviceToken: "t", lastSeq: 0, status: "uploading", createdAt: "x" });
+    const first = await upgraded.outbox.add({ opId: "op1", localEventId: "e1", op: { id: "op1", entity: "events", entityId: "e1", type: "create", changes: {}, timestamp: 1, deviceId: "d1" }, attempts: 0, lastError: null, createdAt: "x" });
+    const second = await upgraded.outbox.add({ opId: "op2", localEventId: "e1", op: { id: "op2", entity: "events", entityId: "e1", type: "update", changes: {}, timestamp: 2, deviceId: "d1" }, attempts: 0, lastError: null, createdAt: "x" });
+    expect(second).toBeGreaterThan(first); // FIFO order key
+    // the same op id may be queued once per event but not twice for one event
+    await expect(upgraded.outbox.add({ opId: "op1", localEventId: "e1", op: { id: "op1", entity: "events", entityId: "e1", type: "create", changes: {}, timestamp: 1, deviceId: "d1" }, attempts: 0, lastError: null, createdAt: "x" })).rejects.toThrow();
+    await upgraded.appliedRemoteOps.put({ localEventId: "e1", opId: "op9", seq: 9, appliedAt: "x" });
+    expect(await upgraded.appliedRemoteOps.get(["e1", "op9"])).toBeTruthy();
+
+    upgraded.close();
+  });
+});

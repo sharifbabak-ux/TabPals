@@ -27,6 +27,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.18.4",
+    "socket.io-client": "^4.8.4",
     "ulid": "^2.3.0"
   },
   "devDependencies": {
@@ -38,8 +39,10 @@
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^25.0.1",
     "jsqr": "^1.4.0",
+    "msw": "^2.15.0",
     "playwright": "^1.56.1",
     "pngjs": "^7.0.0",
+    "socket.io": "^4.8.4",
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
     "vite-plugin-pwa": "^0.21.1",

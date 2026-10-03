@@ -47,6 +47,8 @@ export interface Person extends BaseRecord {
   accountHolder?: string;
   /** True on a person created by the v6 name-split migration until confirmed on the "بررسی نام‌ها" screen. */
   needsNameReview?: boolean;
+  /** True on a person that only exists because an online event's ops created it (joined events); such shells are removed when the event is wiped from this device. */
+  fromSync?: boolean;
 }
 
 /** The two currencies TabPals events can be tracked in. */
@@ -407,4 +409,69 @@ export interface SessionExtra extends BaseRecord {
   allocation: ExtraAllocation;
   /** Used when allocation = "weight". */
   weights?: { personId: string; weight: number }[];
+}
+
+// --- Online mode (docs/PLAN.md "Online architecture", Stage ONLINE-1B) ------
+
+/** Roles a member can hold on the server (mirrors Tabpals-Live `src/permissions.js`). */
+export type OnlineRole = "admin" | "treasurer" | "member";
+
+/** "uploading" while the first full upload is in progress, "online" afterwards, "revoked" once the server cut this device off (the local copy is then wiped). */
+export type OnlineLinkStatus = "uploading" | "online" | "revoked";
+
+/**
+ * Links one local event to its server counterpart. Holds the device token,
+ * which must only ever live in IndexedDB (never localStorage, never logged).
+ */
+export interface OnlineLink {
+  localEventId: string;
+  /** Equal to `localEventId` — the client ULID is used as the server event id. */
+  serverEventId: string;
+  /** The server member id of this device = the person id of this user in the event. */
+  memberId: string;
+  roles: OnlineRole[];
+  deviceToken: string;
+  deviceId?: string;
+  /** Highest server seq already applied locally. */
+  lastSeq: number;
+  status: OnlineLinkStatus;
+  /** Ops queued by the initial upload (for the progress bar). */
+  uploadTotal?: number;
+  /** Person ids already registered on the server via POST members. */
+  registeredPersonIds?: string[];
+  createdAt: string;
+}
+
+export type ServerOpType = "create" | "update" | "delete" | "archive" | "restore" | "purge" | "logSend";
+
+/** An operation as sent to / received from the server (docs/API.md "client op"). */
+export interface ServerOp {
+  id: string;
+  entity: string;
+  entityId: string;
+  type: ServerOpType;
+  changes: Record<string, FieldChange>;
+  timestamp: string | number;
+  deviceId: string;
+}
+
+/** A sanitized op waiting to be sent. `order` keeps the queue FIFO. */
+export interface OutboxEntry {
+  order?: number;
+  opId: string;
+  localEventId: string;
+  op: ServerOp;
+  attempts: number;
+  lastError: string | null;
+  createdAt: string;
+  /** Set when the server rejected the op; rejected ops are kept (not retried automatically) and listed for the treasurer. */
+  rejected?: { reason: string; message: string } | null;
+}
+
+/** Makes applying a remote op idempotent. */
+export interface AppliedRemoteOp {
+  opId: string;
+  localEventId: string;
+  seq: number | null;
+  appliedAt: string;
 }

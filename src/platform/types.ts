@@ -18,6 +18,8 @@ export interface PlatformInfo {
   /** Whether the app is running installed/standalone (vs. a browser tab). */
   isStandalone: boolean;
   os: PlatformOS;
+  /** Short human label of this device/browser (≤ 40 chars), e.g. "Android Chrome" — sent to the server as the device label. */
+  deviceLabel: string;
 }
 
 export interface Platform {

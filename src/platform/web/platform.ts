@@ -16,12 +16,22 @@ function detectOS(): PlatformOS {
   return "other";
 }
 
+/** "Android Chrome" / "iPhone Safari" / … — shown to the admin in the devices list. */
+function detectDeviceLabel(): string {
+  if (typeof navigator === "undefined") return "Web";
+  const ua = navigator.userAgent || "";
+  const os = /iPhone|iPad|iPod/.test(ua) ? "iPhone" : /Android/.test(ua) ? "Android" : /Windows/.test(ua) ? "Windows" : /Mac/.test(ua) ? "Mac" : "Web";
+  const browser = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : /Firefox\//.test(ua) ? "Firefox" : "Browser";
+  return `${os} ${browser}`.slice(0, 40);
+}
+
 export class WebPlatform implements Platform {
   getInfo(): PlatformInfo {
     return {
       kind: "web",
       isStandalone: isStandaloneDisplay(),
-      os: detectOS()
+      os: detectOS(),
+      deviceLabel: detectDeviceLabel()
     };
   }
 }
