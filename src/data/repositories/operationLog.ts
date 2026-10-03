@@ -1,5 +1,6 @@
 import { ulid } from "ulid";
 import { getDeviceId } from "../deviceId";
+import { afterLogOperation } from "../online/outboxHook";
 import type { TabPalDB } from "../db";
 import type { BaseRecord, FieldChange, Operation, OperationEntity, OperationType } from "../types";
 
@@ -38,6 +39,8 @@ export async function logOperation(
     deviceId: getDeviceId()
   };
   await db.operations.add(operation);
+  // Online events: permission guard + sanitized outbox entry (same transaction).
+  await afterLogOperation(db, operation);
 }
 
 /** Fresh base fields for a brand-new record. */

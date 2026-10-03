@@ -14,6 +14,7 @@ import {
 import { canonicalJson, computeVerificationCode } from "@/domain/verificationCode";
 import { db } from "../db";
 import type { Event, SendChannel, Statement, StatementKind } from "../types";
+import { OnlinePermissionError } from "../online/outboxHook";
 import { diffFields, logOperation, newBaseFields, touchBaseFields } from "./operationLog";
 
 const STATEMENT_LOG_FIELDS: (keyof Statement)[] = [
@@ -194,7 +195,23 @@ async function issueForPerson(eventId: string, personId: string, ctx: StatementI
   return persistStatement(eventId, kind, personId, { ...data, closingText, appVersion: APP_VERSION }, picked.id, closingText);
 }
 
+/**
+ * A member's statement computed live from local data, WITHOUT issuing or
+ * persisting anything (the member view of an online event, docs/PLAN.md
+ * "Join flow"). Works on open events too; has no verification code.
+ */
+async function previewForPerson(eventId: string, personId: string) {
+  const ctx = await loadIssueContext(eventId);
+  const kind: "member" | "treasurer" = personId === ctx.event.treasurerPersonId ? "treasurer" : "member";
+  const data = buildMemberStatementData({ kind, event: ctx.buildEvent, members: ctx.members, vouchers: ctx.vouchers, personId });
+  const closingText = buildBalanceText(data.summary.balance, ctx.buildEvent.currency);
+  return { ...data, closingText, appVersion: APP_VERSION };
+}
+
 export const statementsRepository = {
+  /** Live, unissued preview of one member's statement (no write, no operation). */
+  previewForMember: previewForPerson,
+
   /** Issues (or re-issues) one member's statement — automatically the treasurer variant if they're the event's treasurer. */
   async issueForMember(eventId: string, personId: string): Promise<Statement> {
     const ctx = await loadIssueContext(eventId);
@@ -235,13 +252,18 @@ export const statementsRepository = {
 
   /** Appends one entry to a statement's sendLog (docs/PLAN.md Stage 3C) — called after a share/send action actually completes. */
   async logSend(statementId: string, channel: SendChannel, target: string): Promise<void> {
-    await db.transaction("rw", db.statements, db.operations, async () => {
-      const statement = await db.statements.get(statementId);
-      if (!statement) return;
-      const entry = { channel, at: new Date().toISOString(), target };
-      const updated: Statement = { ...statement, sendLog: [...statement.sendLog, entry], ...touchBaseFields(statement) };
-      await db.statements.put(updated);
-      await logOperation(db, "statements", statement.id, "update", diffFields(statement, updated, ["sendLog"]));
-    });
+    try {
+      await db.transaction("rw", db.statements, db.operations, async () => {
+        const statement = await db.statements.get(statementId);
+        if (!statement) return;
+        const entry = { channel, at: new Date().toISOString(), target };
+        const updated: Statement = { ...statement, sendLog: [...statement.sendLog, entry], ...touchBaseFields(statement) };
+        await db.statements.put(updated);
+        await logOperation(db, "statements", statement.id, "update", diffFields(statement, updated, ["sendLog"]));
+      });
+    } catch (e) {
+      // A read-only member of an online event may still send a statement; the send log is the treasurer's record, so it is simply not written.
+      if (!(e instanceof OnlinePermissionError)) throw e;
+    }
   }
 };

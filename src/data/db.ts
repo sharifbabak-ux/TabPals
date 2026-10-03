@@ -1,16 +1,19 @@
-import Dexie, { type EntityTable } from "dexie";
+import Dexie, { type EntityTable, type Table } from "dexie";
 import { ulid } from "ulid";
 import { DEFAULT_MESSAGE_TEMPLATES } from "@/domain/messageTemplateDefaults";
 import { getDeviceId } from "./deviceId";
 import type {
+  AppliedRemoteOp,
   Event,
   EventMember,
   Group,
   MessageTemplate,
+  OnlineLink,
   Operation,
   OrderLine,
   OrderPersonTotal,
   OrderSession,
+  OutboxEntry,
   Person,
   SessionExtra,
   SessionMenuItem,
@@ -52,6 +55,22 @@ export interface MetaRecord {
   value: string;
 }
 
+/** Tables a logged write may touch for online sync: link/outbox bookkeeping plus the event-scoped tables used to route an op to its event. */
+const SYNC_SCOPE_TABLES = [
+  "onlineLinks",
+  "outbox",
+  "events",
+  "persons",
+  "eventMembers",
+  "vouchers",
+  "statements",
+  "orderSessions",
+  "sessionMenuItems",
+  "orderLines",
+  "orderPersonTotals",
+  "sessionExtras"
+];
+
 export class TabPalDB extends Dexie {
   meta!: EntityTable<MetaRecord, "key">;
   persons!: EntityTable<Person, "id">;
@@ -67,6 +86,9 @@ export class TabPalDB extends Dexie {
   orderPersonTotals!: EntityTable<OrderPersonTotal, "id">;
   sessionExtras!: EntityTable<SessionExtra, "id">;
   operations!: EntityTable<Operation, "id">;
+  onlineLinks!: EntityTable<OnlineLink, "localEventId">;
+  outbox!: EntityTable<OutboxEntry, "order">;
+  appliedRemoteOps!: Table<AppliedRemoteOp, [string, string]>;
 
   constructor(name = "tabpal") {
     super(name);
@@ -334,6 +356,50 @@ export class TabPalDB extends Dexie {
             }
           });
       });
+
+    // Stage ONLINE-1B — online events. Purely additive: `onlineLinks` (one
+    // row per online event, holds the device token), `outbox` (sanitized ops
+    // waiting to be sent, FIFO by auto-increment `order`) and
+    // `appliedRemoteOps` (idempotency for inbound ops). Every existing table
+    // and row is untouched, so no upgrade() function is needed.
+    this.version(10).stores({
+      meta: "key",
+      persons: "id, archived, deleted, needsNameReview",
+      events: "id, archived, deleted, startDate, closedAt, treasurerPersonId, deletedAt",
+      eventMembers: "id, eventId, personId, &[eventId+personId], active, deleted, sortOrder",
+      groups: "id, name, archived, deleted",
+      vouchers: "id, eventId, &[eventId+number], type, status, deleted, recordedAt",
+      statements: "id, eventId, kind, personId, &[eventId+number], status, deleted",
+      messageTemplates: "id, category, enabled, isDefault, deleted",
+      orderSessions: "id, eventId, status, scheduledAt, deleted",
+      sessionMenuItems: "id, sessionId, sortOrder, deleted",
+      orderLines: "id, sessionId, personId, deleted",
+      orderPersonTotals: "id, sessionId, [sessionId+personId], deleted",
+      sessionExtras: "id, sessionId, deleted",
+      operations: "id, entity, entityId, timestamp",
+      onlineLinks: "localEventId, serverEventId, status",
+      outbox: "++order, &[localEventId+opId], localEventId",
+      appliedRemoteOps: "[localEventId+opId], localEventId"
+    });
+
+    // Every write that logs an operation may also have to queue it in the
+    // outbox (and check the member's role), which reads/writes the sync
+    // tables and the event-scoped tables. Rather than touching every
+    // repository transaction's table list, any read-write transaction that
+    // includes `operations` is transparently widened with that fixed set.
+    const widenedTransaction = this.transaction.bind(this) as (...args: unknown[]) => unknown;
+    (this as { transaction: unknown }).transaction = (...args: unknown[]) => {
+      const mode = args[0];
+      if (typeof mode === "string" && mode.includes("rw") && args.length >= 2) {
+        const scope = args.slice(1, -1).flat() as (Dexie.Table | string)[];
+        const names = new Set(scope.map((t) => (typeof t === "string" ? t : t.name)));
+        if (names.has("operations")) {
+          const extra = SYNC_SCOPE_TABLES.filter((name) => !names.has(name)).map((name) => this.table(name));
+          return widenedTransaction(mode, ...scope, ...extra, args[args.length - 1]);
+        }
+      }
+      return widenedTransaction(...args);
+    };
 
     // Dexie only runs version().upgrade() when migrating an EXISTING
     // database; a brand-new install goes straight to the latest schema

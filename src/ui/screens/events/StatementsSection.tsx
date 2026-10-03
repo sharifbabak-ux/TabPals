@@ -24,6 +24,10 @@ interface StatementsSectionProps {
   eventId: string;
   eventTitle: string;
   eventClosed: boolean;
+  /** Member of an online event: issued statements are viewable, nothing can be issued or sent in bulk. */
+  readOnly?: boolean;
+  /** The viewing member's own person id (online events): enables «صورت‌حساب من». */
+  myPersonId?: string | null;
   treasurerPersonId: string | null;
   activeMembers: MemberOption[];
   onRequestSetTreasurer: () => void;
@@ -48,7 +52,7 @@ function nameOf(members: MemberOption[], personId: string | null): string {
   return members.find((m) => m.personId === personId)?.name ?? "؟";
 }
 
-export function StatementsSection({ eventId, eventTitle, eventClosed, treasurerPersonId, activeMembers, onRequestSetTreasurer }: StatementsSectionProps) {
+export function StatementsSection({ eventId, eventTitle, eventClosed, readOnly = false, myPersonId = null, treasurerPersonId, activeMembers, onRequestSetTreasurer }: StatementsSectionProps) {
   const navigate = useNavigate();
   const [memberPickerOpen, setMemberPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -156,15 +160,24 @@ export function StatementsSection({ eventId, eventTitle, eventClosed, treasurerP
     navigate(`/events/${eventId}/statements/send-queue?personIds=${personIds.join(",")}`);
   }
 
-  if (!eventClosed) {
+  const myPreview = readOnly && myPersonId && (
+    <div className="action-grid">
+      <button type="button" onClick={() => navigate(`/events/${eventId}/my-statement`)}>
+        صورت‌حساب من (پیش‌نمایش زنده)
+      </button>
+    </div>
+  );
+
+  if (!eventClosed && !(readOnly && sorted.length > 0)) {
     return (
       <div>
+        {myPreview}
         <EmptyState hint="صورت‌حساب پس از پایان ایونت قابل صدور است." />
       </div>
     );
   }
 
-  if (!treasurerPersonId) {
+  if (!treasurerPersonId && !readOnly) {
     return (
       <div className="statements-section__prompt">
         <EmptyState hint="برای صدور صورت‌حساب، ابتدا باید مسئول صندوق این ایونت را تعیین کنید." />
@@ -177,6 +190,8 @@ export function StatementsSection({ eventId, eventTitle, eventClosed, treasurerP
 
   return (
     <div>
+      {myPreview}
+      {!readOnly && (
       <div className="action-grid">
         <button type="button" disabled={busy} onClick={() => withBusy(() => statementsRepository.issueForAllMembers(eventId))}>
           صدور صورت‌حساب همه‌ی اعضا
@@ -191,6 +206,7 @@ export function StatementsSection({ eventId, eventTitle, eventClosed, treasurerP
           ارسال گروهی
         </button>
       </div>
+      )}
 
       {error && <p className="field__error">{error}</p>}
 

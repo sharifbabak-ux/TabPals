@@ -18,6 +18,8 @@ export interface PlatformInfo {
   /** Whether the app is running installed/standalone (vs. a browser tab). */
   isStandalone: boolean;
   os: PlatformOS;
+  /** Short human label of this device/browser (≤ 40 chars), e.g. "Android Chrome" — sent to the server as the device label. */
+  deviceLabel: string;
 }
 
 export interface Platform {
@@ -161,4 +163,20 @@ export interface SpeechService {
     onError?: (error: Error) => void
   ): void;
   stopListening(): void;
+}
+
+/**
+ * Scans QR codes with the device camera (docs/PLAN.md "Join flow"). Web:
+ * `BarcodeDetector` when available, otherwise a jsQR fallback on canvas
+ * frames. Native Android/iOS can swap in a native scanner in Stage 9.
+ */
+export interface QrScanService {
+  /** Whether a camera can be opened at all (secure context + getUserMedia). */
+  isSupported(): boolean;
+  /**
+   * Opens the camera into `video` and calls `onResult` once with the first
+   * decoded text. Resolves to a `stop` function that releases the camera;
+   * rejects (Persian message) if the camera cannot be opened.
+   */
+  start(video: HTMLVideoElement, onResult: (text: string) => void): Promise<() => void>;
 }

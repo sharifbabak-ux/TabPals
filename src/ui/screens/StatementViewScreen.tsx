@@ -7,6 +7,7 @@ import { statementsRepository } from "@/data/repositories";
 import { computeVerificationCode } from "@/domain/verificationCode";
 import type { StatementLinkData } from "@/domain/statementLink";
 import { EmptyState } from "@/ui/components/EmptyState";
+import { useOnlineEvent } from "@/ui/hooks/useOnlineEvent";
 import { StatementPaper, type StatementPaperMeta } from "./statements/StatementPaper";
 import { buildStatementShareLink } from "./statements/sendActions";
 import { SendMenuSheet } from "./statements/SendMenuSheet";
@@ -19,6 +20,7 @@ export function StatementViewScreen() {
   const navigate = useNavigate();
   const [verifyResult, setVerifyResult] = useState<"ok" | "mismatch" | null>(null);
   const [sendMenuOpen, setSendMenuOpen] = useState(false);
+  const online = useOnlineEvent(eventId);
 
   const statement = useLiveQuery(() => db.statements.get(statementId), [statementId]);
   const memberPersonId = statement?.personId ?? null;
@@ -100,13 +102,16 @@ export function StatementViewScreen() {
         }}
       />
 
-      <p className="field__hint no-print statement-view__verify">
-        <button type="button" className="list-item__action" onClick={handleVerify}>
-          بررسی اعتبار
-        </button>
-        {verifyResult === "ok" && <span className="statement-footer__verify statement-footer__verify--ok"> ✓ معتبر</span>}
-        {verifyResult === "mismatch" && <span className="statement-footer__verify statement-footer__verify--bad"> ✗ عدم تطابق</span>}
-      </p>
+      {/* A member's copy of a synced statement has its bank details removed, so its hash cannot match the original: verification belongs to the treasurer's device. */}
+      {!online.readOnly && (
+        <p className="field__hint no-print statement-view__verify">
+          <button type="button" className="list-item__action" onClick={handleVerify}>
+            بررسی اعتبار
+          </button>
+          {verifyResult === "ok" && <span className="statement-footer__verify statement-footer__verify--ok"> ✓ معتبر</span>}
+          {verifyResult === "mismatch" && <span className="statement-footer__verify statement-footer__verify--bad"> ✗ عدم تطابق</span>}
+        </p>
+      )}
 
       <SendMenuSheet
         open={sendMenuOpen}

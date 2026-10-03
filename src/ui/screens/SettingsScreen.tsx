@@ -1,14 +1,60 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/data/db";
-import { APP_NAME, APP_VERSION } from "@/config/app";
+import { APP_NAME, APP_VERSION, ONLINE_ENABLED } from "@/config/app";
+import { DEFAULT_API_BASE, getApiBase, getApiBaseOverride, setApiBaseOverride } from "@/config/online";
 import { toPersianDigits } from "@/domain/format";
 import { Tabs } from "@/ui/components/Tabs";
 import { useTheme, type ThemeMode } from "@/ui/theme";
 import { MessageTemplatesSection } from "./settings/MessageTemplatesSection";
+import { JoinWithInviteSheet } from "./online/JoinWithInviteSheet";
+
+/** Dev setting: point the app at another API server (e.g. a local Tabpals-Live). Not a secret, so it lives in localStorage. */
+function ApiServerSection() {
+  const [value, setValue] = useState(getApiBaseOverride() ?? "");
+  const [saved, setSaved] = useState(false);
+  return (
+    <>
+      <h2 className="section-title">سرور (تنظیم توسعه‌دهنده)</h2>
+      <div className="field">
+        <label htmlFor="api-base">نشانی سرور آنلاین</label>
+        <input id="api-base" dir="ltr" placeholder={DEFAULT_API_BASE} value={value} onChange={(e) => { setValue(e.target.value); setSaved(false); }} />
+        <p className="field__hint" dir="ltr">
+          {getApiBase()}
+        </p>
+      </div>
+      <div className="form-actions">
+        <button
+          type="button"
+          className="form-actions__secondary"
+          onClick={() => {
+            setApiBaseOverride(null);
+            setValue("");
+            setSaved(true);
+          }}
+        >
+          بازگشت به پیش‌فرض
+        </button>
+        <button
+          type="button"
+          className="form-actions__primary"
+          onClick={() => {
+            setApiBaseOverride(value);
+            setSaved(true);
+          }}
+        >
+          ذخیره
+        </button>
+      </div>
+      {saved && <p className="field__hint">ذخیره شد؛ برای اتصال دوباره‌ی ایونت‌های آنلاین، برنامه را ببندید و دوباره باز کنید.</p>}
+    </>
+  );
+}
 
 export function SettingsScreen() {
   const navigate = useNavigate();
+  const [joinOpen, setJoinOpen] = useState(false);
   const { theme, setTheme } = useTheme();
 
   const needsReviewCount = useLiveQuery(() => db.persons.filter((p) => !p.deleted && p.needsNameReview === true).count(), []);
@@ -40,6 +86,14 @@ export function SettingsScreen() {
             {Boolean(needsReviewCount) && <span className="list-item__subtitle">{toPersianDigits(needsReviewCount ?? 0)} مورد در انتظار بررسی</span>}
           </div>
         </li>
+        {ONLINE_ENABLED && (
+          <li className="list-item" onClick={() => setJoinOpen(true)}>
+            <div className="list-item__main">
+              <span className="list-item__title">پیوستن با دعوت</span>
+              <span className="list-item__subtitle">ورود به ایونت آنلاین با اسکن QR یا کد دعوت</span>
+            </div>
+          </li>
+        )}
         <li className="list-item" onClick={() => navigate("/settings/trash")}>
           <div className="list-item__main">
             <span className="list-item__title">سطل بازیافت</span>
@@ -49,6 +103,9 @@ export function SettingsScreen() {
       </ul>
 
       <MessageTemplatesSection />
+
+      {ONLINE_ENABLED && <ApiServerSection />}
+      <JoinWithInviteSheet open={joinOpen} onClose={() => setJoinOpen(false)} />
     </section>
   );
 }

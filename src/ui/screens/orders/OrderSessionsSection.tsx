@@ -12,13 +12,15 @@ interface OrderSessionsSectionProps {
   eventId: string;
   currency: string;
   eventClosed: boolean;
+  /** Member of an online event: sessions can be viewed but not created. */
+  readOnly?: boolean;
   treasurerPersonId: string | null;
   treasurerName: string | null;
   onRequestSetTreasurer: () => void;
 }
 
 /** The event's «سفارش‌ها» tab: its group-order sessions, newest first (docs/PLAN.md Group Order UI #1). */
-export function OrderSessionsSection({ eventId, currency, eventClosed, treasurerPersonId, treasurerName, onRequestSetTreasurer }: OrderSessionsSectionProps) {
+export function OrderSessionsSection({ eventId, currency, eventClosed, readOnly = false, treasurerPersonId, treasurerName, onRequestSetTreasurer }: OrderSessionsSectionProps) {
   const navigate = useNavigate();
   const [formOpen, setFormOpen] = useState(false);
 
@@ -51,7 +53,7 @@ export function OrderSessionsSection({ eventId, currency, eventClosed, treasurer
         <h2 className="section-title" style={{ margin: 0 }}>
           سفارش‌ها
         </h2>
-        {!eventClosed && (
+        {!eventClosed && !readOnly && (
           <button type="button" className="icon-button icon-button--label" onClick={() => setFormOpen(true)}>
             + نشست جدید
           </button>
