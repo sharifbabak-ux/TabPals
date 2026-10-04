@@ -8,13 +8,16 @@ import { getAppBaseUrl } from "@/config/online";
 import { platform } from "@/platform";
 import { can, canWriteLedger } from "@/domain/onlinePermissions";
 import { buildInviteUrl } from "@/domain/inviteLink";
-import { sanitizeOutboundOp } from "@/domain/outboundSanitizer";
+import { buildProfileOp, PROFILE_FIELDS, sanitizeOutboundOp } from "@/domain/outboundSanitizer";
+import { generateEventKey, makeKeyCheck } from "../crypto";
 import { isEventClosed } from "@/domain/eventStatus";
 import { db as defaultDb, type TabPalDB } from "../db";
 import { getDeviceId } from "../deviceId";
-import { newBaseFields } from "../repositories/operationLog";
+import { diffFields, logOperation, newBaseFields, touchBaseFields } from "../repositories/operationLog";
+import { validateCardNumber, validateIban } from "@/domain/paymentValidation";
 import type { Event, OnlineLink, OnlineRole, ServerOp } from "../types";
-import { api, ApiError, type AuditEntry, type InviteCreated, type MemberInput, type ServerDevice, type ServerMember } from "./apiClient";
+import { api, ApiError, type AuditEntry, type InviteCreated, type MemberInput, type ServerDevice, type ServerInvite, type ServerMember } from "./apiClient";
+import { getDeviceKeys, putEventKey } from "./keyStore";
 import { detachOnlineEvent, setOnlineNotice, wipeOnlineEvent } from "./localCleanup";
 import { syncEngine, type SyncEngine } from "./syncEngine";
 
@@ -39,22 +42,23 @@ function personName(person: { firstName: string; lastName: string }): string {
 
 type Row = Record<string, unknown> & { id: string };
 
-function createOpFor(entity: string, row: Row): ServerOp | null {
+function createOpsFor(entity: string, row: Row): { op: ServerOp | null; profile: ServerOp | null } {
   const changes: Record<string, { before: unknown; after: unknown }> = {};
   for (const [field, value] of Object.entries(row)) {
     if (BASE_FIELDS.has(field) || value === undefined) continue;
     changes[field] = { before: undefined, after: value };
   }
-  const op = sanitizeOutboundOp({
-    id: `snap.${entity}.${row.id}`.slice(0, 128),
+  const local = {
+    id: `snap.${entity}.${row.id}`.slice(0, 120),
     entity,
     entityId: row.id,
-    type: "create",
+    type: "create" as const,
     changes,
     timestamp: (row.updatedAt as string) ?? new Date().toISOString(),
     deviceId: getDeviceId()
-  });
-  return op;
+  };
+  // A person's bank details / phone leave only as an encrypted memberProfile op (encrypted when pushed).
+  return { op: sanitizeOutboundOp(local), profile: buildProfileOp(local) };
 }
 
 /** One sanitized `create` op per live row of an event, in dependency order (persons → event → members → ledger → group orders). */
@@ -62,8 +66,9 @@ export async function buildSnapshotOps(db: TabPalDB, eventId: string): Promise<S
   const ops: ServerOp[] = [];
   const push = (entity: string, rows: Row[]) => {
     for (const row of rows) {
-      const op = createOpFor(entity, row);
+      const { op, profile } = createOpsFor(entity, row);
       if (op) ops.push(op);
+      if (profile) ops.push(profile);
     }
   };
 
@@ -145,18 +150,35 @@ export function createOnlineService(deps: OnlineServiceDeps) {
       );
       const members: MemberInput[] = memberPersons.map((p) => ({ memberId: p.id, displayName: personName(p) }));
 
+      // The creator device generates the event key; it never leaves the device except wrapped for members' devices.
+      const eventKey = await generateEventKey();
+      const keyCheck = await makeKeyCheck(eventKey, localEventId);
+      const deviceKeys = await getDeviceKeys(db);
+
       const created = await api.createEvent({
         eventId: localEventId,
         title: event.title.slice(0, 200),
         creator: { memberId: treasurer.id, displayName: personName(treasurer) },
         members,
-        deviceLabel: deps.deviceLabel()
+        deviceLabel: deps.deviceLabel(),
+        publicKey: deviceKeys.publicKey
       });
 
       // Everything below is local and atomic: the token must not be lost between the POST and the queue.
       const snapshot = await buildSnapshotOps(db, localEventId);
+      snapshot.push({
+        id: `keycheck.${localEventId}`.slice(0, 128),
+        entity: "events",
+        entityId: localEventId,
+        type: "update",
+        changes: { keyCheck: { before: undefined, after: keyCheck } },
+        timestamp: new Date().toISOString(),
+        deviceId: getDeviceId()
+      });
       const nowIso = new Date().toISOString();
-      await db.transaction("rw", db.onlineLinks, db.outbox, async () => {
+      await db.transaction("rw", db.onlineLinks, db.outbox, db.eventKeys, db.events, async () => {
+        await putEventKey(localEventId, eventKey, true, db);
+        await db.events.update(localEventId, { keyCheck });
         await db.onlineLinks.put({
           localEventId,
           serverEventId: localEventId,
@@ -168,6 +190,9 @@ export function createOnlineService(deps: OnlineServiceDeps) {
           status: "uploading",
           uploadTotal: snapshot.length,
           registeredPersonIds: [treasurer.id, ...members.map((m) => m.memberId)],
+          creatorDevice: true,
+          publicKeyRegistered: true,
+          profilesBackfilledAt: nowIso,
           createdAt: nowIso
         });
         for (const op of snapshot) {
@@ -178,8 +203,9 @@ export function createOnlineService(deps: OnlineServiceDeps) {
     },
 
     /** Redeems an invite (token from the link or the typed short code), creates the local event shell + link, and catches up on all ops. Returns the local event id. */
-    async joinWithInvite(invite: { inviteToken?: string; shortCode?: string }): Promise<string> {
-      const result = await api.redeemInvite({ ...invite, deviceLabel: deps.deviceLabel() });
+    async joinWithInvite(invite: { inviteToken?: string; shortCode?: string; eventKey?: string | null }): Promise<string> {
+      const deviceKeys = await getDeviceKeys(db);
+      const result = await api.redeemInvite({ inviteToken: invite.inviteToken, shortCode: invite.shortCode, deviceLabel: deps.deviceLabel(), publicKey: deviceKeys.publicKey });
       const existing = await db.onlineLinks.get(result.eventId);
       if (existing) throw new OnlineServiceError("شما قبلاً عضو این ایونت آنلاین هستید.");
 
@@ -208,9 +234,13 @@ export function createOnlineService(deps: OnlineServiceDeps) {
           deviceId: result.deviceId,
           lastSeq: 0,
           status: "online",
+          creatorDevice: false,
+          publicKeyRegistered: true,
           createdAt: nowIso
         });
       });
+      // A key from the invite link is imported at once and verified against keyCheck after the first catch-up.
+      if (invite.eventKey) await engine.keys.importLinkKey(result.eventId, invite.eventKey);
       await engine.catchUp(result.eventId);
       engine.attach(result.eventId);
       return result.eventId;
@@ -221,7 +251,71 @@ export function createOnlineService(deps: OnlineServiceDeps) {
     async createInvite(localEventId: string, memberId: string): Promise<InviteCreated & { url: string }> {
       await engine.registerMembers(localEventId).catch(() => undefined);
       const created = await authed(localEventId, (link) => api.createInvite(link.deviceToken, link.serverEventId, memberId));
-      return { ...created, url: buildInviteUrl(getAppBaseUrl(), created.inviteToken, created.shortCode) };
+      const keyText = await engine.keys.inviteKeyText(localEventId);
+      return { ...created, url: buildInviteUrl(getAppBaseUrl(), created.inviteToken, created.shortCode, keyText ?? undefined) };
+    },
+
+    /** Invites of the event as the server knows them (status pending / used / expired / revoked). */
+    async listInvites(localEventId: string): Promise<ServerInvite[]> {
+      return (await authed(localEventId, (link) => api.listInvites(link.deviceToken, link.serverEventId))).invites;
+    },
+
+    /** Removes a member: devices revoked, invites cancelled, roles dropped; their financial history stays. */
+    async removeMember(localEventId: string, memberId: string): Promise<void> {
+      await authed(localEventId, (link) => api.removeMember(link.deviceToken, link.serverEventId, memberId));
+    },
+
+    async restoreMember(localEventId: string, memberId: string): Promise<void> {
+      await authed(localEventId, (link) => api.restoreMember(link.deviceToken, link.serverEventId, memberId));
+    },
+
+    // --- own member profile ------------------------------------------------------
+
+    /**
+     * "اطلاعات بانکی من": saves the caller's own bank details/phone on their person (plaintext locally);
+     * the outbox hook turns that into an encrypted `memberProfile` op for this member. Throws a Persian message on invalid input.
+     */
+    async saveMyProfile(localEventId: string, input: { cardNumber?: string; iban?: string; bankName?: string; accountHolder?: string; phone?: string }): Promise<void> {
+      const link = await requireLink(localEventId);
+      const person = await db.persons.get(link.memberId);
+      if (!person) throw new OnlineServiceError("اطلاعات شما در این ایونت پیدا نشد؛ کمی بعد دوباره تلاش کنید.");
+      const patch: Partial<Record<(typeof PROFILE_FIELDS)[number], string | undefined>> = {};
+      if (input.cardNumber !== undefined) {
+        const text = input.cardNumber.trim();
+        if (text) {
+          const result = validateCardNumber(text);
+          if (!result.valid) throw new OnlineServiceError(result.error ?? "شماره کارت نامعتبر است");
+          patch.cardNumber = result.normalized;
+        } else patch.cardNumber = undefined;
+      }
+      if (input.iban !== undefined) {
+        const text = input.iban.trim();
+        if (text) {
+          const result = validateIban(text);
+          if (!result.valid) throw new OnlineServiceError(result.error ?? "شماره شبا نامعتبر است");
+          patch.iban = result.normalized;
+        } else patch.iban = undefined;
+      }
+      if (input.bankName !== undefined) patch.bankName = input.bankName.trim() || undefined;
+      if (input.accountHolder !== undefined) patch.accountHolder = input.accountHolder.trim() || undefined;
+      if (input.phone !== undefined) patch.phone = input.phone.trim() || undefined;
+      const updated = { ...person, ...patch, ...touchBaseFields(person) };
+      await db.transaction("rw", db.persons, db.operations, async () => {
+        await db.persons.put(updated);
+        await logOperation(db, "persons", person.id, "update", diffFields(person, updated, [...PROFILE_FIELDS]));
+      });
+    },
+
+    // --- backup key ---------------------------------------------------------
+
+    exportBackupKey(localEventId: string, passphrase?: string): Promise<string | null> {
+      return engine.keys.exportBackup(localEventId, passphrase);
+    },
+
+    async restoreBackupKey(localEventId: string, text: string, passphrase?: string): Promise<void> {
+      await engine.keys.restoreFromBackup(localEventId, text, passphrase);
+      engine.attach(localEventId);
+      await engine.syncNow(localEventId);
     },
 
     async revokeInvite(localEventId: string, inviteId: string | number): Promise<void> {

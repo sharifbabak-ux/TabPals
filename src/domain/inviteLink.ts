@@ -14,11 +14,20 @@ export const SHORT_CODE_LENGTH = 8;
  * along as `&c=` so the "install the app first" page can show it large
  * (the server only reveals the code once, at invite creation).
  */
-export function buildInviteUrl(appBaseUrl: string, inviteToken: string, shortCode?: string): string {
+export function buildInviteUrl(appBaseUrl: string, inviteToken: string, shortCode?: string, eventKey?: string): string {
   const base = appBaseUrl.split("#")[0].split("?")[0];
   const withSlash = base.endsWith("/") ? base : `${base}/`;
   const code = shortCode ? normalizeShortCode(shortCode) : "";
-  return `${withSlash}#/join?t=${encodeURIComponent(inviteToken)}${code ? `&c=${code}` : ""}`;
+  // The event key rides in the URL FRAGMENT (`k=`): browsers never send a fragment to any server.
+  return `${withSlash}#/join?t=${encodeURIComponent(inviteToken)}${code ? `&c=${code}` : ""}${eventKey ? `&k=${eventKey}` : ""}`;
+}
+
+/** The base64url event key carried in a join link's `k` parameter, or null. */
+export function parseInviteKey(input: string): string | null {
+  const queryStart = input.indexOf("?");
+  if (queryStart === -1 || parseInviteToken(input) === null) return null;
+  const key = new URLSearchParams(input.slice(queryStart + 1).split("#")[0]).get("k");
+  return key && /^[A-Za-z0-9_-]{43}$/.test(key) ? key : null;
 }
 
 /** The short code carried in a join link's `c` parameter (valid codes only), or null. */

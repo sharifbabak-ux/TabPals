@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sanitizeOutboundOp, scrubValue, toServerOpType, type LocalOpLike } from "./outboundSanitizer";
+import { buildProfileOp, sanitizeOutboundOp, scrubValue, toServerOpType, type LocalOpLike } from "./outboundSanitizer";
 
 const base = { id: "op1", entityId: "e1", timestamp: "2026-01-01T00:00:00.000Z", deviceId: "d1" };
 const op = (over: Partial<LocalOpLike>): LocalOpLike => ({ ...base, entity: "persons", type: "create", changes: {}, ...over });
@@ -36,7 +36,7 @@ describe("outbound sanitizer — private data never leaves the device", () => {
     expect(sanitizeOutboundOp(op({ type: "update", changes: { phone: { before: "1", after: "2" }, cardNumber: { before: "a", after: "b" } } }))).toBeNull();
   });
 
-  it("event: treasurer card/IBAN/bank/holder are dropped, shareable fields kept", () => {
+  it("event: treasurer bank fields stay in the op (the engine encrypts them), nothing else private does", () => {
     const out = sanitizeOutboundOp(
       op({
         entity: "events",
@@ -51,8 +51,10 @@ describe("outbound sanitizer — private data never leaves the device", () => {
         }
       })
     )!;
-    expect(Object.keys(out.changes).sort()).toEqual(["title", "treasurerPersonId"]);
-    for (const secret of SECRETS) expect(JSON.stringify(out)).not.toContain(secret);
+    expect(Object.keys(out.changes).sort()).toEqual(["title", "treasurerAccountHolder", "treasurerBankName", "treasurerCardNumber", "treasurerIban", "treasurerPersonId"]);
+    // photos / notes of the event owner still never travel
+    const withPhoto = sanitizeOutboundOp(op({ entity: "events", type: "update", changes: { photo: ch(new Blob(["x"])), phone: ch("0912") } }));
+    expect(withPhoto).toBeNull();
   });
 
   it("Blobs and binary values are removed everywhere, including menu photos", () => {
@@ -86,9 +88,42 @@ describe("outbound sanitizer — private data never leaves the device", () => {
     const parsed = JSON.parse(out.changes.snapshot.after as string);
     expect(parsed.member.name).toBe("سارا");
     expect(parsed.summary.balance).toBe(100);
+    // creditor members' bank details never leave; the treasurer's own payment info is kept (the whole snapshot is encrypted at push time)
     expect(parsed.hubSettlement.paysFromTreasurer[0]).toEqual({ name: "رضا", amount: 5 });
-    const text = JSON.stringify(out);
-    for (const secret of ["6037", "IR12", "بانک ملی", "علی رضایی"]) expect(text).not.toContain(secret);
+    expect(parsed.treasurerCardNumberGrouped).toBe("6037 9912 3456 7890");
+    expect(parsed.treasurerAccountHolder).toBe("علی رضایی");
+    expect(JSON.stringify(out)).not.toContain("رضا\",\"amount\":5,\"cardNumberGrouped");
+    expect(out.changes.snapshot.after).not.toContain('"cardNumberGrouped"');
+  });
+
+  it("person create with bank data: persons op has no private field, a separate memberProfile op carries them", () => {
+    const local = op({
+      changes: { firstName: ch("علی"), lastName: ch("رضایی"), cardNumber: ch("6037991234567890"), iban: ch(""), phone: ch("09121234567"), photo: ch(new Blob(["x"])) }
+    });
+    const personOp = sanitizeOutboundOp(local)!;
+    const profile = buildProfileOp(local)!;
+    expect(JSON.stringify(personOp)).not.toMatch(/6037|0912/);
+    expect(profile.entity).toBe("memberProfile");
+    expect(profile.entityId).toBe("e1");
+    expect(profile.id).toBe("op1.mp");
+    expect(Object.keys(profile.changes).sort()).toEqual(["cardNumber", "phone"]);
+    expect(JSON.stringify(profile)).not.toContain("SECRET");
+  });
+
+  it("clearing a bank field on update is a profile change (empty value), names are not", () => {
+    const profile = buildProfileOp(op({ type: "update", changes: { iban: { before: "IR1", after: undefined }, firstName: { before: "a", after: "b" } } }))!;
+    expect(profile.changes.iban.after).toBe("");
+    expect(profile.changes.firstName).toBeUndefined();
+    expect(buildProfileOp(op({ type: "update", changes: { firstName: { before: "a", after: "b" } } }))).toBeNull();
+    expect(buildProfileOp(op({ entity: "vouchers", changes: { cardNumber: ch("1") } }))).toBeNull();
+  });
+
+  it("logSend ops carry targetMemberId and channel", () => {
+    const sendLog = [{ channel: "whatsapp", at: "2026-01-01T00:00:00.000Z", target: "p9" }];
+    const out = sanitizeOutboundOp(op({ entity: "statements", type: "update", changes: { sendLog: { before: [], after: sendLog } } }))!;
+    expect(out.type).toBe("logSend");
+    expect(out.changes.targetMemberId.after).toBe("p9");
+    expect(out.changes.channel.after).toBe("whatsapp");
   });
 
   it("a non-JSON snapshot is never shipped", () => {

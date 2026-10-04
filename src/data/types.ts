@@ -81,6 +81,8 @@ export interface Event extends BaseRecord {
   reopenReason: string | null;
   /** ISO timestamp when this CLOSED event was moved to trash, or null. Only settable/clearable via the trash UI (see CLAUDE.md). */
   deletedAt: string | null;
+  /** Online events only: encryption of the constant "tabpals-key-check-v1" under the event key (`enc:v1:…`). A key is accepted only if it decrypts this. */
+  keyCheck?: string;
 }
 
 /**
@@ -439,6 +441,14 @@ export interface OnlineLink {
   uploadTotal?: number;
   /** Person ids already registered on the server via POST members. */
   registeredPersonIds?: string[];
+  /** True once this device's public key is registered on the server (sent with create/redeem, or via PUT for devices that predate encryption). */
+  publicKeyRegistered?: boolean;
+  /** True on the device that created the online event: only it may generate the event key. */
+  creatorDevice?: boolean;
+  /** ISO time the creator device finished the one-time encrypted backfill (member profiles + treasurer fields). */
+  profilesBackfilledAt?: string;
+  /** Set when a received key failed the keyCheck; cleared by a later good key. Shown in the sync details. */
+  keyError?: string | null;
   createdAt: string;
 }
 
@@ -474,4 +484,23 @@ export interface AppliedRemoteOp {
   localEventId: string;
   seq: number | null;
   appliedAt: string;
+}
+
+// --- End-to-end encryption (Stage ONLINE-1C) -------------------------------
+
+/** The AES-GCM event key of one online event. Lives in IndexedDB only (never localStorage, never logged). */
+export interface EventKeyRow {
+  localEventId: string;
+  key: CryptoKey;
+  /** False while a key imported from an invite link still waits for the first keyCheck; unverified keys are never used to wrap for others. */
+  verified: boolean;
+  createdAt: string;
+}
+
+/** This device's ECDH P-256 key pair. The private key is non-extractable. */
+export interface DeviceKeyRow {
+  id: "device";
+  privateKey: CryptoKey;
+  publicKey: { kty: "EC"; crv: "P-256"; x: string; y: string };
+  createdAt: string;
 }

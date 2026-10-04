@@ -17,9 +17,12 @@ import { backoffDelayMs, chunkBySizeAndCount } from "@/domain/syncBackoff";
 import { onlineErrorMessage } from "@/domain/onlineErrors";
 import { canWriteLedger } from "@/domain/onlinePermissions";
 import { db as defaultDb, type TabPalDB } from "../db";
-import type { OnlineLink, OnlineRole, OutboxEntry } from "../types";
+import type { OnlineLink, OnlineRole, OutboxEntry, ServerOp } from "../types";
 import { api as defaultApi, ApiError, NetworkError, type PullResult, type RemoteOpEnvelope } from "./apiClient";
 import { applyRemoteOperation } from "./applyRemoteOperation";
+import { createKeyService, defaultServeDelayMs, type KeyService } from "./keyService";
+import { getDevicePublicJwk } from "./keyStore";
+import { encryptOutboundOp, findPlaintextLeaks, opNeedsKey } from "./wireCodec";
 import { detachOnlineEvent, setOnlineNotice, wipeOnlineEvent } from "./localCleanup";
 import { onOutboxChanged } from "./syncSignal";
 
@@ -39,18 +42,22 @@ export interface EventSyncState {
   connected: boolean;
   syncing: boolean;
   lastError: string | null;
+  /** Bumped when the member/access picture changed (member removed, roles changed, key received) so open screens reload. */
+  accessRevision: number;
 }
 
 /** Shared, stable object for events without engine state (useSyncExternalStore needs a cached snapshot). */
-const IDLE_STATE: EventSyncState = Object.freeze({ connected: false, syncing: false, lastError: null });
+const IDLE_STATE: EventSyncState = Object.freeze({ connected: false, syncing: false, lastError: null, accessRevision: 0 });
 
 export type RevokeReason = "device-revoked" | "event-purged" | "unauthorized";
 
 export interface SyncEngineDeps {
   db: TabPalDB;
-  api: Pick<typeof defaultApi, "pushOps" | "pullOps" | "me" | "addMember">;
+  api: Pick<typeof defaultApi, "pushOps" | "pullOps" | "me" | "addMember" | "putPublicKey" | "getKeyEnvelope" | "awaitingKey" | "postKeyEnvelope">;
   socketFactory: SocketFactory;
   apiBase: () => string;
+  /** Pause before answering a key request (0–3 s random by default; tests pass 0). */
+  serveDelayMs: () => number;
 }
 
 const MAX_BATCH_OPS = 500;
@@ -80,14 +87,17 @@ export class SyncEngine {
   private unsubscribeSignal: (() => void) | null = null;
   private windowHandler = () => this.fire(this.syncAll());
   private started = false;
+  readonly keys: KeyService;
 
   constructor(deps: Partial<SyncEngineDeps> = {}) {
     this.deps = {
       db: deps.db ?? defaultDb,
       api: deps.api ?? defaultApi,
       socketFactory: deps.socketFactory ?? defaultSocketFactory,
-      apiBase: deps.apiBase ?? getApiBase
+      apiBase: deps.apiBase ?? getApiBase,
+      serveDelayMs: deps.serveDelayMs ?? defaultServeDelayMs
     };
+    this.keys = createKeyService({ db: this.deps.db, api: this.deps.api, serveDelayMs: this.deps.serveDelayMs });
   }
 
   /** Background work must never surface as an unhandled rejection (e.g. the DB closing under it); failures show up via `lastError` and retries. */
@@ -133,7 +143,7 @@ export class SyncEngine {
     this.fire((async () => {
       const link = await this.deps.db.onlineLinks.get(localEventId);
       if (!link || link.status === "revoked" || this.sockets.has(localEventId)) return;
-      this.states.set(localEventId, { connected: false, syncing: false, lastError: null });
+      this.states.set(localEventId, { connected: false, syncing: false, lastError: null, accessRevision: 0 });
       let socket: SocketLike;
       try {
         socket = this.deps.socketFactory(this.deps.apiBase(), link.deviceToken);
@@ -213,9 +223,87 @@ export class SyncEngine {
       if (code === "device-revoked" || code === "unauthorized") this.fire(this.handleRevoked(localEventId, code));
     });
     socket.on("ops", (payload: { ops?: RemoteOpEnvelope[]; lastSeq?: number }) => this.fire(this.onSocketOps(localEventId, payload)));
-    socket.on("roles-changed", () => this.fire(this.refreshMe(localEventId)));
+    socket.on("roles-changed", () => {
+      this.bumpAccess(localEventId);
+      this.fire(this.refreshMe(localEventId));
+    });
+    socket.on("member-removed", (payload: { memberId?: string }) => this.fire(this.onMemberRemoved(localEventId, payload?.memberId)));
+    socket.on("key-needed", () => this.fire(this.serveKeyRequests(localEventId)));
+    socket.on("key-delivered", () => this.fire(this.receiveKey(localEventId)));
     socket.on("device-revoked", () => this.fire(this.handleRevoked(localEventId, "device-revoked")));
     socket.on("event-purged", () => this.fire(this.handleRevoked(localEventId, "event-purged")));
+  }
+
+  private bumpAccess(localEventId: string): void {
+    this.patchState(localEventId, { accessRevision: this.getState(localEventId).accessRevision + 1 });
+  }
+
+  /** Someone was removed: their own devices get `device-revoked`; this covers a lost one and refreshes open member lists. */
+  private async onMemberRemoved(localEventId: string, memberId: string | undefined): Promise<void> {
+    const link = await this.deps.db.onlineLinks.get(localEventId);
+    if (!link || link.status === "revoked") return;
+    if (memberId && memberId === link.memberId) {
+      await this.handleRevoked(localEventId, "device-revoked");
+      return;
+    }
+    this.bumpAccess(localEventId);
+  }
+
+  // --- encryption keys ------------------------------------------------------
+
+  /** Registers this device's public key (existing devices only; new ones send it with create/redeem), then fetches/creates/serves keys. */
+  private async refreshKeysLocked(localEventId: string): Promise<void> {
+    const { db } = this.deps;
+    try {
+      let link = await db.onlineLinks.get(localEventId);
+      if (!link || link.status === "revoked") return;
+      if (!link.publicKeyRegistered) {
+        await this.deps.api.putPublicKey(link.deviceToken, await getDevicePublicJwk(db));
+        await db.onlineLinks.update(localEventId, { publicKeyRegistered: true });
+      }
+      if (await this.keys.ensureCreatorKey(localEventId)) this.bumpAccess(localEventId);
+      const before = await this.keys.hasUsableKey(localEventId);
+      if (!before) {
+        const verdict = await this.keys.verifyPendingKey(localEventId);
+        if (verdict !== "verified") await this.keys.fetchEnvelope(localEventId);
+      }
+      if ((await this.keys.hasUsableKey(localEventId)) && !before) this.bumpAccess(localEventId);
+      link = await db.onlineLinks.get(localEventId);
+      if (await this.keys.hasUsableKey(localEventId)) this.fire(this.serveKeyRequests(localEventId));
+    } catch (err) {
+      if (err instanceof ApiError && err.isAuthFailure) await this.handleFailure(localEventId, err);
+      // other failures: the next sync retries
+    }
+  }
+
+  /** "key-needed", startup and reconnect: answer devices waiting for the key (runs outside the sync chain — it may pause up to 3 s). */
+  async serveKeyRequests(localEventId: string): Promise<void> {
+    try {
+      const epoch = this.epochs.get(localEventId) ?? 0;
+      await this.keys.serveAwaiting(localEventId, () => (this.epochs.get(localEventId) ?? 0) === epoch);
+    } catch (err) {
+      if (err instanceof ApiError && err.isAuthFailure) await this.handleFailure(localEventId, err);
+    }
+  }
+
+  /** "key-delivered" (or no key yet): fetch our envelope, then unblock queued encrypted writes. */
+  async receiveKey(localEventId: string): Promise<void> {
+    await this.exclusive(localEventId, async () => {
+      try {
+        // The event's keyCheck must be known before an envelope can be verified.
+        await this.catchUpLocked(localEventId);
+        const verdict = await this.keys.fetchEnvelope(localEventId);
+        if (verdict === "stored") {
+          this.bumpAccess(localEventId);
+          await this.flushLocked(localEventId);
+          this.fire(this.serveKeyRequests(localEventId));
+        } else {
+          this.bumpAccess(localEventId);
+        }
+      } catch (err) {
+        await this.handleFailure(localEventId, err);
+      }
+    });
   }
 
   private async onSocketOps(localEventId: string, payload: { ops?: RemoteOpEnvelope[] }): Promise<void> {
@@ -233,6 +321,7 @@ export class SyncEngine {
       for (const envelope of sorted) {
         if ((await this.applyEnvelope(localEventId, envelope)) === "purged") return;
       }
+      await this.verifyKeyAfterInbound(localEventId);
     });
   }
 
@@ -259,6 +348,7 @@ export class SyncEngine {
       this.patchState(localEventId, { syncing: true });
       try {
         await this.catchUpLocked(localEventId);
+        await this.refreshKeysLocked(localEventId);
         await this.flushLocked(localEventId);
       } finally {
         this.patchState(localEventId, { syncing: false });
@@ -319,6 +409,22 @@ export class SyncEngine {
     return result;
   }
 
+  /** A key taken from an invite link is verified as soon as the event's keyCheck has arrived. */
+  private async verifyKeyAfterInbound(localEventId: string): Promise<void> {
+    const row = await this.deps.db.eventKeys.get(localEventId);
+    if (!row || row.verified) return;
+    const verdict = await this.keys.verifyPendingKey(localEventId);
+    if (verdict === "verified") {
+      this.bumpAccess(localEventId);
+      this.fire(this.flush(localEventId));
+      this.fire(this.serveKeyRequests(localEventId));
+    } else if (verdict === "rejected") {
+      this.bumpAccess(localEventId);
+      // the wrong key is gone: ask the others for a real one
+      this.fire(this.receiveKey(localEventId));
+    }
+  }
+
   private async catchUpLocked(localEventId: string): Promise<void> {
     try {
       for (;;) {
@@ -333,6 +439,7 @@ export class SyncEngine {
         if (fresh && page.lastSeq > fresh.lastSeq && page.ops.length === 0) await this.deps.db.onlineLinks.update(localEventId, { lastSeq: page.lastSeq });
         if (!page.hasMore) break;
       }
+      await this.verifyKeyAfterInbound(localEventId);
       this.clearRetry(localEventId);
       this.patchState(localEventId, { lastError: null });
     } catch (err) {
@@ -369,21 +476,37 @@ export class SyncEngine {
     try {
       await this.registerMembers(localEventId);
 
+      let blockedCount = 0;
       for (;;) {
         link = await this.deps.db.onlineLinks.get(localEventId);
         if (!link || link.status === "revoked") return;
+        const key = (await this.deps.db.eventKeys.get(localEventId)) ?? null;
+        const usable = key?.verified ? key.key : null;
         const queued = await this.deps.db.outbox
           .where("localEventId")
           .equals(localEventId)
           .filter((row) => !row.rejected)
           .sortBy("order");
-        if (queued.length === 0) break;
-        const [batch] = chunkBySizeAndCount(queued, (row) => JSON.stringify(row.op).length, MAX_BATCH_OPS);
-        await this.pushBatch(link, batch);
+        // Ops that need the event key wait (in order) until it arrives; later ops on the same record wait behind them.
+        const blockedRecords = new Set<string>();
+        const sendable: OutboxEntry[] = [];
+        blockedCount = 0;
+        for (const row of queued) {
+          const record = `${row.op.entity}|${row.op.entityId}`;
+          if ((opNeedsKey(row.op) && !usable) || blockedRecords.has(record)) {
+            blockedRecords.add(record);
+            blockedCount++;
+          } else {
+            sendable.push(row);
+          }
+        }
+        if (sendable.length === 0) break;
+        const [batch] = chunkBySizeAndCount(sendable, (row) => JSON.stringify(row.op).length, MAX_BATCH_OPS);
+        await this.pushBatch(link, batch, usable);
       }
 
       const current = await this.deps.db.onlineLinks.get(localEventId);
-      if (current && current.status === "uploading") await this.deps.db.onlineLinks.update(localEventId, { status: "online" });
+      if (current && current.status === "uploading" && blockedCount === 0) await this.deps.db.onlineLinks.update(localEventId, { status: "online" });
       this.clearRetry(localEventId);
       this.patchState(localEventId, { lastError: null });
     } catch (err) {
@@ -391,11 +514,30 @@ export class SyncEngine {
     }
   }
 
-  private async pushBatch(link: OnlineLink, batch: OutboxEntry[]): Promise<void> {
+  private async pushBatch(link: OnlineLink, batch: OutboxEntry[], eventKey: CryptoKey | null): Promise<void> {
     const { db } = this.deps;
+
+    // Encrypt, then refuse anything that would still leave as plaintext.
+    const outgoing: { row: OutboxEntry; op: ServerOp }[] = [];
+    const refused: OutboxEntry[] = [];
+    for (const row of batch) {
+      const op = eventKey ? await encryptOutboundOp(row.op, eventKey, link.serverEventId) : row.op;
+      if (findPlaintextLeaks(op).length > 0) refused.push(row);
+      else outgoing.push({ row, op });
+    }
+    if (refused.length > 0) {
+      await db.transaction("rw", db.outbox, async () => {
+        for (const row of refused) {
+          await db.outbox.update(row.order!, { rejected: { reason: "plaintext-blocked", message: "این تغییر شامل اطلاعات رمزنشده‌ی خصوصی بود و ارسال نشد." }, attempts: row.attempts + 1, lastError: "plaintext-blocked" });
+        }
+      });
+    }
+    if (outgoing.length === 0) return;
+    batch = outgoing.map((o) => o.row);
+
     let result;
     try {
-      result = await this.deps.api.pushOps(link.deviceToken, link.serverEventId, batch.map((row) => row.op));
+      result = await this.deps.api.pushOps(link.deviceToken, link.serverEventId, outgoing.map((o) => o.op));
     } catch (err) {
       if (err instanceof ApiError && (err.code === "invalid-field" || err.code === "payload-too-large" || err.code === "bad-request")) {
         // The request itself is unacceptable: keep the ops, flagged, so the loop cannot spin forever.

@@ -9,7 +9,7 @@
  */
 import { ulid } from "ulid";
 import { checkOp } from "@/domain/onlinePermissions";
-import { isSyncedEntity, sanitizeOutboundOp, toServerOpType, type LocalOpLike } from "@/domain/outboundSanitizer";
+import { buildProfileOp, isSyncedEntity, sanitizeOutboundOp, toServerOpType, type LocalOpLike } from "@/domain/outboundSanitizer";
 import type { TabPalDB } from "../db";
 import type { FieldChange, OnlineLink, Operation, ServerOp } from "../types";
 import { signalOutboxChanged } from "./syncSignal";
@@ -101,29 +101,24 @@ async function enqueue(db: TabPalDB, link: OnlineLink, op: ServerOp): Promise<vo
   });
 }
 
-/** Builds the sanitized op for one local op; creates are completed from the stored row first. */
-export async function buildOutboundOp(db: TabPalDB, op: LocalOpLike): Promise<ServerOp | null> {
-  let source = op;
-  if (op.type === "create") {
-    const row = await rowTable(db, op.entity)?.get(op.entityId);
-    if (row) source = { ...op, changes: { ...fullRecordChanges(row), ...op.changes } };
-  }
-  return sanitizeOutboundOp(source);
+/** Creates are completed from the stored row so the op always carries the full record. */
+async function completeOp(db: TabPalDB, op: LocalOpLike): Promise<LocalOpLike> {
+  if (op.type !== "create") return op;
+  const row = await rowTable(db, op.entity)?.get(op.entityId);
+  return row ? { ...op, changes: { ...fullRecordChanges(row), ...op.changes } } : op;
 }
 
-/** A synthetic `persons` create op carrying the shareable fields of a person (used when someone joins an online event). */
-export async function buildPersonCreateOp(db: TabPalDB, personId: string, timestamp: string, deviceId: string): Promise<ServerOp | null> {
-  const person = (await db.persons.get(personId)) as Record<string, unknown> | undefined;
-  if (!person) return null;
-  return sanitizeOutboundOp({
-    id: ulid(),
-    entity: "persons",
-    entityId: personId,
-    type: "create",
-    changes: fullRecordChanges(person),
-    timestamp,
-    deviceId
-  });
+/** Builds the sanitized op for one local op; creates are completed from the stored row first. */
+export async function buildOutboundOp(db: TabPalDB, op: LocalOpLike): Promise<ServerOp | null> {
+  return sanitizeOutboundOp(await completeOp(db, op));
+}
+
+/** Synthetic `persons` create op (shareable fields) plus the person's `memberProfile` op (plaintext here, encrypted at push time) — used when someone joins an online event. */
+export async function buildPersonCreateOps(db: TabPalDB, personId: string, timestamp: string, deviceId: string): Promise<{ person: ServerOp | null; profile: ServerOp | null }> {
+  const row = (await db.persons.get(personId)) as Record<string, unknown> | undefined;
+  if (!row) return { person: null, profile: null };
+  const local: LocalOpLike = { id: ulid(), entity: "persons", entityId: personId, type: "create", changes: fullRecordChanges(row), timestamp, deviceId };
+  return { person: sanitizeOutboundOp(local), profile: buildProfileOp(local) };
 }
 
 export async function afterLogOperation(db: TabPalDB, op: Operation): Promise<void> {
@@ -136,23 +131,36 @@ export async function afterLogOperation(db: TabPalDB, op: Operation): Promise<vo
   if (links.length === 0) return;
 
   const serverType = toServerOpType(op.type, op.entity, op.changes);
+  const source = await completeOp(db, op);
+  const outbound = sanitizeOutboundOp(source);
+  const profile = buildProfileOp(source);
+  // A person edit that only touches sensitive fields is a `memberProfile` write (own profile for any member), not a ledger write.
+  const ledgerRelevant = !(op.entity === "persons" && outbound === null && profile !== null);
   for (const link of links) {
-    const check = checkOp({ memberId: link.memberId, roles: link.roles }, { entity: op.entity, entityId: op.entityId, type: serverType });
-    if (!check.ok) throw new OnlinePermissionError(check.reason);
+    const actor = { memberId: link.memberId, roles: link.roles };
+    if (ledgerRelevant) {
+      const check = checkOp(actor, { entity: op.entity, entityId: op.entityId, type: serverType });
+      if (!check.ok) throw new OnlinePermissionError(check.reason);
+    }
+    if (profile) {
+      const check = checkOp(actor, { entity: profile.entity, entityId: profile.entityId, type: profile.type });
+      if (!check.ok) throw new OnlinePermissionError(check.reason);
+    }
   }
 
-  const outbound = await buildOutboundOp(db, op);
   for (const link of links) {
     if (op.entity === "eventMembers" && op.type === "create") {
       const personId = op.changes.personId?.after;
       const row = (await db.eventMembers.get(op.entityId)) as { personId?: string } | undefined;
       const id = (typeof personId === "string" ? personId : row?.personId) ?? null;
       if (id) {
-        const personOp = await buildPersonCreateOp(db, id, op.timestamp, op.deviceId);
-        if (personOp) await enqueue(db, link, personOp);
+        const ops = await buildPersonCreateOps(db, id, op.timestamp, op.deviceId);
+        if (ops.person) await enqueue(db, link, ops.person);
+        if (ops.profile) await enqueue(db, link, ops.profile);
       }
     }
     if (outbound) await enqueue(db, link, outbound);
+    if (profile) await enqueue(db, link, profile);
     signalOutboxChanged(link.localEventId);
   }
 }
