@@ -1,3 +1,5 @@
+import { isPendingKey } from "@/domain/encryptedDisplay";
+import { loadExportData } from "./statements/statementData";
 import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -54,23 +56,25 @@ export function SendQueueScreen() {
       .filter((s) => !s.deleted && s.status === "current" && s.personId !== null && personIds.includes(s.personId))
       .toArray();
 
-    return personIds
-      .map((personId) => {
+    const resolved = await Promise.all(
+      personIds.map(async (personId) => {
         const memberRow = allMemberRows.find((m) => m.personId === personId);
         const person = allPersons.find((p) => p?.id === personId);
         const statement = statements.find((s) => s.personId === personId);
         if (!memberRow || !person || !statement) return null;
-        const data = JSON.parse(statement.snapshot) as StatementLinkData;
+        const data = (await loadExportData(statement)) as StatementLinkData | null;
+        if (!data) return null;
         return {
           personId,
           name: displayName({ personId, firstName: person.firstName, lastName: person.lastName }, nameParts),
           photo: person.photo,
-          phone: person.phone,
+          phone: isPendingKey(person.phone) ? undefined : person.phone,
           statement,
           data
         };
       })
-      .filter((row): row is NonNullable<typeof row> => row !== null);
+    );
+    return resolved.filter((row): row is NonNullable<typeof row> => row !== null);
   }, [eventId, personIds]);
 
   if (!event || !rows) return <div className="screen" />;

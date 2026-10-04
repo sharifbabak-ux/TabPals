@@ -187,8 +187,8 @@ describe("key distribution", () => {
     const { event, sara, admin } = await goOnline();
     const member = makeDevice(memberDb, "iPhone Safari");
     await member.engine.start();
-    // keep the genuine holder from answering: only the attacker's envelope will be there
-    engines.find((e) => e !== member.engine)!.stop();
+    // nobody can hand out the genuine key: only the attacker's envelope will be there
+    mock.failures.keyEnvelopes = 1000;
     const invite = await admin.service.createInvite(event.id, sara.id);
     await member.service.joinWithInvite({ inviteToken: invite.inviteToken });
     await until(async () => (await memberDb.events.get(event.id))?.keyCheck !== undefined);
@@ -211,8 +211,8 @@ describe("key distribution", () => {
   it("until the key arrives, values stay ciphertext; they decrypt afterwards", async () => {
     const { event, sara, admin } = await goOnline();
     const member = makeDevice(memberDb, "iPhone Safari");
-    // the admin goes offline so nobody can answer yet
-    engines.find((e) => e !== member.engine)!.stop();
+    // nobody can answer yet
+    mock.failures.keyEnvelopes = 1000;
     await member.engine.start();
     const invite = await admin.service.createInvite(event.id, sara.id);
     await member.service.joinWithInvite({ inviteToken: invite.inviteToken });
@@ -221,6 +221,7 @@ describe("key distribution", () => {
     expect(await memberDb.eventKeys.get(event.id)).toBeUndefined();
 
     // a holder comes back and answers
+    mock.failures.keyEnvelopes = 0;
     const back = makeDevice(db, "Android Chrome again");
     await back.engine.start();
     await until(async () => Boolean((await memberDb.eventKeys.get(event.id))?.verified));
@@ -386,8 +387,8 @@ describe("backup key", () => {
 
     const member = makeDevice(memberDb, "iPhone Safari");
     await member.engine.start();
-    // nobody can answer: the admin device is stopped
-    engines.find((e) => e !== member.engine)!.stop();
+    // nobody can answer
+    mock.failures.keyEnvelopes = 1000;
     const invite = await admin.service.createInvite(event.id, sara.id);
     await member.service.joinWithInvite({ inviteToken: invite.inviteToken });
     await until(async () => (await memberDb.events.get(event.id))?.keyCheck !== undefined);

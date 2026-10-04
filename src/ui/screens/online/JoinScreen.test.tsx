@@ -93,7 +93,7 @@ describe("#/join in a browser tab (not installed)", () => {
     await renderAt("/join?t=tok-continue");
     await act(async () => button("ادامه در همین مرورگر")!.click());
     expect(mocks.join).toHaveBeenCalledTimes(1);
-    expect(mocks.join).toHaveBeenCalledWith({ inviteToken: "tok-continue" });
+    expect(mocks.join).toHaveBeenCalledWith({ inviteToken: "tok-continue", eventKey: null });
     expect(container.querySelector("[data-testid=where]")?.textContent).toBe("/events/EVENT1");
   });
 });
@@ -104,8 +104,15 @@ describe("#/join in the installed app", () => {
     await renderAt("/join?t=tok-standalone&c=ABCD2345");
     expect(text()).not.toContain("ابتدا برنامه را نصب کنید");
     expect(mocks.join).toHaveBeenCalledTimes(1);
-    expect(mocks.join).toHaveBeenCalledWith({ inviteToken: "tok-standalone" });
+    expect(mocks.join).toHaveBeenCalledWith({ inviteToken: "tok-standalone", eventKey: null });
     expect(container.querySelector("[data-testid=where]")?.textContent).toBe("/events/EVENT1");
+  });
+
+  it("passes the event key from the link fragment to the join call", async () => {
+    mocks.standalone = true;
+    const key = "A".repeat(43);
+    await renderAt(`/join?t=tok-key&c=ABCD2345&k=${key}`);
+    expect(mocks.join).toHaveBeenCalledWith({ inviteToken: "tok-key", eventKey: key });
   });
 
   it("shows the Persian server error when the invite is no longer valid", async () => {

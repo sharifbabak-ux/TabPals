@@ -30,6 +30,7 @@ import { OrderSessionsSection } from "./orders/OrderSessionsSection";
 import { useOnlineEvent } from "@/ui/hooks/useOnlineEvent";
 import { GoOnlineSheet } from "./online/GoOnlineSheet";
 import { InviteSheet } from "./online/InviteSheet";
+import { MyBankSheet } from "./online/MyBankSheet";
 import { OnlineBadge } from "./online/OnlineBadge";
 import { SyncIndicator } from "./online/SyncIndicator";
 
@@ -63,6 +64,7 @@ export function EventDetailScreen() {
   const [trashError, setTrashError] = useState<string | null>(null);
   const online = useOnlineEvent(eventId);
   const [goOnlineOpen, setGoOnlineOpen] = useState(false);
+  const [myBankOpen, setMyBankOpen] = useState(false);
   const [inviteTarget, setInviteTarget] = useState<{ personId: string; name: string } | null>(null);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [onlineError, setOnlineError] = useState<string | null>(null);
@@ -249,6 +251,9 @@ export function EventDetailScreen() {
         <div className="online-bar">
           <OnlineBadge roles={online.roles} />
           <SyncIndicator eventId={eventId} canSeeRejected={!readOnly} />
+          <button type="button" className="list-item__action" onClick={() => setMyBankOpen(true)}>
+            اطلاعات بانکی من
+          </button>
           {online.isAdmin && (
             <button type="button" className="list-item__action" onClick={() => navigate(`/events/${eventId}/access`)}>
               اعضا و دسترسی‌ها
@@ -470,6 +475,7 @@ export function EventDetailScreen() {
       />
 
       <GoOnlineSheet open={goOnlineOpen} eventId={eventId} onClose={() => setGoOnlineOpen(false)} />
+      {online.online && <MyBankSheet open={myBankOpen} eventId={eventId} onClose={() => setMyBankOpen(false)} />}
       <InviteSheet open={inviteTarget !== null} eventId={eventId} eventTitle={event.title} member={inviteTarget} onClose={() => setInviteTarget(null)} />
       <ConfirmDialog
         open={leaveOpen}

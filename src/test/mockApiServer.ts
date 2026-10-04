@@ -85,7 +85,7 @@ export function createMockApi() {
   let nextSeq = 1;
   let nextInvite = 1;
   let nextAudit = 1;
-  const failures = { pushOps: 0, pullOps: 0 };
+  const failures = { pushOps: 0, pullOps: 0, keyEnvelopes: 0 };
   const opBatchSizes: number[] = [];
   /** Every op body the server ever received, serialized exactly as sent (for "nothing private on the wire" guard tests). */
   const wire: string[] = [];
@@ -409,6 +409,10 @@ export function createMockApi() {
       const a = auth(request);
       if (a instanceof Response) return a;
       const body = (await request.json()) as { targetDeviceId: string; wrappedKey: string; meta?: unknown };
+      if (failures.keyEnvelopes > 0) {
+        // test hook: nobody can hand out the key right now
+        return err(500, "internal-error");
+      }
       if (body.targetDeviceId === a.device.deviceId) return err(400, "invalid-field");
       const target = a.event.devices.find((d) => d.deviceId === body.targetDeviceId && !d.revokedAt && !a.event.members.get(d.memberId)?.removedAt);
       if (!target) return err(404, "device-not-found");

@@ -13,6 +13,7 @@ const MESSAGES: Record<string, string> = {
   "invite-not-found": "دعوت‌نامه پیدا نشد؛ کد یا لینک را بررسی کنید.",
   "event-exists": "این ایونت قبلاً روی سرور ساخته شده است.",
   "member-exists": "این عضو قبلاً ثبت شده است.",
+  "member-removed": "این عضو از ایونت حذف شده است؛ ابتدا او را بازگردانید.",
   "invite-used": "این دعوت‌نامه قبلاً استفاده شده است.",
   "last-admin": "هر ایونت باید دست‌کم یک مدیر داشته باشد؛ ابتدا مدیر دیگری تعیین کنید.",
   "invite-expired": "مهلت این دعوت‌نامه تمام شده است؛ از مدیر ایونت دعوت‌نامه‌ی جدید بخواهید.",
@@ -28,7 +29,8 @@ const MESSAGES: Record<string, string> = {
   "unknown-type": "نوع تغییر شناخته‌شده نیست.",
   "forbidden-entity": "نقش شما اجازه‌ی تغییر این داده را نمی‌دهد.",
   "forbidden-profile": "فقط خودِ عضو یا مدیر می‌تواند نمایه را تغییر دهد.",
-  "forbidden-purge": "فقط مدیر می‌تواند ایونت را پاک کند."
+  "forbidden-purge": "فقط مدیر می‌تواند ایونت را پاک کند.",
+  "plaintext-blocked": "این تغییر شامل اطلاعات رمزنشده‌ی خصوصی بود و ارسال نشد."
 };
 
 export function onlineErrorMessage(code: string | null | undefined, fallback?: string): string {
@@ -40,6 +42,10 @@ export function onlineErrorMessage(code: string | null | undefined, fallback?: s
 const AUDIT_LABELS: Record<string, string> = {
   "event.created": "ایونت آنلاین ساخته شد",
   "member.added": "عضو اضافه شد",
+  "member.removed": "عضو از ایونت حذف شد",
+  "member.restored": "عضو بازگردانده شد",
+  "key.delivered": "کلید رمزگذاری به یک دستگاه رسید",
+  "statement.sent": "صورت‌حساب ارسال شد",
   "roles.changed": "نقش‌ها تغییر کرد",
   "invite.created": "دعوت‌نامه ساخته شد",
   "invite.redeemed": "دعوت‌نامه استفاده شد",
@@ -62,7 +68,8 @@ const ENTITY_LABELS: Record<string, string> = {
   sessionMenuItems: "منوی سریع",
   orderLines: "سفارش",
   orderPersonTotals: "جمع سفارش",
-  sessionExtras: "هزینه‌ی اضافه"
+  sessionExtras: "هزینه‌ی اضافه",
+  memberProfile: "اطلاعات بانکی و تماس"
 };
 
 export function entityLabel(entity: string): string {

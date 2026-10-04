@@ -1022,3 +1022,17 @@ textarea {
   margin-bottom: 8px;
   cursor: pointer;
 }
+
+.person-bank-summary {
+  display: grid;
+  gap: 4px;
+  padding: 4px 4px 12px;
+}
+
+.privacy-list {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding-inline-start: 20px;
+  line-height: 1.8;
+}

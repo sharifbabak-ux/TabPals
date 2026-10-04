@@ -1,3 +1,4 @@
+import { loadExportData } from "../statements/statementData";
 import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate } from "react-router-dom";
@@ -133,10 +134,18 @@ export function StatementsSection({ eventId, eventTitle, eventClosed, readOnly =
     setBulkBusy(true);
     setBulkError(null);
     try {
-      const entries = Array.from(bulkSelected)
+      const entries: { statement: Statement; data: StatementLinkData }[] = [];
+      for (const statement of Array.from(bulkSelected)
         .map((id) => currentStatementFor(id))
-        .filter((s): s is Statement => Boolean(s))
-        .map((statement) => ({ statement, data: JSON.parse(statement.snapshot) as StatementLinkData }));
+        .filter((s): s is Statement => Boolean(s))) {
+        // creditors' details filled in locally; payment details removed again when the privacy setting is on
+        const data = await loadExportData(statement);
+        if (data) entries.push({ statement, data });
+      }
+      if (entries.length === 0) {
+        setBulkError("صورت‌حساب‌ها هنوز رمزگذاری‌شده‌اند؛ پس از دریافت کلید دوباره تلاش کنید.");
+        return;
+      }
 
       const result = await shareStatementFilesBulk(entries, eventTitle, "image");
       if (result.ok) {

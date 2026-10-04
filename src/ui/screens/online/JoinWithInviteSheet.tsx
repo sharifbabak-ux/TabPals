@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { onlineService } from "@/data/online/onlineService";
-import { formatShortCode, isValidShortCode, normalizeShortCode, parseInviteToken } from "@/domain/inviteLink";
+import { formatShortCode, isValidShortCode, normalizeShortCode, parseInviteKey, parseInviteToken } from "@/domain/inviteLink";
 import { qrScanService } from "@/platform";
 import { BottomSheet } from "@/ui/components/BottomSheet";
 import "./online.css";
@@ -37,7 +37,7 @@ export function JoinWithInviteSheet({ open, onClose, initialCode = "" }: JoinWit
     };
   }, [open]);
 
-  async function redeem(input: { inviteToken?: string; shortCode?: string }) {
+  async function redeem(input: { inviteToken?: string; shortCode?: string; eventKey?: string | null }) {
     setBusy(true);
     setError(null);
     try {
@@ -62,7 +62,7 @@ export function JoinWithInviteSheet({ open, onClose, initialCode = "" }: JoinWit
         stopRef.current = null;
         setScanning(false);
         const token = parseInviteToken(text);
-        if (token) void redeem({ inviteToken: token });
+        if (token) void redeem({ inviteToken: token, eventKey: parseInviteKey(text) });
         else if (isValidShortCode(text)) void redeem({ shortCode: normalizeShortCode(text) });
         else setError("این QR مربوط به دعوت‌نامه‌ی TabPals نیست.");
       });

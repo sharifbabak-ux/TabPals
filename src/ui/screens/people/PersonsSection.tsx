@@ -1,3 +1,4 @@
+import { displayOrPending } from "@/domain/encryptedDisplay";
 import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/data/db";
@@ -86,7 +87,7 @@ export function PersonsSection() {
             <Avatar id={person.id} name={personFullName(person)} photo={person.photo} />
             <div className="list-item__main">
               <span className="list-item__title">{personFullName(person)}</span>
-              {person.phone && <span className="list-item__subtitle">{person.phone}</span>}
+              {person.phone && <span className="list-item__subtitle">{displayOrPending(person.phone)}</span>}
             </div>
           </li>
         ))}

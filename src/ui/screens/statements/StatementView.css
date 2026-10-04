@@ -329,3 +329,9 @@
   font-size: 0.9rem;
   line-height: 1.8;
 }
+
+@media print {
+  .statement-paper--hide-payment [data-payment-detail] {
+    display: none !important;
+  }
+}

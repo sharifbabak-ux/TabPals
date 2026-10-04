@@ -2,10 +2,13 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/data/db";
+import { setHidePaymentInExports } from "@/data/appSettings";
 import { APP_NAME, APP_VERSION, ONLINE_ENABLED } from "@/config/app";
 import { DEFAULT_API_BASE, getApiBase, getApiBaseOverride, setApiBaseOverride } from "@/config/online";
 import { toPersianDigits } from "@/domain/format";
+import { Switch } from "@/ui/components/Switch";
 import { Tabs } from "@/ui/components/Tabs";
+import { useHidePaymentInExports } from "@/ui/hooks/useHidePaymentInExports";
 import { useTheme, type ThemeMode } from "@/ui/theme";
 import { MessageTemplatesSection } from "./settings/MessageTemplatesSection";
 import { JoinWithInviteSheet } from "./online/JoinWithInviteSheet";
@@ -56,6 +59,7 @@ export function SettingsScreen() {
   const navigate = useNavigate();
   const [joinOpen, setJoinOpen] = useState(false);
   const { theme, setTheme } = useTheme();
+  const hidePayment = useHidePaymentInExports();
 
   const needsReviewCount = useLiveQuery(() => db.persons.filter((p) => !p.deleted && p.needsNameReview === true).count(), []);
   const trashedEventsCount = useLiveQuery(() => db.events.filter((e) => !e.deleted && Boolean(e.deletedAt)).count(), []);
@@ -77,6 +81,22 @@ export function SettingsScreen() {
         value={theme}
         onChange={setTheme}
       />
+
+      <h2 className="section-title">حریم خصوصی</h2>
+      <ul className="list">
+        <li className="list-item">
+          <div className="list-item__main">
+            <Switch checked={hidePayment} onChange={(value) => void setHidePaymentInExports(value)} label="عدم چاپ شماره‌کارت و شبا در خروجی‌ها" />
+            <span className="list-item__subtitle">با روشن بودن، در PDF، تصویر و چاپ صورت‌حساب فقط نام مسئول صندوق دیده می‌شود.</span>
+          </div>
+        </li>
+        <li className="list-item" onClick={() => navigate("/settings/privacy")}>
+          <div className="list-item__main">
+            <span className="list-item__title">حریم خصوصی</span>
+            <span className="list-item__subtitle">چه چیزی ذخیره و رمزگذاری می‌شود و چه کسی چه چیزی می‌بیند</span>
+          </div>
+        </li>
+      </ul>
 
       <h2 className="section-title">داده‌ها</h2>
       <ul className="list">

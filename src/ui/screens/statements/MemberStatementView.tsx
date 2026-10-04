@@ -4,16 +4,19 @@ import { formatAmount, toPersianDigits } from "@/domain/format";
 import { describeFundBalance } from "@/domain/fundBalance";
 import { buildBalanceText } from "@/domain/messageTemplate";
 import { JalaliDate } from "@/ui/components/JalaliDate";
+import { MaskedValue } from "@/ui/components/MaskedValue";
 import { FUND_ENTRY_LABELS } from "./statementViewLabels";
 import "./StatementView.css";
 
 interface MemberStatementViewProps {
   data: MemberStatementData;
   closingText: string;
+  /** On-screen only: card numbers and IBANs show masked until tapped. Exports render them in full (or not at all, per the privacy setting). */
+  maskPayment?: boolean;
 }
 
 /** Renders both member and treasurer statements (docs/PLAN.md Stage 3B "MEMBER STATEMENT CONTENT" / "TREASURER STATEMENT"). */
-export function MemberStatementView({ data, closingText }: MemberStatementViewProps) {
+export function MemberStatementView({ data, closingText, maskPayment = false }: MemberStatementViewProps) {
   const { event, expenses, expenseTotals, fundEntries, summary, treasurerName, hubSettlement } = data;
   const balanceText = buildBalanceText(summary.balance, event.currency);
   const isDebtor = summary.balance < 0;
@@ -202,10 +205,10 @@ export function MemberStatementView({ data, closingText }: MemberStatementViewPr
                       {row.name}: {formatAmount(row.amount)} {event.currency}
                     </div>
                     {(row.cardNumberGrouped || row.ibanGrouped || row.bankName || row.accountHolder) && (
-                      <div className="statement-hub-list__bank">
+                      <div className="statement-hub-list__bank" data-payment-detail>
                         {row.bankName && <span>{row.bankName}</span>}
-                        {row.cardNumberGrouped && <span dir="ltr">{row.cardNumberGrouped}</span>}
-                        {row.ibanGrouped && <span dir="ltr">{row.ibanGrouped}</span>}
+                        {row.cardNumberGrouped && (maskPayment ? <MaskedValue kind="card" value={row.cardNumberGrouped} /> : <span dir="ltr">{row.cardNumberGrouped}</span>)}
+                        {row.ibanGrouped && (maskPayment ? <MaskedValue kind="iban" value={row.ibanGrouped} /> : <span dir="ltr">{row.ibanGrouped}</span>)}
                         {row.accountHolder && <span>به نام {row.accountHolder}</span>}
                       </div>
                     )}
@@ -234,18 +237,18 @@ export function MemberStatementView({ data, closingText }: MemberStatementViewPr
               مسئول صندوق: <strong>{treasurerName}</strong>
             </p>
           )}
-          {data.treasurerBankName && <p>{data.treasurerBankName}</p>}
+          {data.treasurerBankName && <p data-payment-detail>{data.treasurerBankName}</p>}
           {data.treasurerCardNumberGrouped && (
-            <p dir="ltr" className="statement-payment-box__number">
-              {data.treasurerCardNumberGrouped}
+            <p dir="ltr" className="statement-payment-box__number" data-payment-detail>
+              {maskPayment ? <MaskedValue kind="card" value={data.treasurerCardNumberGrouped} /> : data.treasurerCardNumberGrouped}
             </p>
           )}
           {data.treasurerIbanGrouped && (
-            <p dir="ltr" className="statement-payment-box__number">
-              {data.treasurerIbanGrouped}
+            <p dir="ltr" className="statement-payment-box__number" data-payment-detail>
+              {maskPayment ? <MaskedValue kind="iban" value={data.treasurerIbanGrouped} /> : data.treasurerIbanGrouped}
             </p>
           )}
-          {data.treasurerAccountHolder && <p>به نام {data.treasurerAccountHolder}</p>}
+          {data.treasurerAccountHolder && <p data-payment-detail>به نام {data.treasurerAccountHolder}</p>}
         </section>
       )}
     </div>
