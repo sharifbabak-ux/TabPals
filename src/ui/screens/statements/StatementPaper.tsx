@@ -37,6 +37,10 @@ interface StatementPaperProps {
   meta: StatementPaperMeta;
   /** Passed straight to the root `<article>` — used both on-screen (StatementViewScreen) and for the offscreen bulk-export render. */
   innerRef?: Ref<HTMLElement>;
+  /** On-screen only: mask card numbers / IBANs until tapped. */
+  maskPayment?: boolean;
+  /** The «عدم چاپ شماره‌کارت و شبا» setting: payment details are left out of the printed page. */
+  hidePaymentOnPrint?: boolean;
 }
 
 /**
@@ -45,9 +49,9 @@ interface StatementPaperProps {
  * bulk export (docs/PLAN.md Stage 3C) — one markup source so all three stay
  * visually identical and the print/export CSS only has to target one shape.
  */
-export function StatementPaper({ data, meta, innerRef }: StatementPaperProps) {
+export function StatementPaper({ data, meta, innerRef, maskPayment = false, hidePaymentOnPrint = false }: StatementPaperProps) {
   return (
-    <article className="statement-paper" ref={innerRef} data-export-verification={meta.verificationCode} data-export-app-version={meta.appVersion}>
+    <article className={hidePaymentOnPrint ? "statement-paper statement-paper--hide-payment" : "statement-paper"} ref={innerRef} data-export-verification={meta.verificationCode} data-export-app-version={meta.appVersion}>
       <header className="statement-header" data-export-header>
         <Logo variant="mark" size={44} />
         <div className="statement-header__title">
@@ -88,7 +92,7 @@ export function StatementPaper({ data, meta, innerRef }: StatementPaperProps) {
         </div>
       </header>
 
-      {data.kind === "comprehensive" ? <ComprehensiveReportView data={data} /> : <MemberStatementView data={data} closingText={data.closingText} />}
+      {data.kind === "comprehensive" ? <ComprehensiveReportView data={data} /> : <MemberStatementView data={data} closingText={data.closingText} maskPayment={maskPayment} />}
 
       {meta.link && (
         <section className="statement-online" data-export-block>

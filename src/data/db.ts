@@ -4,6 +4,8 @@ import { DEFAULT_MESSAGE_TEMPLATES } from "@/domain/messageTemplateDefaults";
 import { getDeviceId } from "./deviceId";
 import type {
   AppliedRemoteOp,
+  DeviceKeyRow,
+  EventKeyRow,
   Event,
   EventMember,
   Group,
@@ -89,6 +91,8 @@ export class TabPalDB extends Dexie {
   onlineLinks!: EntityTable<OnlineLink, "localEventId">;
   outbox!: EntityTable<OutboxEntry, "order">;
   appliedRemoteOps!: Table<AppliedRemoteOp, [string, string]>;
+  eventKeys!: EntityTable<EventKeyRow, "localEventId">;
+  deviceKeys!: EntityTable<DeviceKeyRow, "id">;
 
   constructor(name = "tabpal") {
     super(name);
@@ -381,6 +385,42 @@ export class TabPalDB extends Dexie {
       outbox: "++order, &[localEventId+opId], localEventId",
       appliedRemoteOps: "[localEventId+opId], localEventId"
     });
+
+    // Stage ONLINE-1C — end-to-end encryption. Adds `eventKeys` (the event's
+    // AES-GCM CryptoKey, one row per online event) and `deviceKeys` (this
+    // device's ECDH key pair). Existing online links created by this device
+    // (they carry `uploadTotal`, joined links never do) are flagged
+    // `creatorDevice`, the only device allowed to generate the event key.
+    this.version(11)
+      .stores({
+        meta: "key",
+        persons: "id, archived, deleted, needsNameReview",
+        events: "id, archived, deleted, startDate, closedAt, treasurerPersonId, deletedAt",
+        eventMembers: "id, eventId, personId, &[eventId+personId], active, deleted, sortOrder",
+        groups: "id, name, archived, deleted",
+        vouchers: "id, eventId, &[eventId+number], type, status, deleted, recordedAt",
+        statements: "id, eventId, kind, personId, &[eventId+number], status, deleted",
+        messageTemplates: "id, category, enabled, isDefault, deleted",
+        orderSessions: "id, eventId, status, scheduledAt, deleted",
+        sessionMenuItems: "id, sessionId, sortOrder, deleted",
+        orderLines: "id, sessionId, personId, deleted",
+        orderPersonTotals: "id, sessionId, [sessionId+personId], deleted",
+        sessionExtras: "id, sessionId, deleted",
+        operations: "id, entity, entityId, timestamp",
+        onlineLinks: "localEventId, serverEventId, status",
+        outbox: "++order, &[localEventId+opId], localEventId",
+        appliedRemoteOps: "[localEventId+opId], localEventId",
+        eventKeys: "localEventId",
+        deviceKeys: "id"
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table("onlineLinks")
+          .toCollection()
+          .modify((link) => {
+            if (link.creatorDevice === undefined) link.creatorDevice = link.uploadTotal !== undefined;
+          });
+      });
 
     // Every write that logs an operation may also have to queue it in the
     // outbox (and check the member's role), which reads/writes the sync

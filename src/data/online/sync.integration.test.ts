@@ -26,7 +26,7 @@ const engines: SyncEngine[] = [];
 let memberDb: TabPalDB;
 
 function makeDevice(database: TabPalDB, label: string) {
-  const engine = new SyncEngine({ db: database, socketFactory: mock.socketFactory });
+  const engine = new SyncEngine({ db: database, socketFactory: mock.socketFactory, serveDelayMs: () => 0 });
   engines.push(engine);
   const service = createOnlineService({ db: database, engine, deviceLabel: () => label });
   return { engine, service, db: database };
@@ -109,7 +109,7 @@ describe("go online", () => {
     const { event } = await seedEvent(2);
     const template = (await db.vouchers.toArray())[0];
     await db.vouchers.bulkAdd(Array.from({ length: 700 }, (_, i) => ({ ...template, id: `BULK${i}`, number: 100 + i })));
-    const total = (await buildSnapshotOps(db, event.id)).length;
+    const total = (await buildSnapshotOps(db, event.id)).length + 1; // + the keyCheck op
 
     mock.failures.pushOps = 1_000; // network dies on every push
     const first = makeDevice(db, "x");
@@ -190,7 +190,7 @@ describe("invite + redeem + read-only member", () => {
   it("admin invites; the member redeems with the short code, catches up fully and is read-only", async () => {
     const { sara, event, admin, member } = await setupTwoDevices();
     const invite = await admin.service.createInvite(event.id, sara.id);
-    expect(invite.url).toBe(`https://sharifbabak-ux.github.io/TabPals/#/join?t=${invite.inviteToken}&c=${invite.shortCode}`);
+    expect(invite.url).toMatch(new RegExp(`^https://sharifbabak-ux\\.github\\.io/TabPals/#/join\\?t=${invite.inviteToken}&c=${invite.shortCode}&k=[A-Za-z0-9_-]{43}$`));
     expect(invite.shortCode).toMatch(/^[A-HJ-NP-Z2-9]{8}$/);
     // the server learned about sara before the invite (members were registered)
     expect(mock.events.get(event.id)!.members.has(sara.id)).toBe(true);
@@ -207,7 +207,9 @@ describe("invite + redeem + read-only member", () => {
     expect(await memberDb.eventMembers.where("eventId").equals(event.id).count()).toBe(2);
     expect((await memberDb.persons.toArray()).map((p) => p.firstName).sort()).toEqual(["سارا", "علی"].sort());
     for (const p of await memberDb.persons.toArray()) expect(p.cardNumber ?? p.phone ?? p.bankName).toBeUndefined();
-    expect((await memberDb.events.get(event.id))?.treasurerCardNumber).toBeUndefined();
+    // the short-code member receives the event key through an envelope, then sees the treasurer's payment info
+    await until(async () => Boolean((await memberDb.eventKeys.get(event.id))?.verified));
+    await until(async () => (await memberDb.events.get(event.id))?.treasurerCardNumber === "6037991234567802");
     expect(await memberDb.outbox.count()).toBe(0);
 
     // the same invite cannot be redeemed twice

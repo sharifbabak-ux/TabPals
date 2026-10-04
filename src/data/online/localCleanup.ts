@@ -40,7 +40,8 @@ const ALL_TABLES = (db: TabPalDB) => [
   db.sessionExtras,
   db.outbox,
   db.appliedRemoteOps,
-  db.onlineLinks
+  db.onlineLinks,
+  db.eventKeys
 ];
 
 /** Drops the sync bookkeeping of an event (link with its token, queued ops, applied-op ids) but keeps the event's data: it becomes an offline event again. */
@@ -49,6 +50,7 @@ export async function detachOnlineEvent(localEventId: string, db: TabPalDB = def
     await db.outbox.where("localEventId").equals(localEventId).delete();
     await db.appliedRemoteOps.where("localEventId").equals(localEventId).delete();
     await db.onlineLinks.delete(localEventId);
+    await db.eventKeys.delete(localEventId);
   });
 }
 
@@ -76,6 +78,7 @@ export async function wipeOnlineEvent(localEventId: string, db: TabPalDB = defau
     await db.outbox.where("localEventId").equals(localEventId).delete();
     await db.appliedRemoteOps.where("localEventId").equals(localEventId).delete();
     await db.onlineLinks.delete(localEventId);
+    await db.eventKeys.delete(localEventId);
 
     for (const personId of new Set(members.map((m) => m.personId))) {
       const stillMember = await db.eventMembers.where("personId").equals(personId).count();

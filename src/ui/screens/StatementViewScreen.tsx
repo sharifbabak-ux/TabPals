@@ -5,15 +5,16 @@ import { db } from "@/data/db";
 import type { SendChannel } from "@/data/types";
 import { statementsRepository } from "@/data/repositories";
 import { computeVerificationCode } from "@/domain/verificationCode";
-import type { StatementLinkData } from "@/domain/statementLink";
+import { hidePaymentDetails } from "@/domain/paymentVisibility";
+import { isPendingKey, PENDING_KEY_TEXT } from "@/domain/encryptedDisplay";
 import { EmptyState } from "@/ui/components/EmptyState";
+import { useHidePaymentInExports } from "@/ui/hooks/useHidePaymentInExports";
 import { useOnlineEvent } from "@/ui/hooks/useOnlineEvent";
+import { parseSnapshot, withCreditorDetails, type ParsedSnapshot } from "./statements/statementData";
 import { StatementPaper, type StatementPaperMeta } from "./statements/StatementPaper";
 import { buildStatementShareLink } from "./statements/sendActions";
 import { SendMenuSheet } from "./statements/SendMenuSheet";
 import "./statements/StatementView.css";
-
-type ParsedSnapshot = StatementLinkData & { appVersion: string };
 
 export function StatementViewScreen() {
   const { eventId = "", statementId = "" } = useParams();
@@ -28,18 +29,40 @@ export function StatementViewScreen() {
 
   const [link, setLink] = useState<StatementPaperMeta["link"]>(undefined);
   const snapshot = statement?.snapshot;
+  const parsed = snapshot ? parseSnapshot(snapshot) : null;
+  const hidePayment = useHidePaymentInExports();
+  /** On-screen data: creditors' bank details filled in from local member profiles (only present on treasurer/admin devices). */
+  const [filled, setFilled] = useState<ParsedSnapshot | null>(null);
   useEffect(() => {
-    if (!statement) return;
+    if (!snapshot) return;
+    const current = parseSnapshot(snapshot);
+    if (!current) {
+      setFilled(null);
+      return;
+    }
     let cancelled = false;
-    const parsed = JSON.parse(statement.snapshot) as ParsedSnapshot;
-    buildStatementShareLink(statement, parsed, parsed.event.title).then((result) => {
+    withCreditorDetails(current).then((result) => {
+      if (!cancelled) setFilled(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [snapshot]);
+  const screenData = filled ?? parsed;
+  /** What leaves the app (send menu, exports): the same data, minus payment details when the privacy setting is on. */
+  const exportData = screenData && hidePayment ? hidePaymentDetails(screenData) : screenData;
+
+  useEffect(() => {
+    if (!statement || !exportData) return;
+    let cancelled = false;
+    buildStatementShareLink(statement, exportData, exportData.event.title).then((result) => {
       if (!cancelled) setLink(result);
     });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statement?.id, snapshot, statement?.status, statement?.issueVersion]);
+  }, [statement?.id, snapshot, statement?.status, statement?.issueVersion, hidePayment, Boolean(exportData)]);
 
   async function handleVerify() {
     if (!statement) return;
@@ -67,7 +90,20 @@ export function StatementViewScreen() {
     );
   }
 
-  const data = JSON.parse(statement.snapshot) as ParsedSnapshot;
+  if (!screenData || !exportData) {
+    // The snapshot arrived encrypted and this device has no event key yet.
+    return (
+      <div className="screen statement-view">
+        <div className="statement-view__toolbar no-print">
+          <button type="button" className="back-link" onClick={() => navigate(`/events/${eventId}`)}>
+            ← بازگشت
+          </button>
+        </div>
+        <EmptyState hint={PENDING_KEY_TEXT} />
+      </div>
+    );
+  }
+  const data = screenData;
 
   return (
     <div className="screen statement-view">
@@ -91,6 +127,8 @@ export function StatementViewScreen() {
 
       <StatementPaper
         data={data}
+        maskPayment
+        hidePaymentOnPrint={hidePayment}
         meta={{
           number: statement.number,
           issueVersion: statement.issueVersion,
@@ -117,9 +155,9 @@ export function StatementViewScreen() {
         open={sendMenuOpen}
         onClose={() => setSendMenuOpen(false)}
         statement={statement}
-        data={data}
+        data={exportData}
         eventTitle={data.event.title}
-        phone={memberPerson?.phone}
+        phone={isPendingKey(memberPerson?.phone) ? undefined : memberPerson?.phone}
         onSent={handleSent}
       />
     </div>

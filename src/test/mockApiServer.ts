@@ -34,11 +34,14 @@ interface Device {
   token: string;
   createdAt: string;
   revokedAt: string | null;
+  /** ECDH public JWK as JSON text (docs/API.md). */
+  publicKey?: string;
+  envelope?: { fromDeviceId: string; wrappedKey: string; meta: unknown; createdAt: string };
 }
 interface MockEvent {
   id: string;
   title: string;
-  members: Map<string, { displayName: string; roles: OnlineRole[] }>;
+  members: Map<string, { displayName: string; roles: OnlineRole[]; removedAt?: string | null; createdAt: string }>;
   devices: Device[];
   invites: Invite[];
   ops: StoredOp[];
@@ -82,8 +85,10 @@ export function createMockApi() {
   let nextSeq = 1;
   let nextInvite = 1;
   let nextAudit = 1;
-  const failures = { pushOps: 0, pullOps: 0 };
+  const failures = { pushOps: 0, pullOps: 0, keyEnvelopes: 0 };
   const opBatchSizes: number[] = [];
+  /** Every op body the server ever received, serialized exactly as sent (for "nothing private on the wire" guard tests). */
+  const wire: string[] = [];
 
   const rand = (n: number, alphabet = ALPHABET) => Array.from({ length: n }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
   const err = (status: number, code: string) => HttpResponse.json({ error: { code, message: code } }, { status });
@@ -109,6 +114,24 @@ export function createMockApi() {
     }
   };
 
+  /** docs/API.md: memberProfile ops reach only the owning member and current admins/treasurers. */
+  const canRead = (event: MockEvent, memberId: string, op: ServerOp): boolean => {
+    if (op.entity !== "memberProfile") return true;
+    const roles = event.members.get(memberId)?.roles ?? [];
+    return op.entityId === memberId || roles.includes("admin") || roles.includes("treasurer");
+  };
+  const toDevice = (event: MockEvent, name: string, deviceId: string, payload: unknown) => {
+    const device = event.devices.find((d) => d.deviceId === deviceId);
+    if (!device) return;
+    for (const s of sockets) if (s.token === device.token && s.connected) s.receive(name, payload);
+  };
+  const registerPublicKey = (event: MockEvent, device: Device, publicKey: unknown) => {
+    const text = typeof publicKey === "string" ? publicKey : JSON.stringify(publicKey);
+    if (device.publicKey && device.publicKey !== text) device.envelope = undefined;
+    device.publicKey = text;
+    if (!device.envelope) broadcast(event.id, "key-needed", { deviceId: device.deviceId, memberId: device.memberId });
+  };
+
   function addDevice(event: MockEvent, memberId: string, label: string): Device {
     const device: Device = { deviceId: `dev-${rand(8)}`, memberId, label, token: `tok-${rand(24)}`, createdAt: new Date().toISOString(), revokedAt: null };
     event.devices.push(device);
@@ -117,14 +140,16 @@ export function createMockApi() {
 
   const handlers: RequestHandler[] = [
     http.post(`${BASE}/v1/events`, async ({ request }) => {
-      const body = (await request.json()) as { eventId: string; title: string; creator: { memberId: string; displayName: string }; members?: { memberId: string; displayName: string }[]; deviceLabel: string };
+      const body = (await request.json()) as { eventId: string; title: string; creator: { memberId: string; displayName: string }; members?: { memberId: string; displayName: string }[]; deviceLabel: string; publicKey?: unknown };
       log.push({ method: "POST", path: "/v1/events", body });
       if (events.has(body.eventId)) return err(409, "event-exists");
       const event: MockEvent = { id: body.eventId, title: body.title, members: new Map(), devices: [], invites: [], ops: [], opIndex: new Map(), audit: [] };
-      event.members.set(body.creator.memberId, { displayName: body.creator.displayName, roles: ["admin", "treasurer"] });
-      for (const m of body.members ?? []) if (!event.members.has(m.memberId)) event.members.set(m.memberId, { displayName: m.displayName, roles: ["member"] });
+      const created = new Date().toISOString();
+      event.members.set(body.creator.memberId, { displayName: body.creator.displayName, roles: ["admin", "treasurer"], createdAt: created });
+      for (const m of body.members ?? []) if (!event.members.has(m.memberId)) event.members.set(m.memberId, { displayName: m.displayName, roles: ["member"], createdAt: created });
       events.set(event.id, event);
       const device = addDevice(event, body.creator.memberId, body.deviceLabel);
+      if (body.publicKey) device.publicKey = typeof body.publicKey === "string" ? body.publicKey : JSON.stringify(body.publicKey);
       audit(event, device, "event.created", event.id);
       return HttpResponse.json({ deviceToken: device.token, deviceId: device.deviceId }, { status: 201 });
     }),
@@ -134,6 +159,7 @@ export function createMockApi() {
       if (a instanceof Response) return a;
       const { ops } = (await request.json()) as { ops: ServerOp[] };
       log.push({ method: "POST", path: "ops", body: { count: ops.length } });
+      for (const op of ops) wire.push(JSON.stringify(op));
       opBatchSizes.push(ops.length);
       (log[log.length - 1].body as { first?: string }).first = ops[0]?.id;
       if (failures.pushOps > 0) {
@@ -160,7 +186,14 @@ export function createMockApi() {
         accepted.push({ opId: op.id, seq: stored.seq });
         fresh.push(stored);
       }
-      if (fresh.length) broadcast(a.event.id, "ops", { ops: fresh, lastSeq: fresh[fresh.length - 1].seq });
+      if (fresh.length) {
+        for (const sock of sockets) {
+          const device = a.event.devices.find((d) => d.token === sock.token && !d.revokedAt);
+          if (!device || !sock.connected) continue;
+          const visible = fresh.filter((o) => canRead(a.event, device.memberId, o.op));
+          if (visible.length) sock.receive("ops", { ops: visible, lastSeq: visible[visible.length - 1].seq });
+        }
+      }
       return HttpResponse.json({ accepted, rejected, lastSeq: a.event.ops.at(-1)?.seq ?? 0 });
     }),
 
@@ -174,7 +207,7 @@ export function createMockApi() {
       const url = new URL(request.url);
       const after = Number(url.searchParams.get("after") ?? 0);
       const limit = Math.min(500, Number(url.searchParams.get("limit") ?? 200));
-      const rest = a.event.ops.filter((o) => o.seq > after);
+      const rest = a.event.ops.filter((o) => o.seq > after && canRead(a.event, a.device.memberId, o.op));
       const page = rest.slice(0, limit);
       return HttpResponse.json({ ops: page, hasMore: rest.length > page.length, lastSeq: page.at(-1)?.seq ?? after });
     }),
@@ -193,7 +226,8 @@ export function createMockApi() {
         members: [...a.event.members].map(([memberId, m]) => ({
           memberId,
           displayName: m.displayName,
-          createdAt: new Date().toISOString(),
+          createdAt: m.createdAt,
+          removedAt: m.removedAt ?? null,
           roles: m.roles,
           activeDevices: a.event.devices.filter((d) => d.memberId === memberId && !d.revokedAt).length
         }))
@@ -207,7 +241,7 @@ export function createMockApi() {
       if (!a.roles.includes("admin") && !a.roles.includes("treasurer")) return err(403, "forbidden");
       const body = (await request.json()) as { memberId: string; displayName: string };
       if (a.event.members.has(body.memberId)) return err(409, "member-exists");
-      a.event.members.set(body.memberId, { displayName: body.displayName, roles: ["member"] });
+      a.event.members.set(body.memberId, { displayName: body.displayName, roles: ["member"], createdAt: new Date().toISOString() });
       audit(a.event, a.device, "member.added", body.memberId);
       return HttpResponse.json({ memberId: body.memberId, displayName: body.displayName, roles: ["member"] }, { status: 201 });
     }),
@@ -233,6 +267,7 @@ export function createMockApi() {
       if (!a.roles.includes("admin")) return err(403, "forbidden");
       const { memberId } = (await request.json()) as { memberId: string };
       if (!a.event.members.has(memberId)) return err(404, "member-not-found");
+      if (a.event.members.get(memberId)!.removedAt) return err(409, "member-removed");
       const invite: Invite = { id: nextInvite++, memberId, token: `inv-${rand(24)}`, shortCode: rand(8), expiresAt: Date.now() + 7 * 864e5 };
       a.event.invites.push(invite);
       audit(a.event, a.device, "invite.created", memberId, { inviteId: invite.id });
@@ -250,7 +285,7 @@ export function createMockApi() {
     }),
 
     http.post(`${BASE}/v1/invites/redeem`, async ({ request }) => {
-      const body = (await request.json()) as { inviteToken?: string; shortCode?: string; deviceLabel: string };
+      const body = (await request.json()) as { inviteToken?: string; shortCode?: string; deviceLabel: string; publicKey?: unknown };
       log.push({ method: "POST", path: "redeem", body });
       const code = body.shortCode?.toUpperCase().replace(/[^A-Z0-9]/g, "");
       for (const event of events.values()) {
@@ -259,8 +294,10 @@ export function createMockApi() {
         if (invite.revokedAt) return err(410, "invite-revoked");
         if (invite.usedAt) return err(409, "invite-used");
         if (invite.expiresAt <= Date.now()) return err(410, "invite-expired");
+        if (event.members.get(invite.memberId)?.removedAt) return err(409, "member-removed");
         invite.usedAt = Date.now();
         const device = addDevice(event, invite.memberId, body.deviceLabel);
+        if (body.publicKey) registerPublicKey(event, device, body.publicKey);
         audit(event, device, "invite.redeemed", invite.memberId, { inviteId: invite.id });
         return HttpResponse.json({ eventId: event.id, memberId: invite.memberId, roles: event.members.get(invite.memberId)!.roles, deviceToken: device.token, deviceId: device.deviceId, eventTitle: event.title });
       }
@@ -296,6 +333,103 @@ export function createMockApi() {
       return HttpResponse.json({ entries, nextBefore: null });
     }),
 
+    http.get(`${BASE}/v1/events/:eventId/invites`, ({ request }) => {
+      const a = auth(request);
+      if (a instanceof Response) return a;
+      if (!a.roles.includes("admin")) return err(403, "forbidden");
+      return HttpResponse.json({
+        invites: a.event.invites.map((i) => ({
+          inviteId: i.id,
+          memberId: i.memberId,
+          status: i.revokedAt ? "revoked" : i.usedAt ? "used" : i.expiresAt <= Date.now() ? "expired" : "pending",
+          createdAt: new Date(i.expiresAt - 7 * 864e5).toISOString(),
+          expiresAt: new Date(i.expiresAt).toISOString(),
+          usedAt: i.usedAt ? new Date(i.usedAt).toISOString() : null,
+          createdBy: a.device.memberId
+        }))
+      });
+    }),
+
+    http.delete(`${BASE}/v1/events/:eventId/members/:memberId`, ({ request, params }) => {
+      const a = auth(request);
+      if (a instanceof Response) return a;
+      if (!a.roles.includes("admin")) return err(403, "forbidden");
+      const memberId = String(params.memberId);
+      const member = a.event.members.get(memberId);
+      if (!member) return err(404, "member-not-found");
+      if (member.roles.includes("admin") && [...a.event.members].filter(([, m]) => m.roles.includes("admin") && !m.removedAt).length <= 1) return err(409, "last-admin");
+      if (!member.removedAt) {
+        for (const d of a.event.devices.filter((x) => x.memberId === memberId && !x.revokedAt)) {
+          d.revokedAt = new Date().toISOString();
+          d.envelope = undefined;
+          for (const sock of sockets) if (sock.token === d.token) sock.receive("device-revoked", { deviceId: d.deviceId });
+        }
+        for (const i of a.event.invites.filter((x) => x.memberId === memberId && !x.usedAt && !x.revokedAt)) i.revokedAt = Date.now();
+        member.roles = [];
+        member.removedAt = new Date().toISOString();
+        audit(a.event, a.device, "member.removed", memberId);
+        broadcast(a.event.id, "member-removed", { memberId });
+      }
+      return HttpResponse.json({ ok: true });
+    }),
+
+    http.post(`${BASE}/v1/events/:eventId/members/:memberId/restore`, ({ request, params }) => {
+      const a = auth(request);
+      if (a instanceof Response) return a;
+      if (!a.roles.includes("admin")) return err(403, "forbidden");
+      const member = a.event.members.get(String(params.memberId));
+      if (!member) return err(404, "member-not-found");
+      member.removedAt = null;
+      audit(a.event, a.device, "member.restored", String(params.memberId));
+      return HttpResponse.json({ ok: true, memberId: params.memberId, roles: [] });
+    }),
+
+    http.put(`${BASE}/v1/devices/me/public-key`, async ({ request }) => {
+      const a = auth(request);
+      if (a instanceof Response) return a;
+      const { publicKey } = (await request.json()) as { publicKey: unknown };
+      if (!publicKey || (typeof publicKey === "object" && "d" in (publicKey as object))) return err(400, "invalid-field");
+      log.push({ method: "PUT", path: "public-key" });
+      registerPublicKey(a.event, a.device, publicKey);
+      return HttpResponse.json({ ok: true });
+    }),
+
+    http.get(`${BASE}/v1/events/:eventId/devices/awaiting-key`, ({ request }) => {
+      const a = auth(request);
+      if (a instanceof Response) return a;
+      log.push({ method: "GET", path: "awaiting-key" });
+      return HttpResponse.json({
+        devices: a.event.devices
+          .filter((d) => !d.revokedAt && d.publicKey && !d.envelope && !a.event.members.get(d.memberId)?.removedAt)
+          .map((d) => ({ deviceId: d.deviceId, memberId: d.memberId, label: d.label, publicKey: d.publicKey }))
+      });
+    }),
+
+    http.post(`${BASE}/v1/events/:eventId/key-envelopes`, async ({ request }) => {
+      const a = auth(request);
+      if (a instanceof Response) return a;
+      const body = (await request.json()) as { targetDeviceId: string; wrappedKey: string; meta?: unknown };
+      if (failures.keyEnvelopes > 0) {
+        // test hook: nobody can hand out the key right now
+        return err(500, "internal-error");
+      }
+      if (body.targetDeviceId === a.device.deviceId) return err(400, "invalid-field");
+      const target = a.event.devices.find((d) => d.deviceId === body.targetDeviceId && !d.revokedAt && !a.event.members.get(d.memberId)?.removedAt);
+      if (!target) return err(404, "device-not-found");
+      log.push({ method: "POST", path: "key-envelopes", body: { target: target.deviceId, from: a.device.deviceId } });
+      target.envelope = { fromDeviceId: a.device.deviceId, wrappedKey: body.wrappedKey, meta: body.meta ?? null, createdAt: new Date().toISOString() };
+      audit(a.event, a.device, "key.delivered", target.deviceId, { targetDeviceId: target.deviceId });
+      toDevice(a.event, "key-delivered", target.deviceId, { deviceId: target.deviceId, fromDeviceId: a.device.deviceId });
+      return HttpResponse.json({ ok: true });
+    }),
+
+    http.get(`${BASE}/v1/devices/me/key-envelope`, ({ request }) => {
+      const a = auth(request);
+      if (a instanceof Response) return a;
+      if (!a.device.envelope) return err(404, "not-found");
+      return HttpResponse.json(a.device.envelope);
+    }),
+
     http.delete(`${BASE}/v1/events/:eventId`, ({ request }) => {
       const a = auth(request);
       if (a instanceof Response) return a;
@@ -314,5 +448,5 @@ export function createMockApi() {
     return socket;
   };
 
-  return { handlers, events, sockets, log, failures, opBatchSizes, socketFactory, addDevice, broadcast };
+  return { handlers, events, sockets, log, wire, failures, opBatchSizes, socketFactory, addDevice, broadcast };
 }

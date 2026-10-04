@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { onlineService } from "@/data/online/onlineService";
-import { formatShortCode, parseInviteLinkCode, parseInviteToken } from "@/domain/inviteLink";
+import { formatShortCode, parseInviteKey, parseInviteLinkCode, parseInviteToken } from "@/domain/inviteLink";
 import { clipboardService, platform } from "@/platform";
 import { Toast } from "@/ui/components/Toast";
 import { JoinWithInviteSheet } from "./JoinWithInviteSheet";
@@ -48,6 +48,7 @@ export function JoinScreen() {
   const search = location.search ? `${location.pathname}${location.search}` : location.pathname;
   const token = parseInviteToken(search);
   const shortCode = parseInviteLinkCode(search);
+  const eventKey = parseInviteKey(search);
 
   const standalone = platform.getInfo().isStandalone;
   const os = platform.getInfo().os;
@@ -66,13 +67,13 @@ export function JoinScreen() {
     submittedTokens.add(token);
     setBusy(true);
     onlineService
-      .joinWithInvite({ inviteToken: token })
+      .joinWithInvite({ inviteToken: token, eventKey })
       .then((eventId) => navigate(`/events/${eventId}`, { replace: true }))
       .catch((e) => {
         setError(e instanceof Error ? e.message : "پیوستن ناموفق بود");
         setBusy(false);
       });
-  }, [shouldRedeem, token, navigate]);
+  }, [shouldRedeem, token, eventKey, navigate]);
 
   if (!token) {
     return (

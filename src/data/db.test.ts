@@ -734,7 +734,7 @@ describe("TabPalDB schema v9 -> v10 migration (online events)", () => {
 
     const upgraded = new TabPalDB(TEST_DB_NAME);
     await upgraded.open();
-    expect(upgraded.verno).toBe(10);
+    expect(upgraded.verno).toBe(11);
 
     expect((await upgraded.persons.get("p1"))?.cardNumber).toBe("6037991234567802");
     expect((await upgraded.events.get("e1"))?.title).toBe("سفر");
@@ -758,6 +758,55 @@ describe("TabPalDB schema v9 -> v10 migration (online events)", () => {
     await upgraded.appliedRemoteOps.put({ localEventId: "e1", opId: "op9", seq: 9, appliedAt: "x" });
     expect(await upgraded.appliedRemoteOps.get(["e1", "op9"])).toBeTruthy();
 
+    upgraded.close();
+  });
+});
+
+describe("TabPalDB schema v10 -> v11 migration (end-to-end encryption)", () => {
+  it("flags creator links, keeps data, and adds usable key tables", async () => {
+    class V10DB extends Dexie {
+      constructor() {
+        super(TEST_DB_NAME);
+        this.version(10).stores({
+          meta: "key",
+          persons: "id, archived, deleted, needsNameReview",
+          events: "id, archived, deleted, startDate, closedAt, treasurerPersonId, deletedAt",
+          eventMembers: "id, eventId, personId, &[eventId+personId], active, deleted, sortOrder",
+          groups: "id, name, archived, deleted",
+          vouchers: "id, eventId, &[eventId+number], type, status, deleted, recordedAt",
+          statements: "id, eventId, kind, personId, &[eventId+number], status, deleted",
+          messageTemplates: "id, category, enabled, isDefault, deleted",
+          orderSessions: "id, eventId, status, scheduledAt, deleted",
+          sessionMenuItems: "id, sessionId, sortOrder, deleted",
+          orderLines: "id, sessionId, personId, deleted",
+          orderPersonTotals: "id, sessionId, [sessionId+personId], deleted",
+          sessionExtras: "id, sessionId, deleted",
+          operations: "id, entity, entityId, timestamp",
+          onlineLinks: "localEventId, serverEventId, status",
+          outbox: "++order, &[localEventId+opId], localEventId",
+          appliedRemoteOps: "[localEventId+opId], localEventId"
+        });
+      }
+    }
+    const legacy = new V10DB();
+    const link = { serverEventId: "x", memberId: "p1", roles: ["admin"], deviceToken: "t", lastSeq: 3, status: "online", createdAt: "x" };
+    await legacy.table("onlineLinks").put({ localEventId: "created", ...link, uploadTotal: 5, registeredPersonIds: ["p1"] });
+    await legacy.table("onlineLinks").put({ localEventId: "joined", ...link });
+    await legacy.table("persons").put({ id: "p1", firstName: "علی", lastName: "رضایی", archived: false, cardNumber: "6037991234567802", createdAt: "x", updatedAt: "x", deviceId: "d", version: 1, deleted: false });
+    legacy.close();
+
+    const upgraded = new TabPalDB(TEST_DB_NAME);
+    await upgraded.open();
+    expect(upgraded.verno).toBe(11);
+    expect((await upgraded.onlineLinks.get("created"))?.creatorDevice).toBe(true);
+    expect((await upgraded.onlineLinks.get("joined"))?.creatorDevice).toBe(false);
+    expect((await upgraded.onlineLinks.get("joined"))?.lastSeq).toBe(3);
+    expect((await upgraded.persons.get("p1"))?.cardNumber).toBe("6037991234567802");
+    expect(await upgraded.eventKeys.count()).toBe(0);
+    expect(await upgraded.deviceKeys.count()).toBe(0);
+    const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
+    await upgraded.eventKeys.put({ localEventId: "created", key, verified: true, createdAt: "x" });
+    expect((await upgraded.eventKeys.get("created"))?.key.type).toBe("secret");
     upgraded.close();
   });
 });

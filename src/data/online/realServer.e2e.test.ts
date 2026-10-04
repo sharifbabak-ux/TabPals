@@ -10,6 +10,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { setApiBaseOverride } from "@/config/online";
 import { db, TabPalDB } from "../db";
 import { eventMembersRepository, eventsRepository, personsRepository, vouchersRepository } from "../repositories";
+import { api } from "./apiClient";
 import { OnlinePermissionError } from "./outboxHook";
 import { readOnlineNotice } from "./localCleanup";
 import { createOnlineService } from "./onlineService";
@@ -68,7 +69,7 @@ run("real server end-to-end", () => {
     await eventMembersRepository.addMembers(event.id, [ali.id, sara.id]);
     await vouchersRepository.createExpense({ eventId: event.id, expenseDate: "2026-01-01", description: "شام", totalAmount: 100, payers: [{ personId: ali.id, amount: 100 }], split: { mode: "equal_all" } });
 
-    const adminEngine = new SyncEngine({ db });
+    const adminEngine = new SyncEngine({ db, serveDelayMs: () => 0 });
     engines.push(adminEngine);
     const admin = createOnlineService({ db, engine: adminEngine, deviceLabel: () => "Android Chrome" });
     await adminEngine.start();
@@ -77,7 +78,7 @@ run("real server end-to-end", () => {
     expect(await db.outbox.count()).toBe(0);
 
     const invite = await admin.createInvite(event.id, sara.id);
-    const memberEngine = new SyncEngine({ db: memberDb });
+    const memberEngine = new SyncEngine({ db: memberDb, serveDelayMs: () => 0 });
     engines.push(memberEngine);
     const member = createOnlineService({ db: memberDb, engine: memberEngine, deviceLabel: () => "iPhone Safari" });
     await memberEngine.start();
@@ -88,7 +89,21 @@ run("real server end-to-end", () => {
     expect(await memberDb.vouchers.count()).toBe(1);
     expect((await memberDb.persons.toArray()).map((p) => p.firstName).sort()).toEqual(["سارا", "علی"].sort());
     for (const p of await memberDb.persons.toArray()) expect(p.cardNumber ?? p.phone).toBeUndefined();
-    expect((await memberDb.events.get(event.id))?.treasurerCardNumber).toBeUndefined();
+
+    // end-to-end encryption: the key reaches the member through a real envelope, then the treasurer's card decrypts
+    await until(async () => Boolean((await memberDb.eventKeys.get(event.id))?.verified));
+    await until(async () => (await memberDb.events.get(event.id))?.treasurerCardNumber === "6037991234567802");
+    // the real server only ever stored ciphertext
+    const link = (await db.onlineLinks.get(event.id))!;
+    const stored = JSON.stringify(await api.pullOps(link.deviceToken, event.id, 0));
+    expect(stored).not.toContain("6037991234567802");
+    expect(stored).not.toContain("09121234567");
+    expect(stored).toContain("enc:v1:");
+
+    // the member's own profile travels encrypted to the treasurer's device
+    await member.saveMyProfile(event.id, { cardNumber: "5859831012343728", phone: "09351112233" });
+    await until(async () => (await db.persons.get(sara.id))?.cardNumber === "5859831012343728");
+    expect(JSON.stringify(await api.pullOps(link.deviceToken, event.id, 0))).not.toContain("5859831012343728");
 
     // live: a new voucher on the admin device arrives on the member device through the real socket
     const v = await vouchersRepository.createExpense({ eventId: event.id, expenseDate: "2026-01-02", description: "ناهار", totalAmount: 60, payers: [{ personId: ali.id, amount: 60 }], split: { mode: "equal_all" } });
@@ -105,12 +120,15 @@ run("real server end-to-end", () => {
     const audit = await admin.listAudit(event.id);
     expect(audit.entries.map((e) => e.action)).toEqual(expect.arrayContaining(["event.created", "invite.created", "invite.redeemed"]));
 
-    // revoke the member's device → its local copy is wiped with a Persian notice
-    const devices = await admin.listDevices(event.id);
-    const memberDevice = devices.find((d) => d.memberId === sara.id)!;
-    await admin.revokeDevice(event.id, memberDevice.deviceId);
+    // removing the member revokes their device → its local copy and key are wiped with a Persian notice; history stays
+    expect((await admin.listInvites(event.id)).find((i) => i.memberId === sara.id)?.status).toBe("used");
+    await admin.removeMember(event.id, sara.id);
     await until(async () => (await memberDb.events.get(event.id)) === undefined);
+    expect(await memberDb.eventKeys.count()).toBe(0);
     expect((await readOnlineNotice(memberDb))?.message).toContain("قطع شد");
+    expect((await admin.listMembers(event.id)).find((m) => m.memberId === sara.id)?.removedAt).toBeTruthy();
+    await admin.restoreMember(event.id, sara.id);
+    expect((await admin.listMembers(event.id)).find((m) => m.memberId === sara.id)?.removedAt).toBeNull();
 
     memberDb.close();
     await Dexie.delete("e2e-member");

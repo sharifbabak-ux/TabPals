@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/data/db";
-import type { AuditEntry, ServerDevice, ServerMember } from "@/data/online/apiClient";
+import type { AuditEntry, ServerDevice, ServerInvite, ServerMember } from "@/data/online/apiClient";
 import { onlineService } from "@/data/online/onlineService";
 import type { OnlineRole } from "@/data/types";
 import { auditActionLabel } from "@/domain/onlineErrors";
@@ -11,36 +11,11 @@ import { ConfirmDialog } from "@/ui/components/ConfirmDialog";
 import { EmptyState } from "@/ui/components/EmptyState";
 import { JalaliDate } from "@/ui/components/JalaliDate";
 import { useOnlineEvent } from "@/ui/hooks/useOnlineEvent";
+import { useAccessRevision } from "@/ui/hooks/useSyncStatus";
+import { BackupKeySection } from "./BackupKeySection";
 import "./online.css";
 
-const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-
-type InviteStatus = "pending" | "used" | "expired" | "revoked";
-interface InviteRow {
-  inviteId: string | number;
-  memberId: string | null;
-  at: string;
-  status: InviteStatus;
-}
-
-const INVITE_STATUS_LABELS: Record<InviteStatus, string> = { pending: "در انتظار", used: "استفاده‌شده", expired: "منقضی", revoked: "لغوشده" };
-
-/** The invite list is derived from the audit log (the API has no list-invites endpoint; the log carries `inviteId` for created/redeemed/revoked). */
-export function deriveInvites(entries: AuditEntry[], now = Date.now()): InviteRow[] {
-  const idOf = (e: AuditEntry) => (e.details && typeof e.details === "object" ? (e.details as { inviteId?: string | number }).inviteId : undefined);
-  const redeemed = new Set(entries.filter((e) => e.action === "invite.redeemed").map((e) => String(idOf(e))));
-  const revoked = new Set(entries.filter((e) => e.action === "invite.revoked").map((e) => String(idOf(e))));
-  return entries
-    .filter((e) => e.action === "invite.created" && idOf(e) !== undefined)
-    .map((e) => {
-      const key = String(idOf(e));
-      let status: InviteStatus = "pending";
-      if (redeemed.has(key)) status = "used";
-      else if (revoked.has(key)) status = "revoked";
-      else if (new Date(e.at).getTime() + INVITE_TTL_MS <= now) status = "expired";
-      return { inviteId: idOf(e)!, memberId: e.target, at: e.at, status };
-    });
-}
+const INVITE_STATUS_LABELS: Record<ServerInvite["status"], string> = { pending: "در انتظار", used: "استفاده‌شده", expired: "منقضی", revoked: "لغوشده" };
 
 /** «اعضا و دسترسی‌ها» — admin only: roles, devices, invites, audit log and the danger zone (docs/PLAN.md "Admin screen"). */
 export function AccessScreen() {
@@ -52,6 +27,9 @@ export function AccessScreen() {
   const [members, setMembers] = useState<ServerMember[]>([]);
   const [devices, setDevices] = useState<ServerDevice[]>([]);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
+  const [invites, setInvites] = useState<ServerInvite[]>([]);
+  const [removeTarget, setRemoveTarget] = useState<ServerMember | null>(null);
+  const accessRevision = useAccessRevision(eventId);
   const [nextBefore, setNextBefore] = useState<number | string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyRole, setBusyRole] = useState<string | null>(null);
@@ -63,9 +41,15 @@ export function AccessScreen() {
   const refresh = useCallback(async () => {
     try {
       setError(null);
-      const [m, d, a] = await Promise.all([onlineService.listMembers(eventId), onlineService.listDevices(eventId), onlineService.listAudit(eventId)]);
+      const [m, d, a, inv] = await Promise.all([
+        onlineService.listMembers(eventId),
+        onlineService.listDevices(eventId),
+        onlineService.listAudit(eventId),
+        onlineService.listInvites(eventId)
+      ]);
       setMembers(m);
       setDevices(d);
+      setInvites(inv);
       setAudit(a.entries);
       setNextBefore(a.nextBefore);
     } catch (e) {
@@ -73,15 +57,15 @@ export function AccessScreen() {
     }
   }, [eventId]);
 
+  // Reload when the server tells us the member picture changed (member-removed, roles-changed, key received).
   useEffect(() => {
     if (online.isAdmin) void refresh();
-  }, [online.isAdmin, refresh]);
+  }, [online.isAdmin, refresh, accessRevision]);
 
   const nameOf = useMemo(() => {
     const map = new Map(members.map((m) => [m.memberId, m.displayName]));
     return (id: string | null) => (id ? (map.get(id) ?? "—") : "—");
   }, [members]);
-  const invites = useMemo(() => deriveInvites(audit), [audit]);
 
   if (!online.loaded || event === undefined) return <div className="screen" />;
   if (!online.online || !online.isAdmin || !event) {
@@ -136,6 +120,27 @@ export function AccessScreen() {
     }
   }
 
+  async function confirmRemoveMember() {
+    if (!removeTarget) return;
+    const target = removeTarget;
+    setRemoveTarget(null);
+    try {
+      await onlineService.removeMember(eventId, target.memberId);
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "حذف عضو ناموفق بود");
+    }
+  }
+
+  async function restoreMember(member: ServerMember) {
+    try {
+      await onlineService.restoreMember(eventId, member.memberId);
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "بازگردانی ناموفق بود");
+    }
+  }
+
   async function revokeInvite(inviteId: string | number) {
     try {
       await onlineService.revokeInvite(eventId, inviteId);
@@ -170,7 +175,15 @@ export function AccessScreen() {
         <ul className="online-list">
           {members.map((member) => (
             <li key={member.memberId} className="online-list__row">
-              <span>{member.displayName}</span>
+              <span>
+                {member.displayName}
+                {member.removedAt && <span className="badge"> حذف‌شده</span>}
+              </span>
+              {member.removedAt ? (
+                <button type="button" className="form-actions__secondary" onClick={() => restoreMember(member)}>
+                  بازگردانی
+                </button>
+              ) : (
               <div className="role-chips">
                 {ONLINE_ROLES.map((role) => (
                   <button
@@ -184,7 +197,13 @@ export function AccessScreen() {
                     {ROLE_LABELS_FA[role]}
                   </button>
                 ))}
+                {member.memberId !== online.link?.memberId && (
+                  <button type="button" className="danger-button" onClick={() => setRemoveTarget(member)}>
+                    حذف از ایونت
+                  </button>
+                )}
               </div>
+              )}
             </li>
           ))}
         </ul>
@@ -225,7 +244,13 @@ export function AccessScreen() {
                 {nameOf(invite.memberId)} · {INVITE_STATUS_LABELS[invite.status]}
                 <br />
                 <small className="field__hint">
-                  <JalaliDate date={new Date(invite.at)} weekday time />
+                  <JalaliDate date={new Date(invite.createdAt)} weekday time />
+                  {invite.status === "pending" && (
+                    <>
+                      {" "}
+                      · تا <JalaliDate date={new Date(invite.expiresAt)} weekday time />
+                    </>
+                  )}
                 </small>
               </span>
               {invite.status === "pending" && (
@@ -237,6 +262,8 @@ export function AccessScreen() {
           ))}
         </ul>
       </div>
+
+      <BackupKeySection eventId={eventId} />
 
       <h2 className="section-title">گزارش رویدادها</h2>
       <div className="online-card">
@@ -279,6 +306,16 @@ export function AccessScreen() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={removeTarget !== null}
+        title="حذف از ایونت"
+        message={`«${removeTarget?.displayName ?? ""}» از ایونت حذف شود؟ همه‌ی دستگاه‌های او قطع و نسخه‌ی ایونت از دستگاهش پاک می‌شود و دعوت‌های بازِ او لغو می‌شود. سابقه‌ی مالی او (هزینه‌ها، سهم‌ها و صورت‌حساب‌ها) برای بقیه می‌ماند و در صورت نیاز می‌توانید او را بازگردانید.`}
+        confirmLabel="حذف از ایونت"
+        danger
+        onConfirm={confirmRemoveMember}
+        onCancel={() => setRemoveTarget(null)}
+      />
 
       <ConfirmDialog
         open={revokeTarget !== null}

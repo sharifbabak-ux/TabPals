@@ -5,6 +5,8 @@ import { detectBankFromCardNumber, detectBankFromIban } from "@/domain/bankDetec
 import { validateCardNumber, validateIban } from "@/domain/paymentValidation";
 import { validatePersonName, type PersonNameCandidate } from "@/domain/personValidation";
 import { imageService } from "@/platform";
+import { editableValue, isPendingKey, PENDING_KEY_TEXT } from "@/domain/encryptedDisplay";
+import { MaskedValue } from "@/ui/components/MaskedValue";
 import type { Person } from "@/data/types";
 import type { PersonInput } from "@/data/repositories/personsRepository";
 
@@ -71,17 +73,18 @@ export function PersonFormSheet({
     if (open) {
       setFirstName(person?.firstName ?? "");
       setLastName(person?.lastName ?? "");
-      setPhone(person?.phone ?? "");
+      setPhone(editableValue(person?.phone));
       setNote(person?.note ?? "");
       setPhoto(undefined);
       setPhotoError(null);
-      setCardNumber(person?.cardNumber ? groupDigitsForDisplay(person.cardNumber) : "");
-      setIban(person?.iban ?? "");
-      setBankName(person?.bankName ?? "");
+      setCardNumber(person?.cardNumber && !isPendingKey(person.cardNumber) ? groupDigitsForDisplay(person.cardNumber) : "");
+      setIban(editableValue(person?.iban));
+      setBankName(editableValue(person?.bankName));
       setBankNameTouched(Boolean(person?.bankName));
-      setAccountHolder(person?.accountHolder ?? `${person?.firstName ?? ""} ${person?.lastName ?? ""}`.trim());
+      setAccountHolder(editableValue(person?.accountHolder) || `${person?.firstName ?? ""} ${person?.lastName ?? ""}`.trim());
       setAccountHolderTouched(Boolean(person?.accountHolder));
-      setBankOpen(Boolean(person?.cardNumber || person?.iban || person?.bankName || person?.accountHolder));
+      // Saved card/IBAN stay masked (tap to reveal) until the user opens the section to edit.
+      setBankOpen(false);
       setSubmitError(null);
     }
   }, [open, person]);
@@ -104,6 +107,14 @@ export function PersonFormSheet({
   const ibanValidation = ibanDigits ? validateIban(iban) : null;
   const bankFieldsValid = (cardValidation?.valid ?? true) && (ibanValidation?.valid ?? true);
   const valid = nameValidation.valid && bankFieldsValid;
+  /** Values that arrived encrypted and are still waiting for the event key: shown with the lock marker, never overwritten. */
+  const lockedFields = {
+    phone: isPendingKey(person?.phone),
+    cardNumber: isPendingKey(person?.cardNumber),
+    iban: isPendingKey(person?.iban),
+    bankName: isPendingKey(person?.bankName),
+    accountHolder: isPendingKey(person?.accountHolder)
+  };
   const previewPhoto = photo === undefined ? person?.photo : photo === null ? undefined : photo;
 
   async function pickPhoto(source: "camera" | "gallery") {
@@ -128,13 +139,13 @@ export function PersonFormSheet({
       await onSubmit({
         firstName,
         lastName,
-        phone,
+        ...(lockedFields.phone ? {} : { phone }),
         note,
         photo,
-        cardNumber,
-        iban: ibanDigits ? iban : "",
-        bankName,
-        accountHolder
+        ...(lockedFields.cardNumber ? {} : { cardNumber }),
+        ...(lockedFields.iban ? {} : { iban: ibanDigits ? iban : "" }),
+        ...(lockedFields.bankName ? {} : { bankName }),
+        ...(lockedFields.accountHolder ? {} : { accountHolder })
       });
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "خطایی رخ داد");
@@ -180,7 +191,14 @@ export function PersonFormSheet({
         </div>
         <div className="field">
           <label htmlFor="person-phone">شماره تماس (اختیاری)</label>
-          <input id="person-phone" type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} />
+          <input
+            id="person-phone"
+            type="tel"
+            disabled={lockedFields.phone}
+            placeholder={lockedFields.phone ? PENDING_KEY_TEXT : undefined}
+            value={phone}
+            onChange={(event) => setPhone(event.target.value)}
+          />
         </div>
         <div className="field">
           <label htmlFor="person-note">یادداشت (اختیاری)</label>
@@ -190,12 +208,28 @@ export function PersonFormSheet({
         <button type="button" className="collapsible-toggle" onClick={() => setBankOpen((v) => !v)} aria-expanded={bankOpen}>
           اطلاعات بانکی (اختیاری) {bankOpen ? "▲" : "▼"}
         </button>
+        {!bankOpen && person && (person.cardNumber || person.iban) && (
+          <div className="person-bank-summary">
+            {person.cardNumber && (
+              <div>
+                <MaskedValue kind="card" value={person.cardNumber} />
+              </div>
+            )}
+            {person.iban && (
+              <div>
+                <MaskedValue kind="iban" value={person.iban} />
+              </div>
+            )}
+          </div>
+        )}
         {bankOpen && (
           <div className="collapsible-body">
             <div className="field">
               <label htmlFor="person-card">شماره کارت</label>
               <input
                 id="person-card"
+                disabled={lockedFields.cardNumber}
+                placeholder={lockedFields.cardNumber ? PENDING_KEY_TEXT : undefined}
                 dir="ltr"
                 inputMode="numeric"
                 value={cardNumber}
@@ -207,6 +241,8 @@ export function PersonFormSheet({
               <label htmlFor="person-iban">شبا</label>
               <input
                 id="person-iban"
+                disabled={lockedFields.iban}
+                placeholder={lockedFields.iban ? PENDING_KEY_TEXT : undefined}
                 dir="ltr"
                 value={iban || "IR"}
                 onFocus={() => !iban && setIban("IR")}
@@ -218,6 +254,8 @@ export function PersonFormSheet({
               <label htmlFor="person-bank-name">نام بانک</label>
               <input
                 id="person-bank-name"
+                disabled={lockedFields.bankName}
+                placeholder={lockedFields.bankName ? PENDING_KEY_TEXT : undefined}
                 value={bankName}
                 onChange={(event) => {
                   setBankNameTouched(true);
@@ -229,6 +267,8 @@ export function PersonFormSheet({
               <label htmlFor="person-account-holder">نام صاحب حساب</label>
               <input
                 id="person-account-holder"
+                disabled={lockedFields.accountHolder}
+                placeholder={lockedFields.accountHolder ? PENDING_KEY_TEXT : undefined}
                 value={accountHolder}
                 onChange={(event) => {
                   setAccountHolderTouched(true);

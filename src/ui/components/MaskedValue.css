@@ -1,0 +1,34 @@
+.masked-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.masked-value__text {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.masked-value__print {
+  display: none;
+}
+.masked-value__toggle {
+  min-height: 32px;
+  padding: 2px 10px;
+  border: 1px solid var(--color-border, #c9c2ae);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8125rem;
+}
+.masked-value__pending {
+  opacity: 0.75;
+}
+@media print {
+  .masked-value__text {
+    display: none;
+  }
+  .masked-value__print {
+    display: inline;
+  }
+}

@@ -99,8 +99,37 @@ export interface ServerMember {
   memberId: string;
   displayName: string;
   createdAt: string;
+  /** ISO time the member was removed, or null/absent while active. Removed members keep their history but have no roles or devices. */
+  removedAt?: string | null;
   roles: OnlineRole[];
   activeDevices: number;
+}
+
+export type InviteStatus = "pending" | "used" | "expired" | "revoked";
+
+export interface ServerInvite {
+  inviteId: string | number;
+  memberId: string;
+  status: InviteStatus;
+  createdAt: string;
+  expiresAt: string;
+  usedAt: string | null;
+  createdBy: string | null;
+}
+
+/** An active device that registered a public key but has no key envelope yet (`publicKey` is the JWK as JSON text). */
+export interface AwaitingDevice {
+  deviceId: string;
+  memberId: string;
+  label: string;
+  publicKey: string;
+}
+
+export interface ServerKeyEnvelope {
+  fromDeviceId: string;
+  wrappedKey: string;
+  meta: unknown;
+  createdAt: string;
 }
 
 export interface ServerDevice {
@@ -140,7 +169,7 @@ export interface AuditEntry {
 }
 
 export const api = {
-  createEvent(body: { eventId: string; title: string; creator: MemberInput; members: MemberInput[]; deviceLabel: string }) {
+  createEvent(body: { eventId: string; title: string; creator: MemberInput; members: MemberInput[]; deviceLabel: string; publicKey?: unknown }) {
     return request<{ deviceToken: string; deviceId: string }>("POST", "/v1/events", { body });
   },
   pushOps(token: string, eventId: string, ops: ServerOp[]) {
@@ -167,8 +196,29 @@ export const api = {
   revokeInvite(token: string, eventId: string, inviteId: string | number) {
     return request<{ ok: true }>("DELETE", `/v1/events/${encodeURIComponent(eventId)}/invites/${encodeURIComponent(String(inviteId))}`, { token });
   },
-  redeemInvite(body: { inviteToken?: string; shortCode?: string; deviceLabel: string }) {
+  redeemInvite(body: { inviteToken?: string; shortCode?: string; deviceLabel: string; publicKey?: unknown }) {
     return request<RedeemResult>("POST", "/v1/invites/redeem", { body });
+  },
+  listInvites(token: string, eventId: string) {
+    return request<{ invites: ServerInvite[] }>("GET", `/v1/events/${encodeURIComponent(eventId)}/invites`, { token });
+  },
+  removeMember(token: string, eventId: string, memberId: string) {
+    return request<{ ok: true }>("DELETE", `/v1/events/${encodeURIComponent(eventId)}/members/${encodeURIComponent(memberId)}`, { token });
+  },
+  restoreMember(token: string, eventId: string, memberId: string) {
+    return request<{ ok: true; memberId: string; roles: OnlineRole[] }>("POST", `/v1/events/${encodeURIComponent(eventId)}/members/${encodeURIComponent(memberId)}/restore`, { token });
+  },
+  putPublicKey(token: string, publicKey: unknown) {
+    return request<{ ok: true }>("PUT", "/v1/devices/me/public-key", { token, body: { publicKey } });
+  },
+  awaitingKey(token: string, eventId: string) {
+    return request<{ devices: AwaitingDevice[] }>("GET", `/v1/events/${encodeURIComponent(eventId)}/devices/awaiting-key`, { token });
+  },
+  postKeyEnvelope(token: string, eventId: string, body: { targetDeviceId: string; wrappedKey: string; meta: unknown }) {
+    return request<{ ok: true }>("POST", `/v1/events/${encodeURIComponent(eventId)}/key-envelopes`, { token, body });
+  },
+  getKeyEnvelope(token: string) {
+    return request<ServerKeyEnvelope>("GET", "/v1/devices/me/key-envelope", { token });
   },
   listDevices(token: string, eventId: string) {
     return request<{ devices: ServerDevice[] }>("GET", `/v1/events/${encodeURIComponent(eventId)}/devices`, { token });

@@ -11,6 +11,7 @@ import { OnlinePermissionError } from "./outboxHook";
 
 const CARD = "6037-9912-3456-7802";
 const SECRETS = ["6037991234567802", "09121234567", "بانک ملی ایران", "IR"];
+const PLAIN_SECRETS = ["6037991234567802", "09121234567", "بانک ملی ایران"];
 
 async function resetAll() {
   for (const table of db.tables) if (table.name !== "messageTemplates") await table.clear();
@@ -49,38 +50,57 @@ describe("outbox: local writes in an online event", () => {
     expect(rows[0].op.changes.recordedAt?.after).toBeTruthy();
     expect(rows[0].op.changes.eventId.after).toBe(event.id);
 
-    // adding a member also ships that person (sanitized) before the membership
+    // adding a member also ships that person (sanitized) and their memberProfile before the membership
     const newcomer = await personsRepository.create({ firstName: "رضا", lastName: "کریمی", phone: "09121234567", cardNumber: CARD, bankName: "بانک ملی ایران" });
     await eventMembersRepository.addMember(event.id, newcomer.id);
     const after = (await db.outbox.toArray()).slice(1);
-    expect(after.map((r) => r.op.entity)).toEqual(["persons", "eventMembers"]);
+    expect(after.map((r) => r.op.entity)).toEqual(["persons", "memberProfile", "eventMembers"]);
     expect(Object.keys(after[0].op.changes).sort()).toEqual(["archived", "firstName", "lastName"]);
+    expect(after[1].op.entityId).toBe(newcomer.id);
+    expect(Object.keys(after[1].op.changes).sort()).toEqual(["bankName", "cardNumber", "phone"]);
 
-    // editing only a private person field queues nothing
+    // editing only a private person field is a memberProfile op (never a persons op)
     const before = await db.outbox.count();
     await personsRepository.update(sara.id, { phone: "09123334444" });
-    expect(await db.outbox.count()).toBe(before);
-    // renaming does
+    const edit = (await db.outbox.toArray()).slice(before);
+    expect(edit.map((r) => r.op.entity)).toEqual(["memberProfile"]);
+    expect(edit[0].op.entityId).toBe(sara.id);
+    // renaming is a persons op
     await personsRepository.update(sara.id, { firstName: "ساراجان" });
-    expect(await db.outbox.count()).toBe(before + 1);
+    expect((await db.outbox.toArray()).slice(before + 1).map((r) => r.op.entity)).toEqual(["persons"]);
 
     // groups are device-local
+    const size = await db.outbox.count();
     await groupsRepository.create({ name: "خانواده", personIds: [sara.id] });
-    expect(await db.outbox.count()).toBe(before + 1);
+    expect(await db.outbox.count()).toBe(size);
 
-    // nothing private anywhere in the queue
-    const text = JSON.stringify(await db.outbox.toArray());
-    for (const secret of SECRETS) expect(text).not.toContain(secret);
+    // persons ops (and every non-profile op) never hold private data; profile ops are encrypted when pushed
+    const rowsNow = await db.outbox.toArray();
+    for (const row of rowsNow.filter((r) => r.op.entity !== "memberProfile")) {
+      for (const secret of PLAIN_SECRETS) expect(JSON.stringify(row.op)).not.toContain(secret);
+    }
   });
 
-  it("treasurer bank fields never reach the outbox, but other event edits do", async () => {
+  it("treasurer bank fields are queued on the events entity (encrypted when pushed); photos and notes never are", async () => {
     const { event } = await setup();
     await goOnlineAs(event.id, ["admin"]);
     await eventsRepository.update(event.id, { treasurerCardNumber: CARD, treasurerBankName: "بانک ملی ایران", description: "توضیح" });
     const rows = await db.outbox.toArray();
     expect(rows).toHaveLength(1);
-    expect(Object.keys(rows[0].op.changes)).toEqual(["description"]);
+    expect(Object.keys(rows[0].op.changes).sort()).toEqual(["description", "treasurerBankName", "treasurerCardNumber"]);
     await eventsRepository.update(event.id, { treasurerBankName: "بانک دیگر" });
+    expect(await db.outbox.count()).toBe(2);
+  });
+
+  it("a member may write only their OWN member profile", async () => {
+    const { event, sara, treasurer } = await setup();
+    await db.onlineLinks.put({ localEventId: event.id, serverEventId: event.id, memberId: sara.id, roles: ["member"], deviceToken: "tok", lastSeq: 0, status: "online", createdAt: new Date().toISOString() });
+    await personsRepository.update(sara.id, { cardNumber: CARD, iban: "IR820540102680020817909002" });
+    const rows = await db.outbox.toArray();
+    expect(rows.map((r) => [r.op.entity, r.op.entityId])).toEqual([["memberProfile", sara.id]]);
+    // someone else's profile, or a ledger field of their own person, is refused and writes nothing
+    await expect(personsRepository.update(treasurer.id, { phone: "09120000000" })).rejects.toBeInstanceOf(OnlinePermissionError);
+    await expect(personsRepository.update(sara.id, { firstName: "هک" })).rejects.toBeInstanceOf(OnlinePermissionError);
     expect(await db.outbox.count()).toBe(1);
   });
 
@@ -95,7 +115,9 @@ describe("outbox: local writes in an online event", () => {
     const snapshot = stmt.op.changes.snapshot.after as string;
     expect(JSON.parse(snapshot).member.personId).toBe(sara.id);
     for (const secret of SECRETS) expect(JSON.stringify(stmt.op)).not.toContain(secret);
-    expect(snapshot).not.toMatch(/card|iban|bankName|accountHolder/i);
+    // creditors' bank details are not part of the outbound snapshot; the treasurer's own payment info is (the whole snapshot is encrypted when pushed)
+    expect(snapshot).not.toMatch(/"(cardNumberGrouped|ibanGrouped|bankName|accountHolder)"/);
+    expect(JSON.parse(snapshot).treasurerCardNumberGrouped).toBeTruthy();
   });
 });
 

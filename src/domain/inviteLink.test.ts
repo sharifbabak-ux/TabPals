@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildInviteUrl, formatShortCode, isValidShortCode, normalizeShortCode, parseInviteLinkCode, parseInviteToken } from "./inviteLink";
+import { buildInviteUrl, formatShortCode, isValidShortCode, normalizeShortCode, parseInviteKey, parseInviteLinkCode, parseInviteToken } from "./inviteLink";
 
 describe("invite URL building", () => {
   it("builds APP_BASE_URL + #/join?t=<token>", () => {
@@ -62,5 +62,21 @@ describe("short code", () => {
     expect(isValidShortCode("abcd 2345")).toBe(true);
     expect(isValidShortCode("ABCD-234")).toBe(false);
     expect(isValidShortCode("")).toBe(false);
+  });
+});
+
+describe("invite link carries the event key in the fragment", () => {
+  const key = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ"; // 43 base64url chars
+  it("appends k= after the code and parses it back", () => {
+    const url = buildInviteUrl("https://x.example/app/", "tok", "abcd-2345", key);
+    expect(url).toBe(`https://x.example/app/#/join?t=tok&c=ABCD2345&k=${key}`);
+    expect(parseInviteKey(url.slice(url.indexOf("#") + 1))).toBe(key);
+    expect(parseInviteToken(url.slice(url.indexOf("#") + 1))).toBe("tok");
+    expect(parseInviteLinkCode(url.slice(url.indexOf("#") + 1))).toBe("ABCD2345");
+  });
+  it("rejects malformed keys and keyless links", () => {
+    expect(parseInviteKey("/join?t=tok&k=short")).toBeNull();
+    expect(parseInviteKey("/join?t=tok")).toBeNull();
+    expect(parseInviteKey("/other?t=tok&k=" + key)).toBeNull();
   });
 });

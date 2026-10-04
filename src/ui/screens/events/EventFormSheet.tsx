@@ -1,3 +1,4 @@
+import { editableValue, isPendingKey } from "@/domain/encryptedDisplay";
 import { useEffect, useState, type FormEvent } from "react";
 import { BottomSheet } from "@/ui/components/BottomSheet";
 import { JalaliDatePicker } from "@/ui/components/JalaliDatePicker";
@@ -56,10 +57,10 @@ export function EventFormSheet({ open, event, closed, treasurerOptions, onClose,
       setDescription(event?.description ?? "");
       setCurrency(event?.currency ?? "تومان");
       setTreasurerPersonId(event?.treasurerPersonId ?? "");
-      setTreasurerCardNumber(event?.treasurerCardNumber ?? "");
-      setTreasurerIban(event?.treasurerIban ?? "");
-      setTreasurerBankName(event?.treasurerBankName ?? "");
-      setTreasurerAccountHolder(event?.treasurerAccountHolder ?? "");
+      setTreasurerCardNumber(editableValue(event?.treasurerCardNumber));
+      setTreasurerIban(editableValue(event?.treasurerIban));
+      setTreasurerBankName(editableValue(event?.treasurerBankName));
+      setTreasurerAccountHolder(editableValue(event?.treasurerAccountHolder));
       setSubmitError(null);
     }
   }, [open, event]);
@@ -100,10 +101,11 @@ export function EventFormSheet({ open, event, closed, treasurerOptions, onClose,
         description,
         currency,
         treasurerPersonId,
-        treasurerCardNumber,
-        treasurerIban,
-        treasurerBankName,
-        treasurerAccountHolder
+        // values still encrypted (key not received yet) are left untouched
+        ...(isPendingKey(event?.treasurerCardNumber) ? {} : { treasurerCardNumber }),
+        ...(isPendingKey(event?.treasurerIban) ? {} : { treasurerIban }),
+        ...(isPendingKey(event?.treasurerBankName) ? {} : { treasurerBankName }),
+        ...(isPendingKey(event?.treasurerAccountHolder) ? {} : { treasurerAccountHolder })
       });
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "خطایی رخ داد");

@@ -48,3 +48,11 @@ export function useSyncStatus(localEventId: string): SyncStatusInfo {
   const upload = counts?.uploadTotal ? { total: counts.uploadTotal, done: Math.max(0, counts.uploadTotal - pending) } : null;
   return { view, pending, rejected, lastError: state.lastError, upload };
 }
+
+/** Counter that changes whenever the member/access picture of an event may have changed (member removed, roles changed, key received). */
+export function useAccessRevision(localEventId: string): number {
+  return useSyncExternalStore(
+    (listener) => syncEngine.subscribe(listener),
+    () => syncEngine.getState(localEventId).accessRevision
+  );
+}

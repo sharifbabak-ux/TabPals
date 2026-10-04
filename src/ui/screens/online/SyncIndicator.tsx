@@ -14,6 +14,8 @@ export function SyncIndicator({ eventId, canSeeRejected }: { eventId: string; ca
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  const keyReceived = useLiveQuery(async () => Boolean((await db.eventKeys.get(eventId))?.verified), [eventId]);
+  const keyError = useLiveQuery(async () => (await db.onlineLinks.get(eventId))?.keyError ?? null, [eventId]);
   const rejected = useLiveQuery(() => db.outbox.where("localEventId").equals(eventId).filter((r) => Boolean(r.rejected)).toArray(), [eventId]);
 
   async function run(action: () => Promise<void>) {
@@ -53,6 +55,11 @@ export function SyncIndicator({ eventId, canSeeRejected }: { eventId: string; ca
           </>
         )}
         <p>تغییرهای در صف ارسال: {toPersianDigits(status.pending)}</p>
+        <p>
+          کلید رمزگذاری: <strong>{keyReceived ? "دریافت شده" : "در انتظار"}</strong>
+        </p>
+        {!keyReceived && <p className="field__hint">تا رسیدن کلید، اطلاعات بانکی و تماس به‌صورت «🔒 در انتظار دریافت کلید» نمایش داده می‌شود. کافی است یکی از دستگاه‌های دیگر ایونت آنلاین شود.</p>}
+        {keyError && <p className="field__error">{keyError}</p>}
         {status.lastError && <p className="field__error">{status.lastError}</p>}
 
         {canSeeRejected && rejected && rejected.length > 0 && (

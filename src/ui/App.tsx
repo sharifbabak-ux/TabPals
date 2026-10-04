@@ -15,6 +15,7 @@ import { PeopleScreen } from "./screens/PeopleScreen";
 import { BackupScreen } from "./screens/BackupScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 import { NameReviewScreen } from "./screens/NameReviewScreen";
+import { PrivacyScreen } from "./screens/PrivacyScreen";
 import { TrashScreen } from "./screens/TrashScreen";
 import { AccessScreen } from "./screens/online/AccessScreen";
 import { JoinScreen } from "./screens/online/JoinScreen";
@@ -66,6 +67,7 @@ export function App() {
           <Route path="/settings" element={<SettingsScreen />} />
           <Route path="/settings/name-review" element={<NameReviewScreen />} />
           <Route path="/settings/trash" element={<TrashScreen />} />
+          <Route path="/settings/privacy" element={<PrivacyScreen />} />
           <Route path="*" element={<Navigate to="/events" replace />} />
         </Routes>
       </main>
