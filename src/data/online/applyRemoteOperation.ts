@@ -36,12 +36,36 @@ async function nextFreeNumber(table: AnyTable, eventId: string): Promise<number>
   return rows.reduce((max, row) => Math.max(max, (row.number as number) ?? 0), 0) + 1;
 }
 
-/** `memberProfile`: the (decrypted) sensitive fields of a member update the local person; ciphertext is kept as-is while the key is missing. */
-async function applyProfileOp(db: TabPalDB, op: ServerOp): Promise<void> {
+/**
+ * `memberProfile`: the (decrypted) sensitive fields of a member update the local person; ciphertext is kept as-is while the key is missing.
+ *
+ * Local edits always win over older or in-flight remote data (otherwise a member's freshly saved bank info could be wiped by a replayed op).
+ * Decided per field:
+ *  1. a field with a still-pending (not rejected) memberProfile op of this person in our own outbox is skipped — our value is about to be
+ *     sent and becomes the newest write on the server;
+ *  2. last-write-wins by timestamp: a field that was changed on THIS device (local operation log) at a later time than the inbound op is skipped.
+ *     (Only the field's own history counts, so e.g. renaming a person never blocks a newer bank-info change from the member.)
+ * Skipped fields are not retried later: the caller still records the op as applied.
+ */
+async function applyProfileOp(db: TabPalDB, op: ServerOp, localEventId: string): Promise<void> {
   const person = await db.persons.get(op.entityId);
   if (!person) return;
+  const opTime = opTimestampIso(op.timestamp);
+  const localOps = await db.operations.where("entityId").equals(op.entityId).filter((o) => o.entity === "persons").toArray();
+  const lastLocalWrite = new Map<string, string>();
+  for (const local of localOps) {
+    for (const field of Object.keys(local.changes ?? {})) {
+      const at = opTimestampIso(local.timestamp);
+      if (at > (lastLocalWrite.get(field) ?? "")) lastLocalWrite.set(field, at);
+    }
+  }
+
+  const pending = await db.outbox.where("localEventId").equals(localEventId).filter((row) => !row.rejected && row.op.entity === PROFILE_ENTITY && row.op.entityId === op.entityId).toArray();
+  const pendingFields = new Set(pending.flatMap((row) => Object.keys(row.op.changes ?? {})));
+
   const patch: Record<string, unknown> = {};
   for (const field of PROFILE_FIELDS) {
+    if (pendingFields.has(field) || (lastLocalWrite.get(field) ?? "") > opTime) continue;
     const change = op.changes?.[field];
     if (!change || !("after" in change)) continue;
     const after = change.after;
@@ -49,7 +73,8 @@ async function applyProfileOp(db: TabPalDB, op: ServerOp): Promise<void> {
     patch[field] = after === "" ? undefined : after;
   }
   if (Object.keys(patch).length === 0) return;
-  await db.persons.put({ ...person, ...patch, updatedAt: opTimestampIso(op.timestamp), deviceId: op.deviceId, version: person.version + 1 } as typeof person);
+  const newer = opTime >= person.updatedAt; // a partially skipped op must not move the record back in time
+  await db.persons.put({ ...person, ...patch, ...(newer ? { updatedAt: opTime, deviceId: op.deviceId } : {}), version: person.version + 1 } as typeof person);
 }
 
 /** `logSend`: only the send log changes (the op's `targetMemberId`/`channel` are audit metadata, never row fields). */
@@ -67,8 +92,8 @@ async function applyLogSend(db: TabPalDB, op: ServerOp): Promise<void> {
   await db.statements.put({ ...statement, sendLog, updatedAt: opTimestampIso(op.timestamp), deviceId: op.deviceId, version: statement.version + 1 });
 }
 
-async function applyOp(db: TabPalDB, op: ServerOp): Promise<void> {
-  if (op.entity === PROFILE_ENTITY) return applyProfileOp(db, op);
+async function applyOp(db: TabPalDB, op: ServerOp, localEventId: string): Promise<void> {
+  if (op.entity === PROFILE_ENTITY) return applyProfileOp(db, op, localEventId);
   if (op.type === "logSend" && op.entity === "statements") return applyLogSend(db, op);
   const table = tableOf(db, op.entity);
   const existing = await table.get(op.entityId);
@@ -132,6 +157,7 @@ export async function applyRemoteOperation(localEventId: string, envelope: Remot
       db.orderPersonTotals,
       db.sessionExtras,
       db.outbox,
+      db.operations,
       db.appliedRemoteOps,
       db.onlineLinks,
       db.eventKeys
@@ -166,7 +192,7 @@ export async function applyRemoteOperation(localEventId: string, envelope: Remot
         if (!safe) {
           result = "ignored";
         } else {
-          await applyOp(db, { ...safe, timestamp: rawOp.timestamp });
+          await applyOp(db, { ...safe, timestamp: rawOp.timestamp }, localEventId);
         }
       }
 

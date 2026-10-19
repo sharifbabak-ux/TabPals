@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   standalone: false,
   os: "android" as "android" | "ios" | "other",
-  join: vi.fn(async (_input: { inviteToken?: string; shortCode?: string }) => "EVENT1"),
+  join: vi.fn(async (_input: { inviteToken?: string; shortCode?: string }): Promise<{ eventId: string; synced: boolean; error?: string }> => ({ eventId: "EVENT1", synced: true })),
+  retry: vi.fn(async (_id: string): Promise<{ eventId: string; synced: boolean; error?: string }> => ({ eventId: "EVENT1", synced: true })),
   copy: vi.fn(async (_text: string) => true)
 }));
 
@@ -18,8 +19,9 @@ vi.mock("@/platform", async (importOriginal) => {
     clipboardService: { copyText: mocks.copy }
   };
 });
-vi.mock("@/data/online/onlineService", () => ({ onlineService: { joinWithInvite: mocks.join } }));
+vi.mock("@/data/online/onlineService", () => ({ onlineService: { joinWithInvite: mocks.join, retryJoinSync: mocks.retry } }));
 
+import { ApiError, NetworkError } from "@/data/online/apiClient";
 import { JoinScreen } from "./JoinScreen";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -120,6 +122,42 @@ describe("#/join in the installed app", () => {
     mocks.join.mockRejectedValueOnce(new Error("این دعوت‌نامه قبلاً استفاده شده است."));
     await renderAt("/join?t=tok-used");
     expect(text()).toContain("این دعوت‌نامه قبلاً استفاده شده است.");
+  });
+});
+
+describe("#/join failures", () => {
+  it("allows «تلاش دوباره» after a network error (the invite was never used) and then joins", async () => {
+    mocks.standalone = true;
+    mocks.join.mockRejectedValueOnce(new NetworkError());
+    await renderAt("/join?t=tok-net");
+    expect(mocks.join).toHaveBeenCalledTimes(1);
+    expect(button("تلاش دوباره")).toBeTruthy();
+    await act(async () => button("تلاش دوباره")!.click());
+    expect(mocks.join).toHaveBeenCalledTimes(2);
+    expect(container.querySelector("[data-testid=where]")?.textContent).toBe("/events/EVENT1");
+  });
+
+  it("offers no retry when the server answered (invite used/expired is final)", async () => {
+    mocks.standalone = true;
+    mocks.join.mockRejectedValueOnce(new ApiError(409, "invite-used", "این دعوت‌نامه قبلاً استفاده شده است."));
+    await renderAt("/join?t=tok-final");
+    expect(text()).toContain("این دعوت‌نامه قبلاً استفاده شده است.");
+    expect(button("تلاش دوباره")).toBeUndefined();
+  });
+
+  it("joined but first download failed: shows the Persian explanation, does not open the event, retry opens it", async () => {
+    mocks.standalone = true;
+    mocks.join.mockResolvedValueOnce({ eventId: "EVENT1", synced: false, error: "اتصال برقرار نشد" });
+    await renderAt("/join?t=tok-sync");
+    expect(text()).toContain("اطلاعات ایونت هنوز کامل دریافت نشده است");
+    expect(container.querySelector("[data-testid=where]")).toBeNull();
+    mocks.retry.mockResolvedValueOnce({ eventId: "EVENT1", synced: false, error: "هنوز وصل نیست" });
+    await act(async () => button("تلاش دوباره")!.click());
+    expect(text()).toContain("هنوز وصل نیست");
+    expect(container.querySelector("[data-testid=where]")).toBeNull();
+    await act(async () => button("تلاش دوباره")!.click());
+    expect(mocks.retry).toHaveBeenCalledWith("EVENT1");
+    expect(container.querySelector("[data-testid=where]")?.textContent).toBe("/events/EVENT1");
   });
 });
 

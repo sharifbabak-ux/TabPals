@@ -44,7 +44,7 @@ const AUDIT_LABELS: Record<string, string> = {
   "member.added": "عضو اضافه شد",
   "member.removed": "عضو از ایونت حذف شد",
   "member.restored": "عضو بازگردانده شد",
-  "key.delivered": "کلید رمزگذاری به یک دستگاه رسید",
+  "key.delivered": "کلید رمزگذاری برای یک دستگاه ارسال شد",
   "statement.sent": "صورت‌حساب ارسال شد",
   "roles.changed": "نقش‌ها تغییر کرد",
   "invite.created": "دعوت‌نامه ساخته شد",

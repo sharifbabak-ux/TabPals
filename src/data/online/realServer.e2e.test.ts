@@ -82,8 +82,8 @@ run("real server end-to-end", () => {
     engines.push(memberEngine);
     const member = createOnlineService({ db: memberDb, engine: memberEngine, deviceLabel: () => "iPhone Safari" });
     await memberEngine.start();
-    const localId = await member.joinWithInvite({ shortCode: invite.shortCode });
-    expect(localId).toBe(event.id);
+    const joined = await member.joinWithInvite({ shortCode: invite.shortCode });
+    expect(joined).toEqual({ eventId: event.id, synced: true });
 
     expect((await memberDb.events.get(event.id))?.title).toBe("سفر شمال");
     expect(await memberDb.vouchers.count()).toBe(1);

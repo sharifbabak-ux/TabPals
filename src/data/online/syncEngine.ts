@@ -373,8 +373,9 @@ export class SyncEngine {
     });
   }
 
-  async catchUp(localEventId: string): Promise<void> {
-    await this.exclusive(localEventId, () => this.catchUpLocked(localEventId));
+  /** Resolves true when the catch-up finished, false when it failed (the error is in `lastError` and a retry is scheduled) or the device lost access. */
+  async catchUp(localEventId: string): Promise<boolean> {
+    return (await this.exclusive(localEventId, () => this.catchUpLocked(localEventId))) === true;
   }
 
   /** "تلاش دوباره": clears rejections so the treasurer can resend (e.g. after a role change) and forces a sync. */
@@ -425,14 +426,14 @@ export class SyncEngine {
     }
   }
 
-  private async catchUpLocked(localEventId: string): Promise<void> {
+  private async catchUpLocked(localEventId: string): Promise<boolean> {
     try {
       for (;;) {
         const link = await this.deps.db.onlineLinks.get(localEventId);
-        if (!link || link.status === "revoked") return;
+        if (!link || link.status === "revoked") return false;
         const page: PullResult = await this.deps.api.pullOps(link.deviceToken, link.serverEventId, link.lastSeq, MAX_BATCH_OPS);
         for (const envelope of page.ops) {
-          if ((await this.applyEnvelope(localEventId, envelope)) === "purged") return;
+          if ((await this.applyEnvelope(localEventId, envelope)) === "purged") return false;
         }
         // Even an empty page may move the cursor (e.g. only our own ops).
         const fresh = await this.deps.db.onlineLinks.get(localEventId);
@@ -442,8 +443,10 @@ export class SyncEngine {
       await this.verifyKeyAfterInbound(localEventId);
       this.clearRetry(localEventId);
       this.patchState(localEventId, { lastError: null });
+      return true;
     } catch (err) {
       await this.handleFailure(localEventId, err);
+      return false;
     }
   }
 

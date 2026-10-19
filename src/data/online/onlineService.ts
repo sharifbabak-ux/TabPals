@@ -4,6 +4,7 @@
  * network-facing goes through `api`; everything local through Dexie. The
  * device token is read from the `onlineLinks` row and never logged.
  */
+import { onlineErrorMessage } from "@/domain/onlineErrors";
 import { getAppBaseUrl } from "@/config/online";
 import { platform } from "@/platform";
 import { can, canWriteLedger } from "@/domain/onlinePermissions";
@@ -29,6 +30,9 @@ export class OnlineServiceError extends Error {
     this.name = "OnlineServiceError";
   }
 }
+
+/** `synced: false` = joined, but the first download of the event failed (retry with `retryJoinSync`). */
+export type JoinResult = { eventId: string; synced: true } | { eventId: string; synced: false; error: string };
 
 export interface OnlineServiceDeps {
   db: TabPalDB;
@@ -117,6 +121,15 @@ export function createOnlineService(deps: OnlineServiceDeps) {
     }
   }
 
+  /** Undoes a redeem whose result cannot be used (best effort: a network error here leaves the device for the admin's «قطع دسترسی»). */
+  async function revokeFreshDevice(result: { eventId: string; deviceToken: string; deviceId: string }): Promise<void> {
+    try {
+      await api.revokeDevice(result.deviceToken, result.eventId, result.deviceId);
+    } catch {
+      // ignore
+    }
+  }
+
   return {
     async getLink(localEventId: string): Promise<OnlineLink | undefined> {
       return db.onlineLinks.get(localEventId);
@@ -202,48 +215,82 @@ export function createOnlineService(deps: OnlineServiceDeps) {
       engine.attach(localEventId);
     },
 
-    /** Redeems an invite (token from the link or the typed short code), creates the local event shell + link, and catches up on all ops. Returns the local event id. */
-    async joinWithInvite(invite: { inviteToken?: string; shortCode?: string; eventKey?: string | null }): Promise<string> {
+    /**
+     * Redeems an invite (token from the link or the typed short code), creates the local event shell + link, and catches up on all ops.
+     *
+     * The invite is single-use and is burned by the server before anything is stored here, so every failure after the redeem is handled
+     * explicitly instead of leaving a "ghost" device behind:
+     *  - the device already belongs to this event → the new device is revoked again and nothing is written;
+     *  - local persistence fails → the new device is revoked (best effort) and the half-written link is removed; the admin must send a new invite;
+     *  - the first catch-up fails (offline, server error) → the joined device is KEPT and `synced: false` is returned so the UI can offer
+     *    «تلاش دوباره» (`retryJoinSync`); the engine also keeps retrying in the background.
+     */
+    async joinWithInvite(invite: { inviteToken?: string; shortCode?: string; eventKey?: string | null }): Promise<JoinResult> {
       const deviceKeys = await getDeviceKeys(db);
       const result = await api.redeemInvite({ inviteToken: invite.inviteToken, shortCode: invite.shortCode, deviceLabel: deps.deviceLabel(), publicKey: deviceKeys.publicKey });
-      const existing = await db.onlineLinks.get(result.eventId);
-      if (existing) throw new OnlineServiceError("شما قبلاً عضو این ایونت آنلاین هستید.");
+
+      // The event id is only known after the redeem, so this is the earliest possible check — and it runs before any local write.
+      if (await db.onlineLinks.get(result.eventId)) {
+        await revokeFreshDevice(result);
+        throw new OnlineServiceError("شما قبلاً عضو این ایونت آنلاین هستید.");
+      }
 
       const nowIso = new Date().toISOString();
-      await db.transaction("rw", db.events, db.onlineLinks, async () => {
-        if (!(await db.events.get(result.eventId))) {
-          await db.events.add({
-            ...newBaseFields(),
-            id: result.eventId,
-            title: result.eventTitle,
-            currency: "تومان",
-            archived: false,
-            treasurerPersonId: null,
-            closedAt: null,
-            reopenedAt: null,
-            reopenReason: null,
-            deletedAt: null
+      let createdShell = false;
+      try {
+        await db.transaction("rw", db.events, db.onlineLinks, async () => {
+          if (!(await db.events.get(result.eventId))) {
+            createdShell = true;
+            await db.events.add({
+              ...newBaseFields(),
+              id: result.eventId,
+              title: result.eventTitle,
+              currency: "تومان",
+              archived: false,
+              treasurerPersonId: null,
+              closedAt: null,
+              reopenedAt: null,
+              reopenReason: null,
+              deletedAt: null
+            });
+          }
+          await db.onlineLinks.put({
+            localEventId: result.eventId,
+            serverEventId: result.eventId,
+            memberId: result.memberId,
+            roles: result.roles,
+            deviceToken: result.deviceToken,
+            deviceId: result.deviceId,
+            lastSeq: 0,
+            status: "online",
+            creatorDevice: false,
+            publicKeyRegistered: true,
+            createdAt: nowIso
           });
-        }
-        await db.onlineLinks.put({
-          localEventId: result.eventId,
-          serverEventId: result.eventId,
-          memberId: result.memberId,
-          roles: result.roles,
-          deviceToken: result.deviceToken,
-          deviceId: result.deviceId,
-          lastSeq: 0,
-          status: "online",
-          creatorDevice: false,
-          publicKeyRegistered: true,
-          createdAt: nowIso
         });
-      });
-      // A key from the invite link is imported at once and verified against keyCheck after the first catch-up.
-      if (invite.eventKey) await engine.keys.importLinkKey(result.eventId, invite.eventKey);
-      await engine.catchUp(result.eventId);
-      engine.attach(result.eventId);
-      return result.eventId;
+        // A key from the invite link is imported at once and verified against keyCheck after the first catch-up.
+        if (invite.eventKey) await engine.keys.importLinkKey(result.eventId, invite.eventKey);
+      } catch {
+        await revokeFreshDevice(result);
+        await db.onlineLinks.delete(result.eventId).catch(() => undefined);
+        if (createdShell) await db.events.delete(result.eventId).catch(() => undefined);
+        throw new OnlineServiceError("پیوستن به‌طور کامل انجام نشد و دعوت‌نامه مصرف شد. از مدیر بخواهید یک دعوت‌نامه‌ی تازه بفرستد.");
+      }
+      return this.retryJoinSync(result.eventId);
+    },
+
+    /** Runs (again) the first full catch-up of a joined event; `synced: false` keeps the device joined so this can be retried any time. */
+    async retryJoinSync(localEventId: string): Promise<JoinResult> {
+      const ok = await engine.catchUp(localEventId);
+      const link = await db.onlineLinks.get(localEventId);
+      if (!link || link.status === "revoked") throw new OnlineServiceError("دسترسی این دستگاه به ایونت قطع شده است. از مدیر دعوت‌نامه‌ی تازه بخواهید.");
+      engine.attach(localEventId);
+      return ok ? { eventId: localEventId, synced: true } : { eventId: localEventId, synced: false, error: engine.getState(localEventId).lastError ?? onlineErrorMessage("network") };
+    },
+
+    /** «همگام‌سازی دوباره»: catch up on inbound ops and drain the outbox now. */
+    async syncNow(localEventId: string): Promise<void> {
+      await engine.syncNow(localEventId);
     },
 
     // --- admin ------------------------------------------------------------

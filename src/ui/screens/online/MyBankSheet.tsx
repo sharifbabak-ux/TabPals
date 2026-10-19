@@ -20,7 +20,9 @@ const EMPTY: BankDetailsValue = { cardNumber: "", iban: "", bankName: "", accoun
 export function MyBankSheet({ open, eventId, onClose }: MyBankSheetProps) {
   const link = useLiveQuery(() => db.onlineLinks.get(eventId), [eventId]);
   const keyRow = useLiveQuery(async () => (await db.eventKeys.get(eventId)) ?? null, [eventId]);
-  const person = useLiveQuery(async () => (link ? await db.persons.get(link.memberId) : undefined), [link?.memberId]);
+  // null = looked up and missing (event data not downloaded yet); undefined = still loading
+  const person = useLiveQuery(async () => (link ? ((await db.persons.get(link.memberId)) ?? null) : undefined), [link?.memberId]);
+  const [retrying, setRetrying] = useState(false);
   const [bank, setBank] = useState<BankDetailsValue>(EMPTY);
   const [phone, setPhone] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +30,18 @@ export function MyBankSheet({ open, eventId, onClose }: MyBankSheetProps) {
   const [saved, setSaved] = useState(false);
 
   const personId = person?.id;
+  const personMissing = person === null;
+
+  async function retrySync() {
+    setRetrying(true);
+    try {
+      await onlineService.syncNow(eventId);
+    } catch {
+      // the sync indicator shows the error; this button can be pressed again
+    } finally {
+      setRetrying(false);
+    }
+  }
   useEffect(() => {
     if (!open || !person) return;
     setBank({
@@ -82,6 +96,14 @@ export function MyBankSheet({ open, eventId, onClose }: MyBankSheetProps) {
         <p className="field__hint my-bank__privacy">
           این اطلاعات فقط روی دستگاه‌ها رمزگذاری می‌شود و تنها برای مسئول صندوق و مدیر ایونت قابل‌خواندن است؛ سرور و سایر اعضا هرگز آن را نمی‌بینند. مسئول صندوق برای واریز سهم شما از آن استفاده می‌کند. ذخیره‌ی آن اختیاری است.
         </p>
+        {personMissing && (
+          <div role="alert">
+            <p className="field__warning">اطلاعات ایونت هنوز کامل دریافت نشده است. اینترنت را بررسی کنید و «همگام‌سازی دوباره» را بزنید؛ تا آن موقع امکان ذخیره نیست.</p>
+            <button type="button" className="form-actions__secondary" disabled={retrying} onClick={retrySync}>
+              {retrying ? "در حال همگام‌سازی…" : "همگام‌سازی دوباره"}
+            </button>
+          </div>
+        )}
         {!hasKey && <p className="field__warning">{PENDING_KEY_TEXT} — تا رسیدن کلید، تغییرها روی همین دستگاه ذخیره می‌شود و بعد از دریافت کلید ارسال خواهد شد.</p>}
         <BankDetailsFields idPrefix="my-bank" value={bank} onChange={setBank} lockedFields={locked} lockedText={PENDING_KEY_TEXT} />
         <div className="field">
