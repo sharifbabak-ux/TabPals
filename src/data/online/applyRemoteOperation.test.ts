@@ -121,3 +121,63 @@ describe("applyRemoteOperation", () => {
     expect(await applyRemoteOperation(EV, env({ entity: "events", entityId: EV, type: "purge" }))).toBe("purged");
   });
 });
+
+describe("memberProfile ops never overwrite newer or in-flight local data", () => {
+  const T = 1_760_000_000_000; // timestamp of env() ops
+  const person = { id: "p1", firstName: "سارا", lastName: "احمدی", cardNumber: "6037997000000001", bankName: "ملی", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", deviceId: "me", version: 1, deleted: false };
+  const profile = (changes: Record<string, string>, timestamp = T) =>
+    env({ entity: "memberProfile", entityId: "p1", type: "update", timestamp, changes: Object.fromEntries(Object.entries(changes).map(([k, v]) => [k, { before: undefined, after: v }])) } as never);
+
+  beforeEach(async () => {
+    await db.persons.put(person as never);
+  });
+
+  it("skips a field that still has a pending op in our outbox, but applies the other fields", async () => {
+    await db.outbox.add({
+      opId: "local.mp",
+      localEventId: EV,
+      op: { id: "local.mp", entity: "memberProfile", entityId: "p1", type: "update", changes: { cardNumber: { before: undefined, after: "6037997000000002" } }, timestamp: T + 5, deviceId: "me" },
+      attempts: 0,
+      lastError: null,
+      createdAt: "x",
+      rejected: null
+    });
+    await applyRemoteOperation(EV, profile({ cardNumber: "6037997000009999", bankName: "ملت" }));
+    const p = (await db.persons.get("p1"))!;
+    expect(p.cardNumber).toBe("6037997000000001"); // local value kept (its own op is on its way)
+    expect(p.bankName).toBe("ملت");
+  });
+
+  it("a rejected outbox op does not block inbound data forever", async () => {
+    await db.outbox.add({
+      opId: "local.mp",
+      localEventId: EV,
+      op: { id: "local.mp", entity: "memberProfile", entityId: "p1", type: "update", changes: { cardNumber: { before: undefined, after: "6037997000000002" } }, timestamp: T + 5, deviceId: "me" },
+      attempts: 1,
+      lastError: "x",
+      createdAt: "x",
+      rejected: { reason: "forbidden-profile", message: "x" }
+    });
+    await applyRemoteOperation(EV, profile({ cardNumber: "6037997000009999" }));
+    expect((await db.persons.get("p1"))!.cardNumber).toBe("6037997000009999");
+  });
+
+  it("last write wins by timestamp: a field saved locally after the inbound op's time is kept, an older local write is replaced", async () => {
+    await db.operations.add({ id: "L1", entity: "persons", entityId: "p1", type: "update", changes: { iban: { before: undefined, after: "IR1" } }, timestamp: new Date(T + 1000).toISOString(), deviceId: "me" });
+    await db.persons.put({ ...person, iban: "IR1", updatedAt: new Date(T + 1000).toISOString() } as never);
+
+    await applyRemoteOperation(EV, profile({ iban: "IR-OLD" }, T)); // older than the local save
+    expect((await db.persons.get("p1"))!.iban).toBe("IR1");
+
+    await applyRemoteOperation(EV, profile({ iban: "IR-NEW" }, T + 2000)); // newer than the local save
+    const p = (await db.persons.get("p1"))!;
+    expect(p.iban).toBe("IR-NEW");
+    expect(p.updatedAt).toBe(new Date(T + 2000).toISOString());
+  });
+
+  it("a later local edit of another field (a rename) does not block a bank-info change", async () => {
+    await db.operations.add({ id: "L2", entity: "persons", entityId: "p1", type: "update", changes: { firstName: { before: "سارا", after: "ساره" } }, timestamp: new Date(T + 5000).toISOString(), deviceId: "me" });
+    await applyRemoteOperation(EV, profile({ bankName: "پاسارگاد" }, T));
+    expect((await db.persons.get("p1"))!.bankName).toBe("پاسارگاد");
+  });
+});

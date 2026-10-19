@@ -195,8 +195,8 @@ describe("invite + redeem + read-only member", () => {
     // the server learned about sara before the invite (members were registered)
     expect(mock.events.get(event.id)!.members.has(sara.id)).toBe(true);
 
-    const localId = await member.service.joinWithInvite({ shortCode: invite.shortCode.toLowerCase().replace(/^(....)/, "$1-") });
-    expect(localId).toBe(event.id);
+    const joined = await member.service.joinWithInvite({ shortCode: invite.shortCode.toLowerCase().replace(/^(....)/, "$1-") });
+    expect(joined).toEqual({ eventId: event.id, synced: true });
     const link = (await memberDb.onlineLinks.get(event.id))!;
     expect(link).toMatchObject({ memberId: sara.id, roles: ["member"], status: "online" });
     expect(link.lastSeq).toBeGreaterThan(0);

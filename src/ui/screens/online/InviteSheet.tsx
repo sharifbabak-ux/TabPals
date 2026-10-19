@@ -15,6 +15,8 @@ interface InviteSheetProps {
   eventId: string;
   eventTitle: string;
   member: { personId: string; name: string } | null;
+  /** Create the invite as soon as the sheet opens (used after the admin already confirmed, e.g. «جایگزینی دستگاه»). Default: wait for a tap, so opening the sheet never leaves an unused valid invite on the server. */
+  autoCreate?: boolean;
   onClose: () => void;
 }
 
@@ -25,7 +27,9 @@ interface CreatedInvite {
 }
 
 /** Invite sheet for one member: link, offline QR, big short code, copy/share/WhatsApp/Telegram/SMS, expiry. The server shows token and code only once, so this is the only chance to hand them over. */
-export function InviteSheet({ open, eventId, eventTitle, member, onClose }: InviteSheetProps) {
+export function InviteSheet({ open, eventId, eventTitle, member, autoCreate = false, onClose }: InviteSheetProps) {
+  const [requested, setRequested] = useState(false);
+  const [tries, setTries] = useState(0);
   const [invite, setInvite] = useState<CreatedInvite | null>(null);
   const [qr, setQr] = useState<QrImage | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +37,8 @@ export function InviteSheet({ open, eventId, eventTitle, member, onClose }: Invi
 
   const personId = member?.personId;
   useEffect(() => {
-    if (!open || !personId) return;
+    if (!open) setRequested(false);
+    if (!open || !personId || !(autoCreate || requested)) return;
     let cancelled = false;
     setInvite(null);
     setQr(null);
@@ -51,7 +56,15 @@ export function InviteSheet({ open, eventId, eventTitle, member, onClose }: Invi
     return () => {
       cancelled = true;
     };
-  }, [open, eventId, personId]);
+  }, [open, eventId, personId, autoCreate, requested, tries]);
+
+  // a different member → ask again
+  useEffect(() => {
+    setRequested(false);
+    setInvite(null);
+    setQr(null);
+    setError(null);
+  }, [personId]);
 
   const message = invite && member ? buildInviteMessage(APP_NAME, eventTitle, member.name, invite.url, invite.shortCode) : "";
 
@@ -73,7 +86,27 @@ export function InviteSheet({ open, eventId, eventTitle, member, onClose }: Invi
   return (
     <BottomSheet open={open} title={member ? `دعوت ${member.name}` : "دعوت"} onClose={onClose}>
       {error && <p className="field__error">{error}</p>}
-      {!invite && !error && <p className="field__hint">در حال ساخت دعوت‌نامه…</p>}
+      {!invite && !error && !autoCreate && !requested && (
+        <>
+          <p className="field__hint">با زدن دکمه‌ی زیر یک دعوت‌نامه‌ی یک‌بارمصرف (۷ روز اعتبار) برای {member?.name} ساخته می‌شود.</p>
+          <div className="form-actions">
+            <button type="button" className="form-actions__primary" onClick={() => setRequested(true)}>
+              ساخت دعوت‌نامه
+            </button>
+          </div>
+        </>
+      )}
+      {!invite && !error && (autoCreate || requested) && <p className="field__hint">در حال ساخت دعوت‌نامه…</p>}
+      {error && (
+        <div className="form-actions">
+          <button type="button" className="form-actions__secondary" onClick={() => {
+              setRequested(true);
+              setTries((n) => n + 1);
+            }}>
+            تلاش دوباره
+          </button>
+        </div>
+      )}
       {invite && (
         <div className="invite-sheet">
           {qr ? <img className="invite-qr" src={qr.dataUrl} alt="QR دعوت‌نامه" width={240} height={240} /> : <p className="field__hint">لینک برای QR بیش‌ازحد طولانی است؛ از لینک یا کد استفاده کنید.</p>}

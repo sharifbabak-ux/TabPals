@@ -4,6 +4,7 @@ import { onlineService } from "@/data/online/onlineService";
 import { formatShortCode, isValidShortCode, normalizeShortCode, parseInviteKey, parseInviteToken } from "@/domain/inviteLink";
 import { qrScanService } from "@/platform";
 import { BottomSheet } from "@/ui/components/BottomSheet";
+import { JoinSyncRetry } from "./JoinSyncRetry";
 import "./online.css";
 
 interface JoinWithInviteSheetProps {
@@ -20,6 +21,7 @@ export function JoinWithInviteSheet({ open, onClose, initialCode = "" }: JoinWit
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [pending, setPending] = useState<{ eventId: string; error: string } | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const stopRef = useRef<(() => void) | null>(null);
 
@@ -37,13 +39,23 @@ export function JoinWithInviteSheet({ open, onClose, initialCode = "" }: JoinWit
     };
   }, [open]);
 
+  function finish(localEventId: string) {
+    setPending(null);
+    onClose();
+    navigate(`/events/${localEventId}`);
+  }
+
   async function redeem(input: { inviteToken?: string; shortCode?: string; eventKey?: string | null }) {
     setBusy(true);
     setError(null);
     try {
-      const localEventId = await onlineService.joinWithInvite(input);
-      onClose();
-      navigate(`/events/${localEventId}`);
+      const result = await onlineService.joinWithInvite(input);
+      if (!result.synced) {
+        // Joined, but the event could not be downloaded yet: stay here and offer a retry instead of opening an empty event.
+        setPending({ eventId: result.eventId, error: result.error });
+        return;
+      }
+      finish(result.eventId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "پیوستن ناموفق بود");
     } finally {
@@ -74,6 +86,19 @@ export function JoinWithInviteSheet({ open, onClose, initialCode = "" }: JoinWit
 
   return (
     <BottomSheet open={open} title="پیوستن با دعوت" onClose={onClose}>
+      {pending ? (
+        <JoinSyncRetry
+          eventId={pending.eventId}
+          error={pending.error}
+          onSynced={finish}
+          onLater={() => {
+            setPending(null);
+            onClose();
+            navigate("/events");
+          }}
+        />
+      ) : (
+        <>
       <p className="field__hint">QR دعوت‌نامه را با دوربین اسکن کنید یا کد ۸ حرفی را وارد کنید.</p>
 
       {scanning ? (
@@ -117,6 +142,8 @@ export function JoinWithInviteSheet({ open, onClose, initialCode = "" }: JoinWit
           {busy ? "در حال پیوستن…" : "پیوستن"}
         </button>
       </div>
+        </>
+      )}
     </BottomSheet>
   );
 }

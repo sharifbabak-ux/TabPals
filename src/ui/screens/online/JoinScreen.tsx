@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { NetworkError } from "@/data/online/apiClient";
 import { onlineService } from "@/data/online/onlineService";
 import { formatShortCode, parseInviteKey, parseInviteLinkCode, parseInviteToken } from "@/domain/inviteLink";
 import { clipboardService, platform } from "@/platform";
 import { Toast } from "@/ui/components/Toast";
+import { JoinSyncRetry } from "./JoinSyncRetry";
 import { JoinWithInviteSheet } from "./JoinWithInviteSheet";
 import "./online.css";
 
@@ -57,6 +59,8 @@ export function JoinScreen() {
   const [busy, setBusy] = useState(false);
   const [joinSheetOpen, setJoinSheetOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [pending, setPending] = useState<{ eventId: string; error: string } | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const started = useRef(false);
 
   const shouldRedeem = Boolean(token) && (standalone || continueHere);
@@ -68,12 +72,28 @@ export function JoinScreen() {
     setBusy(true);
     onlineService
       .joinWithInvite({ inviteToken: token, eventKey })
-      .then((eventId) => navigate(`/events/${eventId}`, { replace: true }))
+      .then((result) => {
+        if (result.synced) navigate(`/events/${result.eventId}`, { replace: true });
+        else setPending({ eventId: result.eventId, error: result.error });
+        setBusy(false);
+      })
       .catch((e) => {
+        // The request never reached the server (offline, timeout): the invite is still unused, so allow another try.
+        // Any answer from the server (used, expired, …) is final — the invite is spent or invalid.
+        if (e instanceof NetworkError) {
+          submittedTokens.delete(token);
+          started.current = false;
+        }
         setError(e instanceof Error ? e.message : "پیوستن ناموفق بود");
         setBusy(false);
       });
-  }, [shouldRedeem, token, eventKey, navigate]);
+    // `attempt` re-runs the effect for «تلاش دوباره» after a network error
+  }, [shouldRedeem, token, eventKey, navigate, attempt]);
+
+  function retryRedeem() {
+    setError(null);
+    setAttempt((n) => n + 1);
+  }
 
   if (!token) {
     return (
@@ -93,9 +113,22 @@ export function JoinScreen() {
       <div className="screen join-page">
         <h1>پیوستن به ایونت</h1>
         {busy && <p>در حال پیوستن و دریافت اطلاعات ایونت…</p>}
+        {pending && (
+          <JoinSyncRetry
+            eventId={pending.eventId}
+            error={pending.error}
+            onSynced={(eventId) => navigate(`/events/${eventId}`, { replace: true })}
+            onLater={() => navigate("/events", { replace: true })}
+          />
+        )}
         {error && (
           <>
             <p className="field__error">{error}</p>
+            {!submittedTokens.has(token) && (
+              <button type="button" className="form-actions__primary" onClick={retryRedeem}>
+                تلاش دوباره
+              </button>
+            )}
             <button type="button" className="form-actions__secondary" onClick={() => navigate("/events", { replace: true })}>
               بازگشت به ایونت‌ها
             </button>

@@ -31,6 +31,10 @@ build features from a later stage while working on an earlier one.
   (`this.version(n).stores(...)`) with a migration that preserves existing
   data. Never edit a past version's `stores()` in place.
 
+## Online / sync
+
+- Never swallow a failure of a single-use step (invite redeem, first catch-up): return/throw an explicit status, keep the state needed for a retry, and show a Persian message with a retry button. Inbound sync ops must not overwrite pending or newer local edits (see "Join hardening" in docs/PLAN.md).
+
 ## UI
 
 - All user-facing text is Persian, RTL. The app name is read from

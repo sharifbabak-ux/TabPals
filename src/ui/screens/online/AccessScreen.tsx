@@ -13,6 +13,7 @@ import { JalaliDate } from "@/ui/components/JalaliDate";
 import { useOnlineEvent } from "@/ui/hooks/useOnlineEvent";
 import { useAccessRevision } from "@/ui/hooks/useSyncStatus";
 import { BackupKeySection } from "./BackupKeySection";
+import { InviteSheet } from "./InviteSheet";
 import "./online.css";
 
 const INVITE_STATUS_LABELS: Record<ServerInvite["status"], string> = { pending: "در انتظار", used: "استفاده‌شده", expired: "منقضی", revoked: "لغوشده" };
@@ -34,6 +35,8 @@ export function AccessScreen() {
   const [error, setError] = useState<string | null>(null);
   const [busyRole, setBusyRole] = useState<string | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<ServerDevice | null>(null);
+  const [replaceTarget, setReplaceTarget] = useState<ServerDevice | null>(null);
+  const [replaceInvite, setReplaceInvite] = useState<{ personId: string; name: string } | null>(null);
   const [purgeOpen, setPurgeOpen] = useState(false);
   const [typedTitle, setTypedTitle] = useState("");
   const [purgeBusy, setPurgeBusy] = useState(false);
@@ -118,6 +121,21 @@ export function AccessScreen() {
       setRevokeTarget(null);
       setError(e instanceof Error ? e.message : "قطع دسترسی ناموفق بود");
     }
+  }
+
+  /** «جایگزینی دستگاه» (phone lost / app uninstalled): cut the old device, then open a fresh invite for the same member. */
+  async function confirmReplaceDevice() {
+    if (!replaceTarget) return;
+    const target = replaceTarget;
+    setReplaceTarget(null);
+    try {
+      await onlineService.revokeDevice(eventId, target.deviceId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "جایگزینی دستگاه ناموفق بود");
+      return;
+    }
+    setReplaceInvite({ personId: target.memberId, name: nameOf(target.memberId) });
+    await refresh();
   }
 
   async function confirmRemoveMember() {
@@ -225,9 +243,14 @@ export function AccessScreen() {
                 </small>
               </span>
               {!device.revokedAt && !device.current && (
-                <button type="button" className="danger-button" onClick={() => setRevokeTarget(device)}>
-                  قطع دسترسی
-                </button>
+                <div className="role-chips">
+                  <button type="button" className="form-actions__secondary" onClick={() => setReplaceTarget(device)}>
+                    جایگزینی دستگاه
+                  </button>
+                  <button type="button" className="danger-button" onClick={() => setRevokeTarget(device)}>
+                    قطع دسترسی
+                  </button>
+                </div>
               )}
             </li>
           ))}
@@ -315,6 +338,28 @@ export function AccessScreen() {
         danger
         onConfirm={confirmRemoveMember}
         onCancel={() => setRemoveTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={replaceTarget !== null}
+        title="جایگزینی دستگاه"
+        message={`دستگاه قدیمی «${replaceTarget ? nameOf(replaceTarget.memberId) : ""} · ${replaceTarget?.label ?? ""}» قطع می‌شود و بلافاصله یک دعوت‌نامه‌ی تازه برای همین عضو ساخته می‌شود تا دستگاه جدیدش بپیوندد. نسخه‌ی ایونت از دستگاه قدیمی پاک می‌شود.`}
+        confirmLabel="قطع و دعوت تازه"
+        danger
+        onConfirm={confirmReplaceDevice}
+        onCancel={() => setReplaceTarget(null)}
+      />
+
+      <InviteSheet
+        open={replaceInvite !== null}
+        eventId={eventId}
+        eventTitle={event.title}
+        member={replaceInvite}
+        autoCreate
+        onClose={() => {
+          setReplaceInvite(null);
+          void refresh();
+        }}
       />
 
       <ConfirmDialog
