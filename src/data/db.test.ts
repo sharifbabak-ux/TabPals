@@ -734,7 +734,7 @@ describe("TabPalDB schema v9 -> v10 migration (online events)", () => {
 
     const upgraded = new TabPalDB(TEST_DB_NAME);
     await upgraded.open();
-    expect(upgraded.verno).toBe(11);
+    expect(upgraded.verno).toBe(12);
 
     expect((await upgraded.persons.get("p1"))?.cardNumber).toBe("6037991234567802");
     expect((await upgraded.events.get("e1"))?.title).toBe("سفر");
@@ -797,7 +797,7 @@ describe("TabPalDB schema v10 -> v11 migration (end-to-end encryption)", () => {
 
     const upgraded = new TabPalDB(TEST_DB_NAME);
     await upgraded.open();
-    expect(upgraded.verno).toBe(11);
+    expect(upgraded.verno).toBe(12);
     expect((await upgraded.onlineLinks.get("created"))?.creatorDevice).toBe(true);
     expect((await upgraded.onlineLinks.get("joined"))?.creatorDevice).toBe(false);
     expect((await upgraded.onlineLinks.get("joined"))?.lastSeq).toBe(3);
@@ -807,6 +807,59 @@ describe("TabPalDB schema v10 -> v11 migration (end-to-end encryption)", () => {
     const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
     await upgraded.eventKeys.put({ localEventId: "created", key, verified: true, createdAt: "x" });
     expect((await upgraded.eventKeys.get("created"))?.key.type).toBe("secret");
+    upgraded.close();
+  });
+});
+
+describe("TabPalDB schema v11 -> v12 migration (session model)", () => {
+  it("fills session defaults and keeps existing orders visible", async () => {
+    class V11DB extends Dexie {
+      constructor() {
+        super(TEST_DB_NAME);
+        this.version(11).stores({
+          meta: "key",
+          persons: "id, archived, deleted, needsNameReview",
+          events: "id, archived, deleted, startDate, closedAt, treasurerPersonId, deletedAt",
+          eventMembers: "id, eventId, personId, &[eventId+personId], active, deleted, sortOrder",
+          groups: "id, name, archived, deleted",
+          vouchers: "id, eventId, &[eventId+number], type, status, deleted, recordedAt",
+          statements: "id, eventId, kind, personId, &[eventId+number], status, deleted",
+          messageTemplates: "id, category, enabled, isDefault, deleted",
+          orderSessions: "id, eventId, status, scheduledAt, deleted",
+          sessionMenuItems: "id, sessionId, sortOrder, deleted",
+          orderLines: "id, sessionId, personId, deleted",
+          orderPersonTotals: "id, sessionId, [sessionId+personId], deleted",
+          sessionExtras: "id, sessionId, deleted",
+          operations: "id, entity, entityId, timestamp",
+          onlineLinks: "localEventId, serverEventId, status",
+          outbox: "++order, &[localEventId+opId], localEventId",
+          appliedRemoteOps: "[localEventId+opId], localEventId",
+          eventKeys: "localEventId",
+          deviceKeys: "id"
+        });
+      }
+    }
+    const legacy = new V11DB();
+    const base = { createdAt: "x", updatedAt: "x", deviceId: "d", version: 1, deleted: false };
+    await legacy.table("eventMembers").bulkPut([
+      { id: "m1", eventId: "e1", personId: "p1", active: true, defaultWeight: 1, sortOrder: 0, ...base },
+      { id: "m2", eventId: "e1", personId: "p2", active: false, defaultWeight: 1, sortOrder: 1, ...base },
+      { id: "m3", eventId: "e2", personId: "p3", active: true, defaultWeight: 1, sortOrder: 0, ...base }
+    ]);
+    await legacy.table("orderSessions").put({ id: "s1", eventId: "e1", title: "شام", status: "open", scheduledAt: "x", ...base });
+    // p2 is inactive but already ordered: must stay visible.
+    await legacy.table("orderLines").put({ id: "l1", sessionId: "s1", personId: "p2", itemName: "کوبیده", category: "main", quantity: 1, source: "admin-device", sourceVersion: 1, ...base });
+    legacy.close();
+
+    const upgraded = new TabPalDB(TEST_DB_NAME);
+    await upgraded.open();
+    const session = await upgraded.orderSessions.get("s1");
+    expect([...(session?.participants ?? [])].sort()).toEqual(["p1", "p2"]);
+    expect(session?.mode).toBe("admin-entered");
+    expect(session?.membersMayPrice).toBe(false);
+    expect(session?.settlement).toBe("event");
+    expect(session?.status).toBe("open");
+    expect((await upgraded.orderLines.get("l1"))?.itemName).toBe("کوبیده");
     upgraded.close();
   });
 });

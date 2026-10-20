@@ -108,7 +108,7 @@ Server contract: Tabpals-Live `docs/API.md` (key envelopes, `devices/me/public-k
 
 **Tests.** Unit: crypto (round trip, AAD mismatch, wrap/unwrap between two key pairs, wrong key vs keyCheck, passphrase backup round trip and wrong passphrase), masking, sanitizer/profile ops/`logSend`, payment visibility, invite-link key, v10→v11 migration. Integration (`src/data/online/e2ee.integration.test.ts`, MSW + mock socket hub with envelopes, awaiting-key, profile read filtering, member remove/restore): guard test that serializes every outbound op of a full go-online + edit scenario and asserts no plaintext card/IBAN/phone/bank detail, short-code join via envelope, link join, wrong key rejected, device rejects an envelope that fails keyCheck, non-staff never gets others' profiles, statement snapshot without non-treasurer bank data, legacy backfill idempotency, member removal wipe, backup key. End-to-end against the real server: `TABPALS_LIVE_DIR=<checkout of Tabpals-Live with npm ci> npm test -- realServer`.
 
-**Next.** Stage ONLINE-2: photos (encrypted blobs) and richer member profiles; Stage 9 native shells reuse the same `src/platform` interfaces.
+**Next.** Stage ONLINE-2 — see «ONLINE-2: sessions & live ordering» below (photos/encrypted blobs and richer profiles move to a later stage); Stage 9 native shells reuse the same `src/platform` interfaces.
 
 ## Join hardening (v0.9.1)
 
@@ -121,3 +121,26 @@ Fixes found after a real join on an installed Android PWA (Save in «اطلاع�
 - **Admin:** «جایگزینی دستگاه» (Access screen › devices) revokes the old device and opens a fresh invite for the same member. `InviteSheet` no longer creates a server invite on open: it waits for «ساخت دعوت‌نامه» (`autoCreate` only for the replace flow). The audit entry `key.delivered` reads «کلید رمزگذاری برای یک دستگاه ارسال شد» (the server only relays; it cannot know the recipient unwrapped it).
 - `#/join` allows «تلاش دوباره» after a *network* error (invite not yet used); a server answer (used/expired) stays final.
 - **Follow-ups (not done):** event-key rotation on member removal; «N دستگاه در انتظار کلید» admin hint (needs `awaiting-key`, which also lists the creator device, so a correct count needs a server flag); invite preview endpoint; client key-acknowledgement for the audit log.
+
+## ONLINE-2: sessions & live ordering (v0.9.2 →)
+
+**Concept.** An **Event** (trip, party) contains many **Sessions** (ordering moments: a lunch, a dinner). Several sessions may be open at the same time. Each session has its own participants, orders, voucher and (later) statement. Orders already existed as event › orderSessions › orderLines (Group Order above); ONLINE-2 extends that model instead of adding a new one.
+
+**Decisions.**
+- Members' orders are visible to all event members.
+- Members may enter item prices only when the session's checkbox «اعضا اجازه‌ی ثبت قیمت دارند» is on.
+- Settlement is chosen per session: `event` (the voucher rolls into the event balance — today's behaviour) or `own` (separate settlement).
+- Offline order packages stay GO-2, built later; they are not part of the first online steps.
+
+**Plan.**
+- **O2-0** readiness report (done).
+- **O2-1 (v0.9.2)** session model: `participants` (empty = every active member), `mode` (`admin-entered` default | `collaborative`), `membersMayPrice` (default false), `settlement` (`event` default | `own`). Schema v12 migration fills defaults (participants = active members + anyone who already ordered). Session form has the controls; the order grid shows only participants; the sessions list shows several open sessions with status chips. Wording: «شروع نشست» = draft→open, «پایان نشست» = open→locked (state machine unchanged; supplementary lines stay allowed while open; the admin can reopen). `settlement: "own"` is **only stored and shown** — per-session statements/balances are a follow-up, until then the voucher still joins the event balance.
+- **O2-2 (v0.9.2)** waiter list v2: per-line `deliveredAt`; «جدید» vs «تحویل‌شده», one-tap delivered / undo (admin only, still a view — no new role); a delivered line whose quantity or item changes is «جدید» again, and supplementary lines start as «جدید». Export: PNG image via the existing export service and a WhatsApp-ready Persian text (bold title, grouped by category) with a share button.
+- **O2-3** members enter their own orders online (`mode: collaborative`, server permission for own lines).
+- **O2-4** price entry by members when `membersMayPrice`.
+- **O2-5** live updates / presence in the session.
+- **O2-6** per-session statement and balance (`settlement: "own"`).
+- **O2-7** session-level invite/join polish.
+- **O2-8** hardening, tests, docs. GO-2 offline packs come after.
+
+**Sync/privacy note (O2-1/2).** The new fields (`participants` person ids, `mode`, `membersMayPrice`, `settlement` on `orderSessions`; `deliveredAt` on `orderLines`) are synced like all other order data: **plaintext** (order data was never end-to-end encrypted; only bank/phone data is). Menu photos still never leave the device. The sanitizer is unchanged; tests assert the new fields pass and photos don't.

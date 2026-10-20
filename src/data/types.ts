@@ -329,6 +329,15 @@ export interface Operation {
 
 export type OrderSessionStatus = "draft" | "open" | "locked" | "pricing" | "finalized" | "cancelled";
 
+/**
+ * Who enters the orders (docs/PLAN.md "ONLINE-2"). "admin-entered" is the
+ * pre-0.9.2 behaviour (the admin enters everyone's order); "collaborative"
+ * is for members entering their own orders once the online room exists (O2-3+).
+ */
+export type SessionMode = "collaborative" | "admin-entered";
+/** Where the session's voucher goes: "event" = rolls into the event balance (today's behaviour); "own" = a separate settlement (per-session statement/balance: follow-up, only stored for now). */
+export type SessionSettlement = "event" | "own";
+
 /** One meal's group order inside an event. Read-only once the event is closed (enforced in the repository). */
 export interface OrderSession extends BaseRecord {
   eventId: string;
@@ -352,6 +361,14 @@ export interface OrderSession extends BaseRecord {
   payerSplitMode?: SplitMode;
   /** Set when finalized. */
   voucherId: string | null;
+  /** personIds taking part. Empty/missing (pre-0.9.2 and synced-in sessions) means every active event member. */
+  participants?: string[];
+  /** Default "admin-entered" (current behaviour). */
+  mode?: SessionMode;
+  /** Members may enter item prices themselves (used by the online room, O2-3+). Default false. */
+  membersMayPrice?: boolean;
+  /** Default "event". Stored and shown only — per-session statements/balances are a follow-up. */
+  settlement?: SessionSettlement;
 }
 
 /** Waiter-list category (docs/PLAN.md GO-1.1); fixed display order lives in src/domain/orderCategory.ts. */
@@ -389,6 +406,8 @@ export interface OrderLine extends BaseRecord {
   source: OrderLineSource;
   /** Bumped by package/online submissions so a newer version replaces an older one from the same person (GO-2/GO-3). */
   sourceVersion: number;
+  /** ISO time the waiter list marked this line delivered (O2-2); missing/null = new. Reset when the quantity or name changes. */
+  deliveredAt?: string | null;
 }
 
 /** Optional per-person total used when that person's lines have no item prices. */

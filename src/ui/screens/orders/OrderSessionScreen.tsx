@@ -8,6 +8,7 @@ import { formatAmount, toPersianDigits } from "@/domain/format";
 import { computePersonSubtotals } from "@/domain/groupOrder";
 import { isEventClosed } from "@/domain/eventStatus";
 import { isTerminalStatus } from "@/domain/orderSessionState";
+import { SESSION_MODE_LABELS, SESSION_SETTLEMENT_LABELS, sessionMode, sessionParticipantIds, sessionSettlement } from "@/domain/sessionModel";
 import { Avatar } from "@/ui/components/Avatar";
 import { BottomSheet } from "@/ui/components/BottomSheet";
 import { ConfirmDialog } from "@/ui/components/ConfirmDialog";
@@ -68,6 +69,11 @@ export function OrderSessionScreen() {
   const terminal = isTerminalStatus(session.status);
   const canManage = !locked && !terminal;
   const canEditLines = !locked && (session.status === "open" || session.status === "locked" || session.status === "pricing");
+  const participantIds = sessionParticipantIds(
+    session,
+    members.filter((m) => m.active).map((m) => m.personId),
+    subtotals.filter((s) => s.hasLines).map((s) => s.personId)
+  );
   const nameOf = (id: string) => members.find((m) => m.personId === id)?.name ?? "؟";
   const sharedLines = data.lines.filter((l) => l.personId === null);
   const editingSharedLine = sharedLines.find((l) => l.id === editingSharedLineId);
@@ -120,6 +126,12 @@ export function OrderSessionScreen() {
         </span>
         <span>مدیر نشست: {nameOf(session.adminPersonId)}</span>
       </div>
+      <div className="session-chips">
+        <span className="session-chip">{SESSION_MODE_LABELS[sessionMode(session)]}</span>
+        <span className="session-chip">{SESSION_SETTLEMENT_LABELS[sessionSettlement(session)]}</span>
+        {session.membersMayPrice && <span className="session-chip">اعضا اجازه‌ی ثبت قیمت دارند</span>}
+        <span className="session-chip">{toPersianDigits(participantIds.length)} شرکت‌کننده</span>
+      </div>
 
       {closed && <p className="field__hint">این ایونت پایان‌یافته است؛ نشست فقط‌خواندنی است.</p>}
       {!closed && online.readOnly && <p className="field__hint">شما در این ایونت آنلاین عضو هستید؛ نشست فقط‌خواندنی است.</p>}
@@ -156,12 +168,12 @@ export function OrderSessionScreen() {
         <div className="order-session__actions">
           {session.status === "draft" && (
             <button type="button" className="form-actions__primary" onClick={() => transition("open")}>
-              شروع ثبت سفارش
+              شروع نشست
             </button>
           )}
           {session.status === "open" && (
             <button type="button" className="form-actions__primary" onClick={() => transition("locked")}>
-              سفارش به گارسون داده شد
+              پایان نشست
             </button>
           )}
           {session.status === "locked" && (
@@ -199,7 +211,7 @@ export function OrderSessionScreen() {
           {session.status === "open" && <p className="field__hint">روی نام هر نفر بزنید و سفارشش را ثبت کنید.</p>}
           <div className="order-grid">
             {members
-              .filter((m) => m.active || subtotals.some((s) => s.personId === m.personId))
+              .filter((m) => participantIds.includes(m.personId))
               .map((member) => {
                 const subtotal = subtotals.find((s) => s.personId === member.personId);
                 const hasLines = Boolean(subtotal?.hasLines);
@@ -279,7 +291,7 @@ export function OrderSessionScreen() {
         }}
       />
       <MenuEditorSheet open={menuOpen} sessionId={session.id} items={data.menuItems} currency={event.currency} readOnly={!canManage} onClose={() => setMenuOpen(false)} />
-      <WaiterListSheet open={waiterOpen} data={data} onClose={() => setWaiterOpen(false)} />
+      <WaiterListSheet open={waiterOpen} data={data} canMarkDelivered={!locked && !terminal} onClose={() => setWaiterOpen(false)} />
       {photoOpen && <MenuPhotoViewer photo={session.menuPhoto ?? null} onClose={() => setPhotoOpen(false)} />}
       <SessionFormSheet
         open={editOpen}

@@ -326,3 +326,76 @@ describe("permanent delete of an event", () => {
     expect(await db.sessionExtras.count()).toBe(0);
   });
 });
+
+describe("session model (O2-1)", () => {
+  it("creates with today's behaviour as defaults", async () => {
+    const { session } = await setup();
+    expect(session.mode).toBe("admin-entered");
+    expect(session.membersMayPrice).toBe(false);
+    expect(session.settlement).toBe("event");
+    expect(session.participants).toEqual([]); // no members in this event
+  });
+
+  it("defaults participants to the active event members", async () => {
+    const event = await eventsRepository.create({ title: "x", treasurerPersonId: "t" });
+    const base = { createdAt: "x", updatedAt: "x", deviceId: "d", version: 1, deleted: false, defaultWeight: 1, sortOrder: 0 };
+    await db.eventMembers.bulkPut([
+      { id: "m1", eventId: event.id, personId: "p1", active: true, ...base },
+      { id: "m2", eventId: event.id, personId: "p2", active: false, ...base }
+    ]);
+    const session = await orderSessionsRepository.create({ eventId: event.id, title: "شام", scheduledAt: "2025-09-28T18:30:00.000Z" });
+    expect(session.participants).toEqual(["p1"]);
+  });
+
+  it("stores and updates mode, settlement, price permission and participants (logged for sync)", async () => {
+    const { session } = await setup();
+    await orderSessionsRepository.update(session.id, { participants: ["p1", "p2", "p1"], mode: "collaborative", membersMayPrice: true, settlement: "own" });
+    const saved = (await db.orderSessions.get(session.id))!;
+    expect(saved.participants).toEqual(["p1", "p2"]);
+    expect([saved.mode, saved.membersMayPrice, saved.settlement]).toEqual(["collaborative", true, "own"]);
+    const ops = await db.operations.where("entityId").equals(session.id).toArray();
+    const update = ops.find((o) => o.type === "update")!;
+    expect(Object.keys(update.changes).sort()).toEqual(["membersMayPrice", "mode", "participants", "settlement"]);
+    await expect(orderSessionsRepository.update(session.id, { participants: [] })).rejects.toThrow("حداقل یک شرکت‌کننده");
+  });
+
+  it("keeps supplementary lines allowed while the session is open", async () => {
+    const { session } = await openedSession();
+    await orderSessionsRepository.addLine(session.id, { personId: "a", itemName: "دوغ", quantity: 1 });
+    await orderSessionsRepository.addLine(session.id, { personId: "a", itemName: "نوشابه", quantity: 1 });
+    expect(await db.orderLines.where("sessionId").equals(session.id).count()).toBe(2);
+  });
+});
+
+describe("waiter list delivered tracking (O2-2)", () => {
+  it("marks lines delivered, undoes it, and logs both", async () => {
+    const { session } = await openedSession();
+    const line = await orderSessionsRepository.addLine(session.id, { personId: "a", itemName: "کوبیده", quantity: 2 });
+    expect(line.deliveredAt).toBeUndefined();
+    await orderSessionsRepository.setLinesDelivered([line.id], true);
+    expect((await db.orderLines.get(line.id))?.deliveredAt).toBeTruthy();
+    await orderSessionsRepository.setLinesDelivered([line.id], false);
+    expect((await db.orderLines.get(line.id))?.deliveredAt).toBeNull();
+    const ops = await db.operations.where("entityId").equals(line.id).toArray();
+    expect(ops.filter((o) => o.type === "update").length).toBe(2);
+  });
+
+  it("a delivered line becomes new again when its quantity changes; a new supplementary line starts new", async () => {
+    const { session } = await openedSession();
+    const line = await orderSessionsRepository.addLine(session.id, { personId: "a", itemName: "کوبیده", quantity: 1 });
+    await orderSessionsRepository.setLinesDelivered([line.id], true);
+    await orderSessionsRepository.updateLine(line.id, { note: "کم‌نمک" });
+    expect((await db.orderLines.get(line.id))?.deliveredAt).toBeTruthy();
+    await orderSessionsRepository.updateLine(line.id, { quantity: 2 });
+    expect((await db.orderLines.get(line.id))?.deliveredAt).toBeNull();
+    const extra = await orderSessionsRepository.addLine(session.id, { personId: "b", itemName: "کوبیده", quantity: 1 });
+    expect(extra.deliveredAt).toBeUndefined();
+  });
+
+  it("refuses once the session is finished (cancelled)", async () => {
+    const { session } = await openedSession();
+    const line = await orderSessionsRepository.addLine(session.id, { personId: "a", itemName: "دوغ", quantity: 1 });
+    await orderSessionsRepository.transition(session.id, "cancelled", "تست");
+    await expect(orderSessionsRepository.setLinesDelivered([line.id], true)).rejects.toThrow();
+  });
+});

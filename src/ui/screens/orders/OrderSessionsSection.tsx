@@ -5,6 +5,8 @@ import { db } from "@/data/db";
 import { formatAmount, toPersianDigits } from "@/domain/format";
 import { EmptyState } from "@/ui/components/EmptyState";
 import { JalaliDate } from "@/ui/components/JalaliDate";
+import { sessionMode, sessionSettlement } from "@/domain/sessionModel";
+import type { OrderSessionStatus } from "@/data/types";
 import { SessionFormSheet } from "./SessionFormSheet";
 import { SessionStatusChip } from "./SessionStatusChip";
 
@@ -17,6 +19,13 @@ interface OrderSessionsSectionProps {
   treasurerPersonId: string | null;
   treasurerName: string | null;
   onRequestSetTreasurer: () => void;
+}
+
+function sessionListRank(status: OrderSessionStatus): number {
+  if (status === "open") return 0;
+  if (status === "draft") return 1;
+  if (status === "locked" || status === "pricing") return 2;
+  return 3;
 }
 
 /** The event's «سفارش‌ها» tab: its group-order sessions, newest first (docs/PLAN.md Group Order UI #1). */
@@ -45,7 +54,12 @@ export function OrderSessionsSection({ eventId, currency, eventClosed, readOnly 
     return { sessions, peopleBySession };
   }, [eventId]);
 
-  const sorted = useMemo(() => (data?.sessions ?? []).slice().sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt)), [data]);
+  // Several sessions can be open at once: running ones first (draft/open), then the rest, newest first.
+  const sorted = useMemo(
+    () => (data?.sessions ?? []).slice().sort((a, b) => sessionListRank(a.status) - sessionListRank(b.status) || b.scheduledAt.localeCompare(a.scheduledAt)),
+    [data]
+  );
+  const openCount = sorted.filter((s) => s.status === "open").length;
 
   return (
     <div>
@@ -61,6 +75,7 @@ export function OrderSessionsSection({ eventId, currency, eventClosed, readOnly 
       </div>
 
       {eventClosed && <p className="field__hint">این ایونت پایان‌یافته است؛ نشست‌ها فقط‌خواندنی‌اند.</p>}
+      {openCount > 0 && <p className="sessions-summary">{toPersianDigits(openCount)} نشست باز</p>}
       {sorted.length === 0 && <EmptyState hint="هنوز نشست سفارشی ثبت نشده است." />}
 
       <ul className="list">
@@ -78,7 +93,11 @@ export function OrderSessionsSection({ eventId, currency, eventClosed, readOnly 
                   {session.billTotal !== null ? ` · ${formatAmount(session.billTotal)} ${currency}` : ""}
                 </span>
               </div>
-              <SessionStatusChip status={session.status} />
+              <div className="session-chips">
+                <SessionStatusChip status={session.status} />
+                {sessionMode(session) === "collaborative" && <span className="session-chip">مشارکتی</span>}
+                {sessionSettlement(session) === "own" && <span className="session-chip">تسویه‌ی جداگانه</span>}
+              </div>
             </li>
           );
         })}

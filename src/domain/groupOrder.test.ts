@@ -6,6 +6,8 @@ import {
   buildItemizedSnapshot,
   buildWaiterList,
   buildWaiterListText,
+  buildWaiterListWhatsAppText,
+  buildWaiterSections,
   formatItemizedItem,
   groupWaiterListByCategory,
   bulkPriceLineIds,
@@ -427,5 +429,33 @@ describe("buildItemizedSnapshot", () => {
     expect(a.finalTotal).toBe(253);
     expect(snap.people.reduce((s, p) => s + p.finalTotal, 0)).toBe(snap.billTotal);
     expect(snap.extras[0].amount).toBe(computation.extras[0].amount);
+  });
+});
+
+describe("waiter list v2 — delivered tracking", () => {
+  it("separates new from delivered; a later supplementary line is new automatically", () => {
+    const lines = [
+      line("a", "کوبیده", 2, undefined, { deliveredAt: "2026-01-01T10:00:00Z" }),
+      line("b", "کوبیده", 1),
+      line("c", "دوغ", 1, undefined, { deliveredAt: "2026-01-01T10:00:00Z" })
+    ];
+    const { fresh, delivered } = buildWaiterSections(lines);
+    expect(fresh.map((i) => [i.name, i.quantity])).toEqual([["کوبیده", 1]]);
+    expect(delivered.map((i) => [i.name, i.quantity]).sort()).toEqual([["دوغ", 1], ["کوبیده", 2]].sort());
+    // item rows know their lines so one tap can mark them all
+    expect(fresh[0].lineIds).toEqual([lines[1].id]);
+  });
+
+  it("builds a WhatsApp message grouped by category with bold headings", () => {
+    const text = buildWaiterListWhatsAppText(
+      "شام – نایب",
+      buildWaiterList([line("a", "دوغ", 2, undefined, { category: "drink" }), line("b", "کوبیده", 3, undefined, { category: "main", note: "بدون پیاز" })]),
+      "سفارش جدید"
+    );
+    expect(text).toContain("*سفارش جدید – شام – نایب*");
+    expect(text.indexOf("*غذای اصلی*")).toBeLessThan(text.indexOf("*نوشیدنی*"));
+    expect(text).toContain("• ۳ × کوبیده");
+    expect(text).toContain("◦ بدون پیاز");
+    expect(text).toContain("جمع: ۵ مورد");
   });
 });

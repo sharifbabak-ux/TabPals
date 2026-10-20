@@ -162,3 +162,21 @@ describe("local → server op type mapping", () => {
     for (const t of ["create", "update", "delete", "archive", "restore", "purge"] as const) expect(toServerOpType(t, "vouchers", {})).toBe(t);
   });
 });
+
+describe("outbound sanitizer — O2 session fields", () => {
+  it("participants / mode / settlement / membersMayPrice / deliveredAt travel as plain order data; photos still don't", () => {
+    const session = sanitizeOutboundOp(
+      op({
+        entity: "orderSessions",
+        changes: { participants: ch(["p1", "p2"]), mode: ch("collaborative"), membersMayPrice: ch(true), settlement: ch("own"), menuPhoto: ch(new Blob(["SECRET-PHOTO"])) }
+      })
+    )!;
+    expect(session.changes.participants.after).toEqual(["p1", "p2"]);
+    expect(session.changes.mode.after).toBe("collaborative");
+    expect(session.changes.membersMayPrice.after).toBe(true);
+    expect(session.changes.settlement.after).toBe("own");
+    expect(session.changes.menuPhoto).toBeUndefined();
+    const line = sanitizeOutboundOp(op({ entity: "orderLines", type: "update", changes: { deliveredAt: ch("2026-01-01T10:00:00.000Z") } }))!;
+    expect(line.changes.deliveredAt.after).toBe("2026-01-01T10:00:00.000Z");
+  });
+});
