@@ -34,6 +34,8 @@ export interface LineInput {
   note?: string;
   /** Waiter-list category; missing (pre-GO-1.1 data) counts as "other". */
   category?: OrderCategory;
+  /** Set once the waiter list marked the line delivered (O2-2). */
+  deliveredAt?: string | null;
 }
 
 export interface PersonTotalInput {
@@ -316,6 +318,8 @@ export interface WaiterItem {
   category: OrderCategory;
   /** Distinct notes with how many units carry each ("بدون پیاز"). */
   notes: { text: string; quantity: number }[];
+  /** The order lines behind this row, so one tap can mark all of them delivered / new. */
+  lineIds: string[];
 }
 
 export interface WaiterCategoryGroup {
@@ -335,12 +339,13 @@ export function buildWaiterList(lines: LineInput[]): WaiterItem[] {
     if (!key) continue;
     let item = groups.get(key);
     if (!item) {
-      item = { key, name: line.itemName.trim(), quantity: 0, category: line.category ?? DEFAULT_ORDER_CATEGORY, notes: [] };
+      item = { key, name: line.itemName.trim(), quantity: 0, category: line.category ?? DEFAULT_ORDER_CATEGORY, notes: [], lineIds: [] };
       groups.set(key, item);
     } else if (item.category === DEFAULT_ORDER_CATEGORY && line.category) {
       item.category = line.category;
     }
     item.quantity += line.quantity;
+    item.lineIds.push(line.id);
     const note = line.note?.trim();
     if (note) {
       const existing = item.notes.find((n) => itemKey(n.text) === itemKey(note));
@@ -380,6 +385,39 @@ export function buildWaiterListText(title: string, items: WaiterItem[]): string 
     return (showHeadings ? [`— ${ORDER_CATEGORY_LABELS[group.category]} —`, ...rows] : rows).join("\n");
   });
   return [title, "", sections.join("\n\n")].join("\n");
+}
+
+export interface WaiterSections {
+  /** «جدید»: not yet delivered — includes supplementary lines added later. */
+  fresh: WaiterItem[];
+  /** «تحویل‌شده». */
+  delivered: WaiterItem[];
+}
+
+/** Splits the waiter list by delivery: an item whose lines are partly delivered shows up in both sections with its own quantities. */
+export function buildWaiterSections(lines: LineInput[]): WaiterSections {
+  return {
+    fresh: buildWaiterList(lines.filter((l) => !l.deliveredAt)),
+    delivered: buildWaiterList(lines.filter((l) => Boolean(l.deliveredAt)))
+  };
+}
+
+/**
+ * WhatsApp-ready Persian message: bold title, items grouped by category with
+ * bullets, notes indented, and the total. `*…*` is WhatsApp's bold.
+ */
+export function buildWaiterListWhatsAppText(title: string, items: WaiterItem[], heading = "سفارش"): string {
+  const groups = groupWaiterListByCategory(items);
+  const showHeadings = waiterListShowsHeadings(groups);
+  const sections = groups.map((group) => {
+    const rows = group.items.flatMap((item) => [
+      `• ${formatWaiterLine(item)}`,
+      ...item.notes.map((n) => `    ◦ ${n.text}${n.quantity !== item.quantity ? ` (${toPersianDigits(n.quantity)})` : ""}`)
+    ]);
+    return (showHeadings ? [`*${ORDER_CATEGORY_LABELS[group.category]}*`, ...rows] : rows).join("\n");
+  });
+  const total = items.reduce((sum, item) => sum + item.quantity, 0);
+  return [`*${heading} – ${title}*`, "", sections.join("\n\n"), "", `جمع: ${toPersianDigits(total)} مورد`].join("\n");
 }
 
 export interface MissingPriceGroup {

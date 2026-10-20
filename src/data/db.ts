@@ -422,6 +422,37 @@ export class TabPalDB extends Dexie {
           });
       });
 
+    // Stage O2-1 — session model. No index changes; existing sessions get the
+    // new fields filled with today's behaviour: participants = the event's
+    // active members plus anyone who already has an order, admin-entered,
+    // members may not price, settles into the event balance.
+    this.version(12)
+      .stores({})
+      .upgrade(async (tx) => {
+        const members = await tx.table("eventMembers").toArray();
+        const lines = await tx.table("orderLines").toArray();
+        const totals = await tx.table("orderPersonTotals").toArray();
+        await tx
+          .table("orderSessions")
+          .toCollection()
+          .modify((session) => {
+            if (!Array.isArray(session.participants) || session.participants.length === 0) {
+              const ids = new Set<string>();
+              for (const m of members) if (m.eventId === session.eventId && m.active && !m.deleted) ids.add(m.personId);
+              for (const l of lines) {
+                if (l.sessionId !== session.id || l.deleted) continue;
+                if (l.personId) ids.add(l.personId);
+                else for (const p of l.sharedParticipants ?? []) ids.add(p.personId);
+              }
+              for (const t of totals) if (t.sessionId === session.id && !t.deleted) ids.add(t.personId);
+              session.participants = [...ids];
+            }
+            if (session.mode === undefined) session.mode = "admin-entered";
+            if (session.membersMayPrice === undefined) session.membersMayPrice = false;
+            if (session.settlement === undefined) session.settlement = "event";
+          });
+      });
+
     // Every write that logs an operation may also have to queue it in the
     // outbox (and check the member's role), which reads/writes the sync
     // tables and the event-scoped tables. Rather than touching every

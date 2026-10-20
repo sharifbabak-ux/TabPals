@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { orderSessionsRepository } from "@/data/repositories";
-import type { OrderSession } from "@/data/types";
+import type { OrderSession, SessionMode, SessionSettlement } from "@/data/types";
+import { SESSION_MODE_LABELS, SESSION_SETTLEMENT_LABELS, sessionMode, sessionParticipantIds, sessionSettlement } from "@/domain/sessionModel";
+import { useEventMembers } from "@/ui/hooks/useEventMembers";
 import { menuPhotoService } from "@/platform";
 import { BottomSheet } from "@/ui/components/BottomSheet";
 import { JalaliDatePicker } from "@/ui/components/JalaliDatePicker";
@@ -40,7 +42,13 @@ export function SessionFormSheet({ open, eventId, session, treasurerPersonId, tr
   const [photo, setPhoto] = useState<Blob | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [participants, setParticipants] = useState<string[]>([]);
+  const [mode, setMode] = useState<SessionMode>("admin-entered");
+  const [membersMayPrice, setMembersMayPrice] = useState(false);
+  const [settlement, setSettlement] = useState<SessionSettlement>("event");
   const photoUrl = useBlobUrl(photo);
+  const members = useEventMembers(eventId);
+  const activeMembers = (members ?? []).filter((m) => m.active);
 
   useEffect(() => {
     if (!open) return;
@@ -50,10 +58,30 @@ export function SessionFormSheet({ open, eventId, session, treasurerPersonId, tr
     setDate(toDateInput(when));
     setTime(toTimeInput(when));
     setPhoto(session?.menuPhoto ?? null);
+    setMode(session ? sessionMode(session) : "admin-entered");
+    setMembersMayPrice(session?.membersMayPrice ?? false);
+    setSettlement(session ? sessionSettlement(session) : "event");
     setError(null);
     setSaving(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Default = everyone active; for an existing session, its stored participants.
+  const participantsInitialized = useRef(false);
+  useEffect(() => {
+    if (!open) {
+      participantsInitialized.current = false;
+      return;
+    }
+    if (participantsInitialized.current || members === undefined) return;
+    participantsInitialized.current = true;
+    setParticipants(sessionParticipantIds(session ?? {}, activeMembers.map((m) => m.personId)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, members]);
+
+  function toggleParticipant(personId: string) {
+    setParticipants((prev) => (prev.includes(personId) ? prev.filter((id) => id !== personId) : [...prev, personId]));
+  }
 
   async function pickPhoto(source: "camera" | "gallery") {
     setError(null);
@@ -71,10 +99,10 @@ export function SessionFormSheet({ open, eventId, session, treasurerPersonId, tr
     try {
       const scheduledAt = new Date(`${date}T${time || "00:00"}:00`).toISOString();
       if (session) {
-        await orderSessionsRepository.update(session.id, { title, restaurant, scheduledAt, menuPhoto: photo });
+        await orderSessionsRepository.update(session.id, { title, restaurant, scheduledAt, menuPhoto: photo, participants, mode, membersMayPrice, settlement });
         onSaved?.();
       } else {
-        const created = await orderSessionsRepository.create({ eventId, title, restaurant, scheduledAt, menuPhoto: photo ?? undefined });
+        const created = await orderSessionsRepository.create({ eventId, title, restaurant, scheduledAt, menuPhoto: photo ?? undefined, participants, mode, membersMayPrice, settlement });
         onCreated?.(created.id);
       }
     } catch (e) {
@@ -136,13 +164,65 @@ export function SessionFormSheet({ open, eventId, session, treasurerPersonId, tr
             </div>
           </div>
 
+          <div className="field">
+            <label>شرکت‌کنندگان</label>
+            <div className="person-photo-field__actions">
+              <button type="button" onClick={() => setParticipants(activeMembers.map((m) => m.personId))}>
+                همه
+              </button>
+              <button type="button" onClick={() => setParticipants([])}>
+                هیچ‌کس
+              </button>
+            </div>
+            <div className="session-form__participants">
+              {activeMembers.map((m) => (
+                <button
+                  key={m.personId}
+                  type="button"
+                  className={`category-chip${participants.includes(m.personId) ? " category-chip--selected" : ""}`}
+                  aria-pressed={participants.includes(m.personId)}
+                  onClick={() => toggleParticipant(m.personId)}
+                >
+                  {m.name}
+                </button>
+              ))}
+            </div>
+            {participants.length === 0 && <p className="field__warning">حداقل یک نفر را انتخاب کنید.</p>}
+          </div>
+
+          <div className="field">
+            <label>شیوه‌ی ثبت سفارش</label>
+            <div className="session-form__choices" role="radiogroup">
+              {(Object.keys(SESSION_MODE_LABELS) as SessionMode[]).map((value) => (
+                <label key={value} className="session-form__check">
+                  <input type="radio" name="session-mode" checked={mode === value} onChange={() => setMode(value)} /> {SESSION_MODE_LABELS[value]}
+                </label>
+              ))}
+            </div>
+            <label className="session-form__check">
+              <input type="checkbox" checked={membersMayPrice} onChange={(e) => setMembersMayPrice(e.target.checked)} /> اعضا اجازه‌ی ثبت قیمت دارند
+            </label>
+          </div>
+
+          <div className="field">
+            <label>تسویه</label>
+            <div className="session-form__choices" role="radiogroup">
+              {(Object.keys(SESSION_SETTLEMENT_LABELS) as SessionSettlement[]).map((value) => (
+                <label key={value} className="session-form__check">
+                  <input type="radio" name="session-settlement" checked={settlement === value} onChange={() => setSettlement(value)} /> {SESSION_SETTLEMENT_LABELS[value]}
+                </label>
+              ))}
+            </div>
+            {settlement === "own" && <p className="field__hint">فعلاً فقط ثبت می‌شود؛ صورت‌حساب جداگانه‌ی نشست در نسخه‌های بعدی اضافه می‌شود و تا آن زمان سند نشست مثل همیشه به تراز ایونت می‌رود.</p>}
+          </div>
+
           {!session && treasurerName && <p className="field__hint">مدیر نشست: {treasurerName} (مسئول صندوق)</p>}
           {error && <p className="field__error">{error}</p>}
           <div className="form-actions">
             <button type="button" className="form-actions__secondary" onClick={onClose}>
               انصراف
             </button>
-            <button type="button" className="form-actions__primary" disabled={saving || !title.trim()} onClick={handleSubmit}>
+            <button type="button" className="form-actions__primary" disabled={saving || !title.trim() || participants.length === 0} onClick={handleSubmit}>
               {session ? "ذخیره" : "ایجاد و ورود به نشست"}
             </button>
           </div>

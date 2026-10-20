@@ -36,6 +36,9 @@ function entityDefaults(entity: string): Record<string, unknown> {
       return { status: "active", payers: [], participants: [], shares: [] };
     case "statements":
       return { status: "current", sendLog: [], templateId: null, closingText: "" };
+    case "orderSessions":
+      // Sessions from older clients carry none of the O2-1 fields; empty participants = every active member.
+      return { participants: [], mode: "admin-entered", membersMayPrice: false, settlement: "event" };
     case "orderLines":
       return { source: "online", sourceVersion: 1 };
     default:

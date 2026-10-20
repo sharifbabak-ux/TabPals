@@ -15,6 +15,7 @@ import {
   validateFinalize
 } from "@/domain/groupOrder";
 import { canEditLines, canEditSession, validateTransition } from "@/domain/orderSessionState";
+import { DEFAULT_SESSION_MODE, DEFAULT_SESSION_SETTLEMENT, normalizeParticipants } from "@/domain/sessionModel";
 import { db } from "../db";
 import type {
   Event,
@@ -26,6 +27,8 @@ import type {
   OrderSession,
   OrderSessionStatus,
   SessionExtra,
+  SessionMode,
+  SessionSettlement,
   SessionExtraKind,
   SessionExtraMode,
   SessionMenuItem,
@@ -51,7 +54,11 @@ const SESSION_LOG_FIELDS: (keyof OrderSession)[] = [
   "expenseDate",
   "payers",
   "payerSplitMode",
-  "voucherId"
+  "voucherId",
+  "participants",
+  "mode",
+  "membersMayPrice",
+  "settlement"
 ];
 const MENU_ITEM_LOG_FIELDS: (keyof SessionMenuItem)[] = ["sessionId", "name", "price", "category", "sortOrder", "deleted"];
 const LINE_LOG_FIELDS: (keyof OrderLine)[] = [
@@ -66,6 +73,7 @@ const LINE_LOG_FIELDS: (keyof OrderLine)[] = [
   "note",
   "source",
   "sourceVersion",
+  "deliveredAt",
   "deleted"
 ];
 const TOTAL_LOG_FIELDS: (keyof OrderPersonTotal)[] = ["sessionId", "personId", "total", "deleted"];
@@ -86,6 +94,11 @@ export interface CreateSessionInput {
   /** ISO timestamp. */
   scheduledAt: string;
   menuPhoto?: Blob;
+  /** Defaults to every active event member. */
+  participants?: string[];
+  mode?: SessionMode;
+  membersMayPrice?: boolean;
+  settlement?: SessionSettlement;
 }
 
 export interface UpdateSessionInput {
@@ -99,6 +112,10 @@ export interface UpdateSessionInput {
   expenseDate?: string;
   payers?: VoucherPayer[];
   payerSplitMode?: SplitMode;
+  participants?: string[];
+  mode?: SessionMode;
+  membersMayPrice?: boolean;
+  settlement?: SessionSettlement;
 }
 
 export interface MenuItemInput {
@@ -204,10 +221,15 @@ export const orderSessionsRepository = {
   async create(input: CreateSessionInput): Promise<OrderSession> {
     const title = input.title.trim();
     if (!title) throw new Error("عنوان نشست را وارد کنید");
-    return db.transaction("rw", db.events, db.orderSessions, db.operations, async () => {
+    return db.transaction("rw", db.events, db.eventMembers, db.orderSessions, db.operations, async () => {
       const event = await loadEvent(input.eventId);
       if (isEventClosed(event, new Date())) throw new Error("این ایونت پایان یافته است و امکان ایجاد نشست جدید وجود ندارد.");
       if (!event.treasurerPersonId) throw new Error("برای ایجاد نشست، ابتدا مسئول صندوق ایونت را تعیین کنید.");
+      let participants = normalizeParticipants(input.participants ?? []);
+      if (participants.length === 0) {
+        const members = await db.eventMembers.where("eventId").equals(input.eventId).filter((m) => m.active && !m.deleted).toArray();
+        participants = normalizeParticipants(members.map((m) => m.personId));
+      }
       const session: OrderSession = {
         ...newBaseFields(),
         eventId: input.eventId,
@@ -221,7 +243,11 @@ export const orderSessionsRepository = {
         billTotal: null,
         expenseDate: todayIso(new Date(input.scheduledAt)),
         payers: [],
-        voucherId: null
+        voucherId: null,
+        participants,
+        mode: input.mode ?? DEFAULT_SESSION_MODE,
+        membersMayPrice: input.membersMayPrice ?? false,
+        settlement: input.settlement ?? DEFAULT_SESSION_SETTLEMENT
       };
       await db.orderSessions.add(session);
       await logOperation(db, "orderSessions", session.id, "create", diffFields(undefined, session, SESSION_LOG_FIELDS));
@@ -249,6 +275,14 @@ export const orderSessionsRepository = {
       if (input.expenseDate !== undefined) updated.expenseDate = input.expenseDate;
       if (input.payers !== undefined) updated.payers = input.payers;
       if (input.payerSplitMode !== undefined) updated.payerSplitMode = input.payerSplitMode;
+      if (input.participants !== undefined) {
+        const participants = normalizeParticipants(input.participants);
+        if (participants.length === 0) throw new Error("حداقل یک شرکت‌کننده انتخاب کنید");
+        updated.participants = participants;
+      }
+      if (input.mode !== undefined) updated.mode = input.mode;
+      if (input.membersMayPrice !== undefined) updated.membersMayPrice = input.membersMayPrice;
+      if (input.settlement !== undefined) updated.settlement = input.settlement;
       const diff = diffFields(existing, updated, SESSION_LOG_FIELDS);
       const photoChanged = input.menuPhoto !== undefined && existing.menuPhoto !== updated.menuPhoto;
       if (Object.keys(diff).length === 0 && !photoChanged) return;
@@ -432,10 +466,32 @@ export const orderSessionsRepository = {
         menuItemId: existing.menuItemId
       });
       const updated: OrderLine = { ...existing, ...merged, ...touchBaseFields(existing) };
+      // A delivered line whose item or quantity changed has something new to bring: it is "new" again.
+      if (existing.deliveredAt && (merged.quantity !== existing.quantity || merged.itemName !== existing.itemName)) updated.deliveredAt = null;
       const diff = diffFields(existing, updated, LINE_LOG_FIELDS);
       if (Object.keys(diff).length === 0) return;
       await db.orderLines.put(updated);
       await logOperation(db, "orderLines", lineId, "update", diff);
+    });
+  },
+
+  /**
+   * Waiter-list tracking (O2-2): marks lines delivered (or back to new). Allowed
+   * while the session is not terminal; it never touches quantities or prices.
+   */
+  async setLinesDelivered(lineIds: string[], delivered: boolean): Promise<void> {
+    if (lineIds.length === 0) return;
+    await db.transaction("rw", db.events, db.orderSessions, db.orderLines, db.operations, async () => {
+      const at = new Date().toISOString();
+      for (const lineId of lineIds) {
+        const existing = await db.orderLines.get(lineId);
+        if (!existing || existing.deleted) continue;
+        await loadEditableSession(existing.sessionId);
+        if (Boolean(existing.deliveredAt) === delivered) continue;
+        const updated: OrderLine = { ...existing, deliveredAt: delivered ? at : null, ...touchBaseFields(existing) };
+        await db.orderLines.put(updated);
+        await logOperation(db, "orderLines", lineId, "update", diffFields(existing, updated, LINE_LOG_FIELDS));
+      }
     });
   },
 
