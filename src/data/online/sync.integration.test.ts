@@ -254,6 +254,8 @@ describe("invite + redeem + read-only member", () => {
     const memberToken = mock.events.get(event.id)!.devices.find((d) => d.memberId === sara.id)!.token;
     await until(() => [...mock.sockets].some((s) => s.token === memberToken && s.connected));
     const sock = [...mock.sockets].find((s) => s.token === memberToken)!;
+    // the connect-triggered catch-up must be over, or it could fetch the voucher over HTTP and mask the "missed" socket message
+    await until(() => !member.engine.getState(event.id).syncing);
     sock.disconnect();
     const v = await vouchersRepository.createExpense({ eventId: event.id, expenseDate: "2026-01-02", description: "غایب", totalAmount: 10, payers: [{ personId: treasurer.id, amount: 10 }], split: { mode: "equal_all" } });
     await until(() => mock.events.get(event.id)!.ops.some((o) => o.op.entityId === v.id));
@@ -328,6 +330,8 @@ describe("revocation, purge, leave", () => {
     await expect(admin.service.purgeFromServer(event.id, "عنوان اشتباه")).rejects.toThrow("عنوان");
     await admin.service.purgeFromServer(event.id, "سفر شمال");
     await until(async () => (await memberDb.events.get(event.id)) === undefined);
+    // The row vanishes before the notice is final (a concurrent 401 may write the generic text first); the purge reason always wins in the end.
+    await until(async () => ((await readOnlineNotice(memberDb))?.message ?? "").includes("از سرور حذف شد"));
     expect((await readOnlineNotice(memberDb))?.message).toContain("از سرور حذف شد");
     expect(mock.events.has(event.id)).toBe(false);
     // admin's copy stays, as an offline event
