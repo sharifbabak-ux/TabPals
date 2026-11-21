@@ -499,3 +499,59 @@
   font-weight: 700;
   color: var(--color-primary, #4e5d2f);
 }
+
+/* v0.9.4: no horizontal scrolling in the orders tab, the session form sheet and the session page. */
+.order-session,
+.order-session > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* One column so «منوی سریع» is as wide as the buttons around it. */
+.order-session__tools {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.order-session__tools button {
+  min-height: 44px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Sessions list: title block and chips may wrap instead of pushing the row wider than the screen. */
+.session-list-item {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.session-list-item .list-item__main {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.session-list-item .list-item__title {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.session-form__participants .category-chip,
+.session-chip {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.session-form__check {
+  min-width: 0;
+}
+
+.session-form__check input {
+  flex-shrink: 0;
+}
+
+.session-form__photo {
+  max-width: 100%;
+}
+
+.order-session__meta > * {
+  min-width: 0;
+}
