@@ -1,6 +1,7 @@
 import { canDeleteEvent, canTrashEvent } from "@/domain/deletionGuards";
 import { isEventClosed } from "@/domain/eventStatus";
 import { validateCardNumber, validateIban } from "@/domain/paymentValidation";
+import { validateGroups, type GroupValidationError } from "@/domain/settlementUnits";
 import { db } from "../db";
 import type { Event, EventCurrency } from "../types";
 import { diffFields, logOperation, newBaseFields, touchBaseFields } from "./operationLog";
@@ -72,6 +73,44 @@ function assertTreasurerEditableIfClosed(existing: Event, diff: Record<string, u
   throw new Error("این ایونت پایان‌یافته است؛ برای تغییر مسئول صندوق، ابتدا آن را بازگشایی کنید.");
 }
 
+/**
+ * The treasurer change would leave the event's settlement groups invalid (SG-4):
+ * e.g. the new treasurer is inside a group whose representative is someone else.
+ * Nothing was saved. `message` is Persian and names the group to fix first.
+ */
+export class TreasurerChangeBlockedError extends Error {
+  constructor(
+    message: string,
+    public readonly errors: GroupValidationError[]
+  ) {
+    super(message);
+    this.name = "TreasurerChangeBlockedError";
+  }
+}
+
+/** Throws `TreasurerChangeBlockedError` if the event's live groups are invalid with `newTreasurerId` as treasurer. */
+async function assertGroupsValidForTreasurer(event: Event, newTreasurerId: string | null): Promise<void> {
+  const groups = await db.settlementGroups.where("eventId").equals(event.id).filter((g) => !g.deleted).toArray();
+  if (groups.length === 0) return;
+  const members = await db.eventMembers.where("eventId").equals(event.id).filter((m) => !m.deleted).toArray();
+  const errors = validateGroups(
+    groups.map((g) => ({ id: g.id, name: g.name, memberIds: g.memberIds, representativeId: g.representativeId })),
+    { knownPersonIds: members.map((m) => m.personId), treasurerId: newTreasurerId ?? "" }
+  );
+  if (errors.length === 0) return;
+
+  const blocking = errors.filter((e) => e.code === "treasurer-must-represent");
+  if (blocking.length === 0) {
+    throw new TreasurerChangeBlockedError("گروه‌های تسویه‌ی این ایونت معتبر نیستند؛ ابتدا گروه‌ها را اصلاح کنید.", errors);
+  }
+  const person = newTreasurerId ? await db.persons.get(newTreasurerId) : undefined;
+  const who = person ? `«${[person.firstName, person.lastName].filter(Boolean).join(" ")}»` : "او";
+  const message = blocking
+    .map((e) => `ابتدا نمایندهٔ گروه «${groups.find((g) => g.id === e.groupId)?.name ?? "؟"}» را به ${who} تغییر دهید.`)
+    .join("\n");
+  throw new TreasurerChangeBlockedError(message, errors);
+}
+
 export const eventsRepository = {
   async create(input: EventInput): Promise<Event> {
     const normalized = normalize(input) as EventInput;
@@ -120,7 +159,7 @@ export const eventsRepository = {
 
   async update(id: string, changes: Partial<EventInput>): Promise<void> {
     const normalized = normalize(changes);
-    await db.transaction("rw", db.events, db.operations, async () => {
+    await db.transaction("rw", [db.events, db.operations, db.settlementGroups, db.eventMembers, db.persons], async () => {
       const existing = await db.events.get(id);
       if (!existing) throw new Error(`Event ${id} not found`);
       const updated: Event = { ...existing, ...normalized, ...touchBaseFields(existing) };
@@ -138,6 +177,7 @@ export const eventsRepository = {
       ]);
       if (Object.keys(diff).length === 0) return;
       assertTreasurerEditableIfClosed(existing, diff);
+      if ("treasurerPersonId" in diff) await assertGroupsValidForTreasurer(existing, updated.treasurerPersonId);
       await db.events.put(updated);
       await logOperation(db, "events", id, "update", diff);
     });

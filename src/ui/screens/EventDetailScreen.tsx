@@ -29,6 +29,7 @@ import { EventStatusControls } from "./events/EventStatusControls";
 import { MemberRow } from "./events/MemberRow";
 import { VouchersSection } from "./events/VouchersSection";
 import { BalancesPanel } from "./events/BalancesPanel";
+import { EventUnitsPanel } from "./events/EventUnitsPanel";
 import { SettlementGroupsSection } from "./events/SettlementGroupsSection";
 import { SG_DEACTIVATE } from "./events/settlementGroupLabels";
 import { StatementsSection } from "./events/StatementsSection";
@@ -377,6 +378,8 @@ export function EventDetailScreen() {
           />
 
           <BalancesPanel eventId={eventId} members={activeMemberOptions} currency={event.currency} />
+
+          <EventUnitsPanel eventId={eventId} treasurerPersonId={event.treasurerPersonId} currency={event.currency} />
 
           {online.online && (
             <div className="danger-zone">

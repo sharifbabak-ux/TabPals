@@ -4,7 +4,7 @@ import { BottomSheet } from "@/ui/components/BottomSheet";
 import { JalaliDatePicker } from "@/ui/components/JalaliDatePicker";
 import { validateCardNumber, validateIban } from "@/domain/paymentValidation";
 import type { Event, EventCurrency } from "@/data/types";
-import type { EventInput } from "@/data/repositories/eventsRepository";
+import { TreasurerChangeBlockedError, type EventInput } from "@/data/repositories/eventsRepository";
 
 interface PersonOption {
   id: string;
@@ -48,6 +48,8 @@ export function EventFormSheet({ open, event, closed, treasurerOptions, onClose,
   const [treasurerAccountHolder, setTreasurerAccountHolder] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  /** The error is about the treasurer choice (settlement groups) → shown right under that field. */
+  const [treasurerBlocked, setTreasurerBlocked] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -93,6 +95,7 @@ export function EventFormSheet({ open, event, closed, treasurerOptions, onClose,
     if (!valid || submitting) return;
     setSubmitting(true);
     setSubmitError(null);
+    setTreasurerBlocked(false);
     try {
       await onSubmit({
         title,
@@ -109,6 +112,7 @@ export function EventFormSheet({ open, event, closed, treasurerOptions, onClose,
       });
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "خطایی رخ داد");
+      setTreasurerBlocked(error instanceof TreasurerChangeBlockedError);
     } finally {
       setSubmitting(false);
     }
@@ -159,6 +163,11 @@ export function EventFormSheet({ open, event, closed, treasurerOptions, onClose,
               </option>
             ))}
           </select>
+          {treasurerBlocked && submitError && (
+            <p className="field__error" role="alert" style={{ whiteSpace: "pre-line" }}>
+              {submitError}
+            </p>
+          )}
           {!event && <p className="field__hint">شخص انتخاب‌شده به‌عنوان اولین عضو ایونت هم اضافه می‌شود.</p>}
         </div>
         <div className="field">
@@ -205,7 +214,7 @@ export function EventFormSheet({ open, event, closed, treasurerOptions, onClose,
           <p className="field__hint">این ایونت پایان‌یافته است؛ برای تغییر مسئول صندوق، ابتدا آن را بازگشایی کنید.</p>
         )}
 
-        {submitError && <p className="field__error">{submitError}</p>}
+        {submitError && !treasurerBlocked && <p className="field__error">{submitError}</p>}
         <div className="form-actions">
           <button type="button" className="form-actions__secondary" onClick={onClose}>
             انصراف
