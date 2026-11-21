@@ -180,3 +180,10 @@ Only SG-6 and SG-7 need server changes.
 - How the balance treats sessions with `settlement: "own"` before O2-6.
 - Rules when the representative is removed (block removal, or fall back to another member with a notice).
 - Changing group membership marks group statements outdated.
+
+**SG-1 done (v0.9.5).** `src/domain/settlementUnits.ts` (+ tests), pure, integer-only; `balanceEngine.ts`/`hubSettlement.ts` untouched. Semantics:
+- `validateGroups` returns typed errors (empty-name, too-few-members, duplicate-member, unknown-person, representative-not-member, person-in-multiple-groups, treasurer-must-represent), sorted independent of input order.
+- `buildUnits` → units sorted by key (`g:<groupId>` entries, then `p:<personId>`); group balance = exact sum of members (archived/removed members included); `internalCancelled = min(sum credits, sum debts)`; net zero → `settled`.
+- `unitsToHubInput` feeds `computeHubSettlement` with one balance per unit under the person id (representative for groups). `computeUnitSettlement` validates then runs it. With no groups the output equals the current hub output for balances in person-id order (the hub output order follows input order).
+- Treasurer inside a group must be its representative; that group is the hub unit and is skipped by the hub, so its other members get no separate transfers with the treasurer (their balances net inside the group; the remainder is the treasurer's own side, settled outside the app).
+- `repairGroupAfterMemberRemoval`: representative removed → first remaining member (stored order) + notice; < 2 members → dissolved (null) + notice. The treasurer rule is not re-checked there.
