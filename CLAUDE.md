@@ -35,6 +35,8 @@ build features from a later stage while working on an earlier one.
 
 - Never swallow a failure of a single-use step (invite redeem, first catch-up): return/throw an explicit status, keep the state needed for a retry, and show a Persian message with a retry button. Inbound sync ops must not overwrite pending or newer local edits (see "Join hardening" in docs/PLAN.md).
 
+- Revoke/purge/401 handling goes only through `SyncEngine.handleRevoked`: it keeps one revocation record per event and the most specific reason (`event-purged` > `device-revoked` > `unauthorized`) decides the user's notice, whatever order the socket event, pull and 401 arrive in. Never write that notice from another code path or in tests with sleeps.
+
 ## Sessions (ONLINE-2)
 
 - An Event has many Sessions (`orderSessions`); lifecycle wording «شروع نشست» = draft→open, «پایان نشست» = open→locked — never change the state machine in `orderSessionState.ts` for wording. Session model defaults/helpers live in `src/domain/sessionModel.ts`; a session without `participants` means every active member. `settlement: "own"` is stored only until the per-session statement exists (docs/PLAN.md, O2-6).

@@ -73,6 +73,18 @@ function revokeMessage(reason: RevokeReason, title: string): string {
   }
 }
 
+/** Higher = more specific; a generic 401 must never overwrite the reason a purge or revoke already named. */
+const REVOKE_RANK: Record<RevokeReason, number> = { unauthorized: 0, "device-revoked": 1, "event-purged": 2 };
+
+interface RevocationRecord {
+  reason: RevokeReason;
+  title: string;
+  /** The reason the stored notice was written for (null while nothing was written, e.g. a deliberate purge). */
+  noticed: RevokeReason | null;
+  finished: boolean;
+  done: Promise<void>;
+}
+
 export class SyncEngine {
   private deps: SyncEngineDeps;
   private sockets = new Map<string, SocketLike>();
@@ -83,6 +95,7 @@ export class SyncEngine {
   private retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private retryAttempts = new Map<string, number>();
   private expectedPurges = new Set<string>();
+  private revocations = new Map<string, RevocationRecord>();
   private listeners = new Set<() => void>();
   private unsubscribeSignal: (() => void) | null = null;
   private windowHandler = () => this.fire(this.syncAll());
@@ -607,23 +620,54 @@ export class SyncEngine {
     this.retryTimers.set(localEventId, timer);
   }
 
-  /** Device revoked / event purged / token no longer valid: wipe the local event (unless the admin purged it deliberately) and tell the user. */
+  /**
+   * Device revoked / event purged / token no longer valid: wipe the local event (unless the admin purged it deliberately) and tell the user.
+   * One revocation record per event is the single source of truth for the notice: the socket `event-purged`, a purged-op in a pull and a
+   * 401 from a concurrent request all arrive for the same purge in any order; the most specific reason wins, even if it arrives late.
+   */
   async handleRevoked(localEventId: string, reason: RevokeReason): Promise<void> {
     const { db } = this.deps;
+    // Reading the link is async: another path may register (or even finish) the revocation meanwhile, so decide after it.
     const link = await db.onlineLinks.get(localEventId);
-    if (!link) return;
-    const event = await db.events.get(localEventId);
-    const title = event?.title ?? "";
-    this.detach(localEventId);
-
-    if (this.expectedPurges.has(localEventId)) {
-      this.expectedPurges.delete(localEventId);
-      await detachOnlineEvent(localEventId, db);
-      return;
+    let rec = this.revocations.get(localEventId);
+    // A finished record while a live link exists again means the event was re-joined: this is a fresh revocation.
+    if (rec?.finished && link) rec = undefined;
+    if (!rec) {
+      if (!link) return;
+      const title = (await db.events.get(localEventId))?.title ?? "";
+      rec = this.revocations.get(localEventId);
+      if (!rec) {
+        const fresh: RevocationRecord = { reason, title, noticed: null, finished: false, done: Promise.resolve() };
+        this.revocations.set(localEventId, fresh);
+        fresh.done = this.runRevocation(localEventId, fresh);
+        rec = fresh;
+      }
     }
-    await db.onlineLinks.update(localEventId, { status: "revoked" });
-    await wipeOnlineEvent(localEventId, db);
-    await setOnlineNotice(revokeMessage(reason, title), db);
+    if (REVOKE_RANK[reason] > REVOKE_RANK[rec.reason]) rec.reason = reason;
+    await rec.done;
+    // A more specific reason arrived after the notice was written (e.g. a 401 won the race against `event-purged`): correct it.
+    if (rec.noticed !== null && rec.noticed !== rec.reason) {
+      rec.noticed = rec.reason;
+      await setOnlineNotice(revokeMessage(rec.reason, rec.title), db);
+    }
+  }
+
+  private async runRevocation(localEventId: string, rec: RevocationRecord): Promise<void> {
+    const { db } = this.deps;
+    try {
+      this.detach(localEventId);
+      if (this.expectedPurges.has(localEventId)) {
+        this.expectedPurges.delete(localEventId);
+        await detachOnlineEvent(localEventId, db);
+        return;
+      }
+      await db.onlineLinks.update(localEventId, { status: "revoked" });
+      await wipeOnlineEvent(localEventId, db);
+      rec.noticed = rec.reason;
+      await setOnlineNotice(revokeMessage(rec.reason, rec.title), db);
+    } finally {
+      rec.finished = true;
+    }
   }
 }
 
