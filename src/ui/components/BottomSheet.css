@@ -83,3 +83,22 @@
   overflow-y: auto;
   flex: 1;
 }
+
+/* v0.9.4: a too-wide child must never give the sheet a horizontal scrollbar. */
+.sheet {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sheet__body {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.sheet__body .field input:not([type="checkbox"]):not([type="radio"]),
+.sheet__body .field select,
+.sheet__body .field textarea {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}

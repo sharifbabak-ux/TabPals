@@ -1036,3 +1036,9 @@ textarea {
   padding-inline-start: 20px;
   line-height: 1.8;
 }
+
+/* v0.9.4: flex children of the screen chrome may shrink (no horizontal page scroll). */
+.app-main,
+.screen {
+  min-width: 0;
+}

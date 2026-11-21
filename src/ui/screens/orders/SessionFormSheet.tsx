@@ -165,7 +165,22 @@ export function SessionFormSheet({ open, eventId, session, treasurerPersonId, tr
           </div>
 
           <div className="field">
+            <label>شیوه‌ی ثبت سفارش</label>
+            <div className="session-form__choices" role="radiogroup">
+              {(Object.keys(SESSION_MODE_LABELS) as SessionMode[]).map((value) => (
+                <label key={value} className="session-form__check">
+                  <input type="radio" name="session-mode" checked={mode === value} onChange={() => setMode(value)} /> {SESSION_MODE_LABELS[value]}
+                </label>
+              ))}
+            </div>
+            <label className="session-form__check">
+              <input type="checkbox" checked={membersMayPrice} onChange={(e) => setMembersMayPrice(e.target.checked)} /> اعضا اجازه‌ی ثبت قیمت دارند
+            </label>
+          </div>
+
+          <div className="field">
             <label>شرکت‌کنندگان</label>
+            <p className="field__hint">روی نام هر نفر بزنید تا از این نشست کم یا دوباره اضافه شود (نام‌های پررنگ شرکت می‌کنند).</p>
             <div className="person-photo-field__actions">
               <button type="button" onClick={() => setParticipants(activeMembers.map((m) => m.personId))}>
                 همه
@@ -188,20 +203,6 @@ export function SessionFormSheet({ open, eventId, session, treasurerPersonId, tr
               ))}
             </div>
             {participants.length === 0 && <p className="field__warning">حداقل یک نفر را انتخاب کنید.</p>}
-          </div>
-
-          <div className="field">
-            <label>شیوه‌ی ثبت سفارش</label>
-            <div className="session-form__choices" role="radiogroup">
-              {(Object.keys(SESSION_MODE_LABELS) as SessionMode[]).map((value) => (
-                <label key={value} className="session-form__check">
-                  <input type="radio" name="session-mode" checked={mode === value} onChange={() => setMode(value)} /> {SESSION_MODE_LABELS[value]}
-                </label>
-              ))}
-            </div>
-            <label className="session-form__check">
-              <input type="checkbox" checked={membersMayPrice} onChange={(e) => setMembersMayPrice(e.target.checked)} /> اعضا اجازه‌ی ثبت قیمت دارند
-            </label>
           </div>
 
           <div className="field">
