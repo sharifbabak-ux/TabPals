@@ -149,7 +149,7 @@ Fixes found after a real join on an installed Android PWA (Save in «اطلاع�
 
 ## Settlement groups (SG)
 
-Status: SG-0 (decisions only — no code yet). Not part of any numbered stage; the build order relative to ONLINE-2 (O2-3 onward) is still to be decided by the product owner.
+Status: SG-0 (decisions only — no code yet). Not part of any numbered stage. Decided build order: SG-0 to SG-5 first (app only, no server), then ONLINE-2 from O2-3 onward; SG-6 (online sync) is done together with the O2-3 server work so the server is changed only once.
 
 **Decisions.**
 1. **Name.** UI label «گروه تسویه». Code name `settlementGroup` (table `settlementGroups`). Never reuse the existing `groups` table/name — that is the saved device-local set of people (e.g. a family) from plan item 1.
@@ -178,4 +178,3 @@ Only SG-6 and SG-7 need server changes.
 - How the balance treats sessions with `settlement: "own"` before O2-6.
 - Rules when the representative is removed (block removal, or fall back to another member with a notice).
 - Changing group membership marks group statements outdated.
-- Build order relative to ONLINE-2 (O2-3 onward): product owner to decide.
