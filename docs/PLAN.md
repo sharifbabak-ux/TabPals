@@ -146,3 +146,36 @@ Fixes found after a real join on an installed Android PWA (Save in «اطلاع�
 **Sync/privacy note (O2-1/2).** The new fields (`participants` person ids, `mode`, `membersMayPrice`, `settlement` on `orderSessions`; `deliveredAt` on `orderLines`) are synced like all other order data: **plaintext** (order data was never end-to-end encrypted; only bank/phone data is). Menu photos still never leave the device. The sanitizer is unchanged; tests assert the new fields pass and photos don't.
 
 **FIX-FLAKY-PURGE-TEST (v0.9.3).** The member's «از سرور حذف شد» notice was timing-dependent: a purge reaches a member as the socket `event-purged`, as a `purge` op in a pull, and as a 401 on any concurrent request. All of them call `SyncEngine.handleRevoked`, which wiped and then wrote the notice with whichever reason got there last/first, so the generic 401 text could replace the purge text. Now one revocation record per event is the single source of truth: reasons are ranked (`event-purged` > `device-revoked` > `unauthorized`), concurrent calls join the same wipe, and a more specific reason arriving after the notice was written rewrites it. No change to which events are wiped or kept. The «missed socket message» test also now waits for the connect-time catch-up to finish before disconnecting (test-only race).
+
+## Settlement groups (SG)
+
+Status: SG-0 (decisions only — no code yet). Not part of any numbered stage; the build order relative to ONLINE-2 (O2-3 onward) is still to be decided by the product owner.
+
+**Decisions.**
+1. **Name.** UI label «گروه تسویه». Code name `settlementGroup` (table `settlementGroups`). Never reuse the existing `groups` table/name — that is the saved device-local set of people (e.g. a family) from plan item 1.
+2. **Structure.** A group has a name, N members (2..N; 10+ allowed) and one **representative** chosen by the admin. A person is in at most one group per event. Works in any event. Only admin/treasurer can create/edit; members are read-only.
+3. **Non-destructive layer.** Vouchers, payments and order lines are never changed. Individual statements stay unchanged; a group statement (`StatementKind` `"group"`) is an additional view. Both can be exported/sent (image, PDF, WhatsApp).
+4. **Maths.** Group balance = sum of its members' balances; debts inside the group cancel; money to/from the group goes through its representative. Settlement stays treasurer-hub (`computeHubSettlement`) run on *units* (a unit = an ungrouped person or a settlement group). Direct "A pays B" transfers are NOT part of SG and may become a separate later feature.
+5. **Treasurer inside a group.** The treasurer is that group's representative.
+6. **Privacy.** Group statements are visible to all event members for now (same as other statements). Per-group privacy is an optional later step (SG-7) that needs a server read filter.
+7. **Storage.** Group name and ids are plaintext like order data (not like bank data).
+8. **Help text.** Every non-obvious option gets a small «ⓘ» button. Tapping it opens a short, simple-Persian explanation with a tiny example (bottom sheet on phone; hover/focus tooltip as well on desktop). Built as a reusable component (e.g. `HelpHint`) so other features can use it. Explanations are on-demand only.
+
+**Steps.**
+- **SG-0** decisions/docs (this section).
+- **SG-1** pure domain `settlementUnits.ts` with tests.
+- **SG-2** `settlementGroups` table (Dexie v13) + repository (offline only).
+- **SG-3** admin UI: create/edit/remove group, choose representative, with `HelpHint`.
+- **SG-4** use units in settlement/balances.
+- **SG-5** group statement.
+- **SG-6** online sync — needs a Tabpals-Live change (allow the entity in `permissions.js` and `docs/API.md`) plus client wiring.
+- **SG-7** optional per-group privacy (server read filter).
+- **SG-8** hardening/backup tests.
+
+Only SG-6 and SG-7 need server changes.
+
+**Open items to verify later.**
+- How the balance treats sessions with `settlement: "own"` before O2-6.
+- Rules when the representative is removed (block removal, or fall back to another member with a notice).
+- Changing group membership marks group statements outdated.
+- Build order relative to ONLINE-2 (O2-3 onward): product owner to decide.
