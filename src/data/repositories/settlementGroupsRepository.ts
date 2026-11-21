@@ -3,9 +3,9 @@
  * Offline-only storage for the `settlementGroups` table (not the device-level
  * `groups` table). Every write validates the event's whole resulting set of
  * groups with the pure `validateGroups` (SG-1) using the event's real context,
- * and logs to the operation log. Not synced yet (SG-6).
+ * and logs to the operation log. Not synced yet (SG-6). Groups may be written on
+ * finished events too (SG-3): they are made at the END of an event, before statements.
  */
-import { isEventClosed } from "@/domain/eventStatus";
 import {
   repairGroupAfterMemberRemoval,
   validateGroups,
@@ -83,10 +83,6 @@ async function assertValid(event: Event, groups: SettlementGroupInput[]): Promis
   if (errors.length > 0) throw new SettlementGroupValidationError(errors);
 }
 
-function assertEventOpen(event: Event): void {
-  if (isEventClosed(event, new Date())) throw new Error("این ایونت پایان یافته است؛ گروه‌ها فقط‌خواندنی است.");
-}
-
 export const settlementGroupsRepository = {
   /** Groups of an event, soft-deleted ones excluded. */
   async listByEvent(eventId: string): Promise<SettlementGroup[]> {
@@ -102,7 +98,6 @@ export const settlementGroupsRepository = {
   async create(input: CreateSettlementGroupInput): Promise<SettlementGroup> {
     return db.transaction("rw", db.events, db.eventMembers, db.settlementGroups, db.operations, async () => {
       const event = await loadEvent(input.eventId);
-      assertEventOpen(event);
       const group: SettlementGroup = {
         ...newBaseFields(),
         eventId: input.eventId,
@@ -123,7 +118,6 @@ export const settlementGroupsRepository = {
       const existing = await db.settlementGroups.get(id);
       if (!existing || existing.deleted) throw new Error(`Settlement group ${id} not found`);
       const event = await loadEvent(existing.eventId);
-      assertEventOpen(event);
       const updated: SettlementGroup = {
         ...existing,
         name: input.name !== undefined ? input.name.trim() : existing.name,
@@ -141,10 +135,9 @@ export const settlementGroupsRepository = {
 
   /** Soft delete (`deleted: true`), like other event records; the operation log keeps the tombstone. */
   async delete(id: string): Promise<void> {
-    await db.transaction("rw", db.events, db.settlementGroups, db.operations, async () => {
+    await db.transaction("rw", db.settlementGroups, db.operations, async () => {
       const existing = await db.settlementGroups.get(id);
       if (!existing || existing.deleted) return;
-      assertEventOpen(await loadEvent(existing.eventId));
       const removed: SettlementGroup = { ...existing, deleted: true, ...touchBaseFields(existing) };
       await db.settlementGroups.put(removed);
       await logOperation(db, "settlementGroups", id, "delete", diffFields(existing, removed, GROUP_LOG_FIELDS));

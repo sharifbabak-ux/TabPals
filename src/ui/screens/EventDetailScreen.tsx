@@ -6,11 +6,15 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { ONLINE_ENABLED } from "@/config/app";
 import { db } from "@/data/db";
 import { onlineService } from "@/data/online/onlineService";
+import { deactivateEventMember } from "@/data/memberDeactivation";
 import { eventMembersRepository, eventsRepository, personsRepository } from "@/data/repositories";
+import { settlementGroupsRepository } from "@/data/repositories/settlementGroupsRepository";
 import type { EventMember } from "@/data/types";
 import { canTrashEvent } from "@/domain/deletionGuards";
 import { displayName } from "@/domain/displayName";
 import { isEventClosed } from "@/domain/eventStatus";
+import { groupOfPerson } from "@/domain/settlementGroupForm";
+import { repairGroupAfterMemberRemoval } from "@/domain/settlementUnits";
 import { JalaliDate } from "@/ui/components/JalaliDate";
 import { EmptyState } from "@/ui/components/EmptyState";
 import { ConfirmDialog } from "@/ui/components/ConfirmDialog";
@@ -25,6 +29,8 @@ import { EventStatusControls } from "./events/EventStatusControls";
 import { MemberRow } from "./events/MemberRow";
 import { VouchersSection } from "./events/VouchersSection";
 import { BalancesPanel } from "./events/BalancesPanel";
+import { SettlementGroupsSection } from "./events/SettlementGroupsSection";
+import { SG_DEACTIVATE } from "./events/settlementGroupLabels";
 import { StatementsSection } from "./events/StatementsSection";
 import { OrderSessionsSection } from "./orders/OrderSessionsSection";
 import { useOnlineEvent } from "@/ui/hooks/useOnlineEvent";
@@ -58,6 +64,7 @@ export function EventDetailScreen() {
   const [importOpen, setImportOpen] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
   const [deactivateTarget, setDeactivateTarget] = useState<MemberRowData | null>(null);
+  const [deactivateBlocked, setDeactivateBlocked] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [archiveTarget, setArchiveTarget] = useState(false);
   const [trashConfirmOpen, setTrashConfirmOpen] = useState(false);
@@ -97,6 +104,8 @@ export function EventDetailScreen() {
       })
       .sort((a, b) => a.sortOrder - b.sortOrder);
   }, [eventId]);
+
+  const settlementGroups = useLiveQuery(() => settlementGroupsRepository.listByEvent(eventId), [eventId]);
 
   const activePersons = useLiveQuery(() => db.persons.filter((p) => !p.deleted && !p.archived).toArray(), []);
 
@@ -162,8 +171,18 @@ export function EventDetailScreen() {
 
   async function handleDeactivateConfirm() {
     if (!deactivateTarget) return;
-    await eventMembersRepository.setActive(deactivateTarget.id, !deactivateTarget.active);
+    const target = deactivateTarget;
     setDeactivateTarget(null);
+    if (!target.active) {
+      await eventMembersRepository.setActive(target.id, true);
+      return;
+    }
+    // Settlement groups (SG-3): fix the person's group first, then deactivate; people in no group behave as before.
+    const result = await deactivateEventMember(target.id, eventId, target.personId);
+    if (result.status === "blocked") {
+      const group = groupOfPerson(settlementGroups ?? [], target.personId);
+      setDeactivateBlocked(group && result.codes.includes("treasurer-must-represent") ? SG_DEACTIVATE.blockedMessage(group.name) : SG_DEACTIVATE.blockedOther);
+    }
   }
 
   async function handleArchiveConfirm() {
@@ -215,6 +234,13 @@ export function EventDetailScreen() {
   }
 
   const closed = isEventClosed(event, new Date());
+  const targetGroup = deactivateTarget?.active ? groupOfPerson(settlementGroups ?? [], deactivateTarget.personId) : undefined;
+  const groupNote = targetGroup
+    ? `${SG_DEACTIVATE.inGroup(targetGroup.name)} ${repairGroupAfterMemberRemoval(targetGroup, deactivateTarget!.personId).message ?? ""}`.trim()
+    : "";
+  const deactivateMessage = deactivateTarget?.active
+    ? `${groupNote ? `${groupNote} ` : ""}«${deactivateTarget?.name}» از این ایونت غیرفعال شود؟ سابقه‌ی او حذف نمی‌شود.`
+    : `«${deactivateTarget?.name}» دوباره فعال شود؟`;
   // Members of an online event can only look: every add/edit/close/issue control is hidden.
   const readOnly = online.readOnly;
   const locked = closed || readOnly;
@@ -343,6 +369,13 @@ export function EventDetailScreen() {
             </SortableContext>
           </DndContext>
 
+          <SettlementGroupsSection
+            eventId={eventId}
+            treasurerPersonId={event.treasurerPersonId}
+            canEdit={!readOnly && (!online.online || online.isAdmin)}
+            online={online.online}
+          />
+
           <BalancesPanel eventId={eventId} members={activeMemberOptions} currency={event.currency} />
 
           {online.online && (
@@ -464,14 +497,20 @@ export function EventDetailScreen() {
       <ConfirmDialog
         open={deactivateTarget !== null}
         title={deactivateTarget?.active ? "غیرفعال کردن عضو" : "فعال کردن عضو"}
-        message={
-          deactivateTarget?.active
-            ? `«${deactivateTarget?.name}» از این ایونت غیرفعال شود؟ سابقه‌ی او حذف نمی‌شود.`
-            : `«${deactivateTarget?.name}» دوباره فعال شود؟`
-        }
+        message={deactivateMessage}
         confirmLabel={deactivateTarget?.active ? "غیرفعال کردن" : "فعال کردن"}
         onConfirm={handleDeactivateConfirm}
         onCancel={() => setDeactivateTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={deactivateBlocked !== null}
+        title={SG_DEACTIVATE.blockedTitle}
+        message={deactivateBlocked ?? ""}
+        confirmLabel={SG_DEACTIVATE.understood}
+        cancelLabel={SG_DEACTIVATE.understood}
+        onConfirm={() => setDeactivateBlocked(null)}
+        onCancel={() => setDeactivateBlocked(null)}
       />
 
       <GoOnlineSheet open={goOnlineOpen} eventId={eventId} onClose={() => setGoOnlineOpen(false)} />
