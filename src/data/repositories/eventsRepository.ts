@@ -241,6 +241,7 @@ export const eventsRepository = {
         db.vouchers,
         db.statements,
         db.orderSessions,
+        db.settlementGroups,
         db.sessionMenuItems,
         db.orderLines,
         db.orderPersonTotals,
@@ -266,6 +267,7 @@ export const eventsRepository = {
         await db.sessionExtras.where("sessionId").equals(sessionId).delete();
       }
       await db.orderSessions.bulkDelete(sessionIds);
+      await db.settlementGroups.where("eventId").equals(id).delete();
 
       await db.eventMembers.bulkDelete(memberIds);
       await db.vouchers.bulkDelete(voucherIds);

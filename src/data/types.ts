@@ -297,6 +297,7 @@ export type OperationEntity =
   | "statements"
   | "messageTemplates"
   | "orderSessions"
+  | "settlementGroups"
   | "sessionMenuItems"
   | "orderLines"
   | "orderPersonTotals"
@@ -522,4 +523,18 @@ export interface DeviceKeyRow {
   privateKey: CryptoKey;
   publicKey: { kty: "EC"; crv: "P-256"; x: string; y: string };
   createdAt: string;
+}
+
+// --- Settlement groups (docs/PLAN.md "Settlement groups (SG)", step SG-2) ---
+
+/**
+ * A settlement group of an event: N members (min 2) with exactly one
+ * representative. Not the same as `Group` (a saved set of people on this
+ * device). Stored in the `settlementGroups` table; not synced yet (SG-6).
+ */
+export interface SettlementGroup extends BaseRecord {
+  eventId: string;
+  name: string;
+  memberIds: string[];
+  representativeId: string;
 }

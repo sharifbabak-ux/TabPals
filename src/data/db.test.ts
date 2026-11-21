@@ -734,7 +734,7 @@ describe("TabPalDB schema v9 -> v10 migration (online events)", () => {
 
     const upgraded = new TabPalDB(TEST_DB_NAME);
     await upgraded.open();
-    expect(upgraded.verno).toBe(12);
+    expect(upgraded.verno).toBe(13);
 
     expect((await upgraded.persons.get("p1"))?.cardNumber).toBe("6037991234567802");
     expect((await upgraded.events.get("e1"))?.title).toBe("سفر");
@@ -797,7 +797,7 @@ describe("TabPalDB schema v10 -> v11 migration (end-to-end encryption)", () => {
 
     const upgraded = new TabPalDB(TEST_DB_NAME);
     await upgraded.open();
-    expect(upgraded.verno).toBe(12);
+    expect(upgraded.verno).toBe(13);
     expect((await upgraded.onlineLinks.get("created"))?.creatorDevice).toBe(true);
     expect((await upgraded.onlineLinks.get("joined"))?.creatorDevice).toBe(false);
     expect((await upgraded.onlineLinks.get("joined"))?.lastSeq).toBe(3);
@@ -860,6 +860,52 @@ describe("TabPalDB schema v11 -> v12 migration (session model)", () => {
     expect(session?.settlement).toBe("event");
     expect(session?.status).toBe("open");
     expect((await upgraded.orderLines.get("l1"))?.itemName).toBe("کوبیده");
+    upgraded.close();
+  });
+});
+
+describe("TabPalDB schema v12 -> v13 migration (settlement groups)", () => {
+  it("keeps existing data (including the device-level groups table) and creates an empty, usable settlementGroups table", async () => {
+    const V12_STORES = {
+      meta: "key",
+      persons: "id, archived, deleted, needsNameReview",
+      events: "id, archived, deleted, startDate, closedAt, treasurerPersonId, deletedAt",
+      eventMembers: "id, eventId, personId, &[eventId+personId], active, deleted, sortOrder",
+      groups: "id, name, archived, deleted",
+      vouchers: "id, eventId, &[eventId+number], type, status, deleted, recordedAt",
+      statements: "id, eventId, kind, personId, &[eventId+number], status, deleted",
+      messageTemplates: "id, category, enabled, isDefault, deleted",
+      orderSessions: "id, eventId, status, scheduledAt, deleted",
+      sessionMenuItems: "id, sessionId, sortOrder, deleted",
+      orderLines: "id, sessionId, personId, deleted",
+      orderPersonTotals: "id, sessionId, [sessionId+personId], deleted",
+      sessionExtras: "id, sessionId, deleted",
+      operations: "id, entity, entityId, timestamp",
+      onlineLinks: "localEventId, serverEventId, status",
+      outbox: "++order, &[localEventId+opId], localEventId",
+      appliedRemoteOps: "[localEventId+opId], localEventId",
+      eventKeys: "localEventId",
+      deviceKeys: "id"
+    };
+    class V12DB extends Dexie {
+      constructor() {
+        super(TEST_DB_NAME);
+        this.version(12).stores(V12_STORES);
+      }
+    }
+    const legacy = new V12DB();
+    const base = { createdAt: "x", updatedAt: "x", deviceId: "d", version: 1, deleted: false };
+    await legacy.table("groups").put({ id: "g1", name: "خانواده", personIds: ["p1", "p2"], archived: false, ...base });
+    await legacy.table("orderSessions").put({ id: "s1", eventId: "e1", title: "شام", status: "open", scheduledAt: "x", participants: ["p1"], mode: "admin-entered", membersMayPrice: false, settlement: "event", ...base });
+    legacy.close();
+
+    const upgraded = new TabPalDB(TEST_DB_NAME);
+    await upgraded.open();
+    expect((await upgraded.groups.get("g1"))?.personIds).toEqual(["p1", "p2"]);
+    expect((await upgraded.orderSessions.get("s1"))?.title).toBe("شام");
+    expect(await upgraded.settlementGroups.count()).toBe(0);
+    await upgraded.settlementGroups.put({ id: "sg1", eventId: "e1", name: "گ", memberIds: ["p1", "p2"], representativeId: "p1", ...base });
+    expect((await upgraded.settlementGroups.where("eventId").equals("e1").toArray()).map((g) => g.id)).toEqual(["sg1"]);
     upgraded.close();
   });
 });
