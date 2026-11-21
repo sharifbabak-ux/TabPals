@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../db";
-import { eventsRepository } from "./eventsRepository";
+import { eventMembersRepository } from "./eventMembersRepository";
+import { eventsRepository, TreasurerChangeBlockedError } from "./eventsRepository";
+import { personsRepository } from "./personsRepository";
+import { settlementGroupsRepository } from "./settlementGroupsRepository";
 
 beforeEach(async () => {
   await db.events.clear();
@@ -168,5 +171,60 @@ describe("eventsRepository", () => {
     expect(await db.eventMembers.get("m1")).toBeUndefined();
     const ops = await db.operations.where("entityId").equals(event.id).filter((o) => o.type === "purge").toArray();
     expect(ops).toHaveLength(1);
+  });
+});
+
+describe("eventsRepository.update — treasurer change vs settlement groups (SG-4)", () => {
+  async function seed() {
+    await db.persons.clear();
+    await db.settlementGroups.clear();
+    const ids: Record<string, string> = {};
+    for (const n of ["صندوق", "الف", "ب", "ج"]) ids[n] = (await personsRepository.create({ firstName: n, lastName: "نمونه" })).id;
+    const event = await eventsRepository.create({ title: "سفر", treasurerPersonId: ids["صندوق"] });
+    await eventMembersRepository.addMembers(event.id, Object.values(ids));
+    return { event, ids };
+  }
+
+  it("blocks a change that makes a group invalid, names the group, and saves nothing", async () => {
+    const { event, ids } = await seed();
+    await settlementGroupsRepository.create({ eventId: event.id, name: "خانواده", memberIds: [ids["الف"], ids["ب"]], representativeId: ids["الف"] });
+    const opsBefore = await db.operations.count();
+    const err = await eventsRepository.update(event.id, { treasurerPersonId: ids["ب"] }).catch((e) => e);
+    expect(err).toBeInstanceOf(TreasurerChangeBlockedError);
+    expect(err.message).toContain("«خانواده»");
+    expect(err.message).toContain("ابتدا نمایندهٔ گروه");
+    expect((await db.events.get(event.id))!.treasurerPersonId).toBe(ids["صندوق"]);
+    expect(await db.operations.count()).toBe(opsBefore);
+  });
+
+  it("allows the change when the new treasurer is the representative of their group", async () => {
+    const { event, ids } = await seed();
+    await settlementGroupsRepository.create({ eventId: event.id, name: "خانواده", memberIds: [ids["الف"], ids["ب"]], representativeId: ids["ب"] });
+    await eventsRepository.update(event.id, { treasurerPersonId: ids["ب"] });
+    expect((await db.events.get(event.id))!.treasurerPersonId).toBe(ids["ب"]);
+  });
+
+  it("allows the change when the new treasurer is in no group", async () => {
+    const { event, ids } = await seed();
+    await settlementGroupsRepository.create({ eventId: event.id, name: "خانواده", memberIds: [ids["الف"], ids["ب"]], representativeId: ids["الف"] });
+    await eventsRepository.update(event.id, { treasurerPersonId: ids["ج"] });
+    expect((await db.events.get(event.id))!.treasurerPersonId).toBe(ids["ج"]);
+  });
+
+  it("allows the change when the event has no groups, and ignores deleted groups", async () => {
+    const { event, ids } = await seed();
+    await eventsRepository.update(event.id, { treasurerPersonId: ids["الف"] });
+    expect((await db.events.get(event.id))!.treasurerPersonId).toBe(ids["الف"]);
+    const g = await settlementGroupsRepository.create({ eventId: event.id, name: "خانواده", memberIds: [ids["ب"], ids["ج"]], representativeId: ids["ب"] });
+    await settlementGroupsRepository.delete(g.id);
+    await eventsRepository.update(event.id, { treasurerPersonId: ids["ج"] });
+    expect((await db.events.get(event.id))!.treasurerPersonId).toBe(ids["ج"]);
+  });
+
+  it("does not check groups when the treasurer is unchanged (e.g. a title edit)", async () => {
+    const { event, ids } = await seed();
+    await settlementGroupsRepository.create({ eventId: event.id, name: "خانواده", memberIds: [ids["الف"], ids["ب"]], representativeId: ids["الف"] });
+    await eventsRepository.update(event.id, { title: "سفر جدید", treasurerPersonId: ids["صندوق"] });
+    expect((await db.events.get(event.id))!.title).toBe("سفر جدید");
   });
 });

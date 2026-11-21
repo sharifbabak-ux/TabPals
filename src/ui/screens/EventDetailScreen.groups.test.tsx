@@ -116,3 +116,28 @@ describe("EventDetailScreen — settlement groups section", () => {
     expect(container.querySelector('button[aria-label="گروه جدید"]')).toBeNull();
   });
 });
+
+describe("EventDetailScreen — changing the treasurer when settlement groups exist (SG-4)", () => {
+  it("blocks the change, names the group under the treasurer field, and keeps the treasurer", async () => {
+    const { event, ids } = await seed();
+    await groups.create({ eventId: event.id, name: "خانواده", memberIds: [ids["الف"], ids["ب"]], representativeId: ids["الف"] });
+    await show(event.id);
+    const editBtn = container.querySelector<HTMLButtonElement>('button[aria-label="ویرایش ایونت"]')!;
+    await act(async () => editBtn.click());
+    await wait();
+    const select = document.querySelector<HTMLSelectElement>("#event-treasurer")!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!;
+      setter.call(select, ids["ب"]);
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const form = select.closest("form")!;
+    await act(async () => {
+      form.requestSubmit();
+    });
+    await wait();
+    const alert = select.parentElement!.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("ابتدا نمایندهٔ گروه «خانواده»");
+    expect((await db.events.get(event.id))!.treasurerPersonId).toBe(ids["صندوق"]);
+  });
+});
