@@ -34,6 +34,7 @@ const ALL_TABLES = (db: TabPalDB) => [
   db.vouchers,
   db.statements,
   db.orderSessions,
+  db.settlementGroups,
   db.sessionMenuItems,
   db.orderLines,
   db.orderPersonTotals,
@@ -71,6 +72,7 @@ export async function wipeOnlineEvent(localEventId: string, db: TabPalDB = defau
       await db.sessionExtras.where("sessionId").equals(sessionId).delete();
     }
     await db.orderSessions.where("eventId").equals(localEventId).delete();
+    await db.settlementGroups.where("eventId").equals(localEventId).delete();
     await db.vouchers.where("eventId").equals(localEventId).delete();
     await db.statements.where("eventId").equals(localEventId).delete();
     await db.eventMembers.where("eventId").equals(localEventId).delete();

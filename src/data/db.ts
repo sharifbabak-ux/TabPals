@@ -19,6 +19,7 @@ import type {
   Person,
   SessionExtra,
   SessionMenuItem,
+  SettlementGroup,
   Statement,
   Voucher
 } from "./types";
@@ -83,6 +84,7 @@ export class TabPalDB extends Dexie {
   statements!: EntityTable<Statement, "id">;
   messageTemplates!: EntityTable<MessageTemplate, "id">;
   orderSessions!: EntityTable<OrderSession, "id">;
+  settlementGroups!: EntityTable<SettlementGroup, "id">;
   sessionMenuItems!: EntityTable<SessionMenuItem, "id">;
   orderLines!: EntityTable<OrderLine, "id">;
   orderPersonTotals!: EntityTable<OrderPersonTotal, "id">;
@@ -452,6 +454,12 @@ export class TabPalDB extends Dexie {
             if (session.settlement === undefined) session.settlement = "event";
           });
       });
+
+    // Stage SG-2 — settlement groups (offline only; not in the sync scope yet).
+    // New table only; existing tables and data are untouched.
+    this.version(13).stores({
+      settlementGroups: "id, eventId, deleted"
+    });
 
     // Every write that logs an operation may also have to queue it in the
     // outbox (and check the member's role), which reads/writes the sync
