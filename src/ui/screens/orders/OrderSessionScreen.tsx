@@ -147,7 +147,7 @@ export function OrderSessionScreen() {
         </p>
       )}
 
-      <div className="action-grid">
+      <div className="action-grid order-session__tools">
         {photoUrl && (
           <button type="button" className="order-session__photo-button" onClick={() => setPhotoOpen(true)}>
             <img src={photoUrl} alt="" />

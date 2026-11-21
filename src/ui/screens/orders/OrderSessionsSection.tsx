@@ -68,8 +68,10 @@ export function OrderSessionsSection({ eventId, currency, eventClosed, readOnly 
           سفارش‌ها
         </h2>
         {!eventClosed && !readOnly && (
-          <button type="button" className="icon-button icon-button--label" onClick={() => setFormOpen(true)}>
-            + نشست جدید
+          <button type="button" className="icon-button" aria-label="نشست جدید" title="نشست جدید" onClick={() => setFormOpen(true)}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
           </button>
         )}
       </div>
@@ -82,7 +84,7 @@ export function OrderSessionsSection({ eventId, currency, eventClosed, readOnly 
         {sorted.map((session) => {
           const count = data?.peopleBySession.get(session.id)?.size ?? 0;
           return (
-            <li key={session.id} className="list-item" onClick={() => navigate(`/events/${eventId}/orders/${session.id}`)}>
+            <li key={session.id} className="list-item session-list-item" onClick={() => navigate(`/events/${eventId}/orders/${session.id}`)}>
               <div className="list-item__main">
                 <span className="list-item__title">
                   {session.title}
