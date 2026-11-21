@@ -70,6 +70,18 @@ describe("settlementGroupsRepository CRUD", () => {
   });
 });
 
+describe("settlementGroupsRepository on a finished event (SG-3)", () => {
+  it("creates, updates and deletes groups after the event is closed", async () => {
+    const e = await setup();
+    await eventsRepository.close(e.id);
+    const g = await repo.create({ eventId: e.id, name: "الف", memberIds: ["a", "b"], representativeId: "a" });
+    const u = await repo.update(g.id, { memberIds: ["a", "b", "c"], representativeId: "c" });
+    expect(u.memberIds).toEqual(["a", "b", "c"]);
+    await repo.delete(g.id);
+    expect(await repo.listByEvent(e.id)).toEqual([]);
+  });
+});
+
 describe("settlementGroupsRepository validation", () => {
   it("rejects every invalid shape with a typed error and stores nothing", async () => {
     const e = await setup();

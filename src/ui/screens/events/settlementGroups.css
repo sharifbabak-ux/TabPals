@@ -1,0 +1,156 @@
+/* Settlement groups (SG-3): scoped styles, nothing global. */
+.sg-section {
+  margin-top: 20px;
+  min-width: 0;
+}
+
+.sg-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  min-width: 0;
+}
+
+.sg-section__title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.sg-section__title h2 {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sg-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sg-item .list-item__title,
+.sg-item .list-item__subtitle {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.sg-empty {
+  margin: 0 0 8px;
+  padding: 12px 14px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-card);
+  font-size: 0.9rem;
+  line-height: 1.8;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.sg-note {
+  margin: 8px 0 0;
+}
+
+.sg-label-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.sg-label-row label {
+  margin: 0;
+}
+
+.sg-people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sg-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 6px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: start;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.sg-chip--selected {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-primary-contrast);
+}
+
+.sg-chip:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sg-chip__note {
+  font-size: 0.7rem;
+  opacity: 0.85;
+}
+
+.sg-reps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sg-rep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sg-rep input {
+  flex-shrink: 0;
+}
+
+.sg-lock {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  margin: 6px 0 0;
+}
+
+.sg-lock p {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sg-errors {
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sg-errors li {
+  overflow-wrap: anywhere;
+}
+
+.sg-delete {
+  margin-top: 12px;
+}
