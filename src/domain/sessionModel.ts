@@ -18,7 +18,7 @@ export const SESSION_MODE_LABELS: Record<SessionMode, string> = {
 };
 
 export const SESSION_SETTLEMENT_LABELS: Record<SessionSettlement, string> = {
-  event: "جزو تسویه‌ی ایونت",
+  event: "جزو تسویه‌ی رویداد",
   own: "تسویه‌ی جداگانه"
 };
 

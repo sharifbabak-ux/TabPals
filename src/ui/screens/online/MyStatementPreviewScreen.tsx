@@ -52,7 +52,7 @@ export function MyStatementPreviewScreen() {
           ← بازگشت
         </button>
       </div>
-      <p className="field__hint no-print">این پیش‌نمایش زنده است و با هر تغییر ایونت به‌روز می‌شود؛ صورت‌حساب رسمی را مسئول صندوق پس از پایان ایونت صادر می‌کند.</p>
+      <p className="field__hint no-print">این پیش‌نمایش زنده است و با هر تغییر رویداد به‌روز می‌شود؛ صورت‌حساب رسمی را مسئول صندوق پس از پایان رویداد صادر می‌کند.</p>
       <StatementPaper
         data={preview}
         meta={{ number: 0, issueVersion: 0, issuedAt: new Date().toISOString(), verificationCode: "", status: "current", appVersion: preview.appVersion, preview: true }}

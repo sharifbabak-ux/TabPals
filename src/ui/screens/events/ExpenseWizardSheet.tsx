@@ -290,7 +290,7 @@ export function ExpenseWizardSheet({ open, eventId, activeMembers, lastPayerId, 
           {step === "payer" && (
             <>
               {activeMembers.length === 0 ? (
-                <EmptyState hint="این ایونت عضو فعالی ندارد." />
+                <EmptyState hint="این رویداد عضو فعالی ندارد." />
               ) : (
                 <ul className="list">
                   {activeMembers.map((member) => (

@@ -16,7 +16,7 @@ import { signalOutboxChanged } from "./syncSignal";
 
 export class OnlinePermissionError extends Error {
   constructor(public readonly reason: string) {
-    super("در ایونت آنلاین، نقش شما اجازه‌ی این تغییر را نمی‌دهد (فقط مسئول صندوق یا مدیر می‌تواند ثبت و ویرایش کند).");
+    super("در رویداد آنلاین، نقش شما اجازه‌ی این تغییر را نمی‌دهد (فقط مسئول صندوق یا مدیر می‌تواند ثبت و ویرایش کند).");
     this.name = "OnlinePermissionError";
   }
 }

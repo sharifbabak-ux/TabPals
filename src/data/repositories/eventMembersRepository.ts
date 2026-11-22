@@ -8,7 +8,7 @@ async function assertEventOpenForMemberChange(eventId: string): Promise<void> {
   const event = await db.events.get(eventId);
   if (!event) throw new Error(`Event ${eventId} not found`);
   if (isEventClosed(event, new Date())) {
-    throw new Error("این ایونت پایان‌یافته است؛ برای تغییر، ابتدا آن را بازگشایی کنید.");
+    throw new Error("این رویداد پایان‌یافته است؛ برای تغییر، ابتدا آن را بازگشایی کنید.");
   }
 }
 

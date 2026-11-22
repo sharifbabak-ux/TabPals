@@ -94,11 +94,11 @@ export function MyBankSheet({ open, eventId, onClose }: MyBankSheetProps) {
     <BottomSheet open={open} title="اطلاعات بانکی من" onClose={onClose}>
       <form onSubmit={submit}>
         <p className="field__hint my-bank__privacy">
-          این اطلاعات فقط روی دستگاه‌ها رمزگذاری می‌شود و تنها برای مسئول صندوق و مدیر ایونت قابل‌خواندن است؛ سرور و سایر اعضا هرگز آن را نمی‌بینند. مسئول صندوق برای واریز سهم شما از آن استفاده می‌کند. ذخیره‌ی آن اختیاری است.
+          این اطلاعات فقط روی دستگاه‌ها رمزگذاری می‌شود و تنها برای مسئول صندوق و مدیر رویداد قابل‌خواندن است؛ سرور و سایر اعضا هرگز آن را نمی‌بینند. مسئول صندوق برای واریز سهم شما از آن استفاده می‌کند. ذخیره‌ی آن اختیاری است.
         </p>
         {personMissing && (
           <div role="alert">
-            <p className="field__warning">اطلاعات ایونت هنوز کامل دریافت نشده است. اینترنت را بررسی کنید و «همگام‌سازی دوباره» را بزنید؛ تا آن موقع امکان ذخیره نیست.</p>
+            <p className="field__warning">اطلاعات رویداد هنوز کامل دریافت نشده است. اینترنت را بررسی کنید و «همگام‌سازی دوباره» را بزنید؛ تا آن موقع امکان ذخیره نیست.</p>
             <button type="button" className="form-actions__secondary" disabled={retrying} onClick={retrySync}>
               {retrying ? "در حال همگام‌سازی…" : "همگام‌سازی دوباره"}
             </button>

@@ -70,7 +70,7 @@ function assertTreasurerEditableIfClosed(existing: Event, diff: Record<string, u
   const touchesTreasurer = TREASURER_FIELDS.some((field) => field in diff);
   if (!touchesTreasurer || !isEventClosed(existing, new Date())) return;
   if (existing.treasurerPersonId === null) return;
-  throw new Error("این ایونت پایان‌یافته است؛ برای تغییر مسئول صندوق، ابتدا آن را بازگشایی کنید.");
+  throw new Error("این رویداد پایان‌یافته است؛ برای تغییر مسئول صندوق، ابتدا آن را بازگشایی کنید.");
 }
 
 /**
@@ -101,7 +101,7 @@ async function assertGroupsValidForTreasurer(event: Event, newTreasurerId: strin
 
   const blocking = errors.filter((e) => e.code === "treasurer-must-represent");
   if (blocking.length === 0) {
-    throw new TreasurerChangeBlockedError("گروه‌های تسویه‌ی این ایونت معتبر نیستند؛ ابتدا گروه‌ها را اصلاح کنید.", errors);
+    throw new TreasurerChangeBlockedError("گروه‌های تسویه‌ی این رویداد معتبر نیستند؛ ابتدا گروه‌ها را اصلاح کنید.", errors);
   }
   const person = newTreasurerId ? await db.persons.get(newTreasurerId) : undefined;
   const who = person ? `«${[person.firstName, person.lastName].filter(Boolean).join(" ")}»` : "او";
@@ -194,7 +194,7 @@ export const eventsRepository = {
     });
   },
 
-  /** Manually closes an event ("پایان ایونت"). No-op if already closed. */
+  /** Manually closes an event ("پایان رویداد"). No-op if already closed. */
   async close(id: string): Promise<void> {
     await db.transaction("rw", db.events, db.operations, async () => {
       const existing = await db.events.get(id);
@@ -206,7 +206,7 @@ export const eventsRepository = {
     });
   },
 
-  /** Reopens a closed event ("بازگشایی ایونت"). Requires a non-empty reason, is always logged, and marks all of the event's current statements "outdated" (docs/PLAN.md Stage 3B). */
+  /** Reopens a closed event ("بازگشایی رویداد"). Requires a non-empty reason, is always logged, and marks all of the event's current statements "outdated" (docs/PLAN.md Stage 3B). */
   async reopen(id: string, reason: string): Promise<void> {
     const trimmedReason = reason.trim();
     if (!trimmedReason) throw new Error("دلیل بازگشایی الزامی است");
@@ -237,13 +237,13 @@ export const eventsRepository = {
     });
   },
 
-  /** "حذف ایونت": moves a CLOSED event to trash by setting deletedAt (docs/PLAN.md Stage 3B.1). */
+  /** "حذف رویداد": moves a CLOSED event to trash by setting deletedAt (docs/PLAN.md Stage 3B.1). */
   async moveToTrash(id: string): Promise<void> {
     await db.transaction("rw", db.events, db.operations, async () => {
       const existing = await db.events.get(id);
       if (!existing) throw new Error(`Event ${id} not found`);
       const check = canTrashEvent(existing);
-      if (!check.allowed) throw new Error(check.reason ?? "این ایونت قابل انتقال به سطل بازیافت نیست.");
+      if (!check.allowed) throw new Error(check.reason ?? "این رویداد قابل انتقال به سطل بازیافت نیست.");
       const updated: Event = { ...existing, deletedAt: new Date().toISOString(), ...touchBaseFields(existing) };
       await db.events.put(updated);
       await logOperation(db, "events", id, "trash", diffFields(existing, updated, ["deletedAt"]));
@@ -271,7 +271,7 @@ export const eventsRepository = {
   async permanentlyDelete(id: string): Promise<void> {
     const link = await db.onlineLinks.get(id);
     if (link && link.status !== "revoked") {
-      throw new Error("این ایونت آنلاین است؛ ابتدا از ایونت آنلاین خارج شوید (یا مدیر آن را از سرور حذف کند).");
+      throw new Error("این رویداد آنلاین است؛ ابتدا از رویداد آنلاین خارج شوید (یا مدیر آن را از سرور حذف کند).");
     }
     await db.transaction(
       "rw",
@@ -292,7 +292,7 @@ export const eventsRepository = {
       const existing = await db.events.get(id);
       if (!existing) throw new Error(`Event ${id} not found`);
       const check = canDeleteEvent(existing);
-      if (!check.allowed) throw new Error(check.reason ?? "این ایونت قابل حذف دائمی نیست.");
+      if (!check.allowed) throw new Error(check.reason ?? "این رویداد قابل حذف دائمی نیست.");
 
       const memberIds = await db.eventMembers.where("eventId").equals(id).primaryKeys();
       const voucherIds = await db.vouchers.where("eventId").equals(id).primaryKeys();

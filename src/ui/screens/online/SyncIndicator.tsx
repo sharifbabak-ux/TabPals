@@ -47,7 +47,7 @@ export function SyncIndicator({ eventId, canSeeRejected }: { eventId: string; ca
         {status.upload && (
           <>
             <p>
-              در حال بارگذاری اطلاعات ایونت: {toPersianDigits(status.upload.done)} از {toPersianDigits(status.upload.total)}
+              در حال بارگذاری اطلاعات رویداد: {toPersianDigits(status.upload.done)} از {toPersianDigits(status.upload.total)}
             </p>
             <div className="online-progress" role="progressbar" aria-valuenow={status.upload.done} aria-valuemax={status.upload.total}>
               <div className="online-progress__bar" style={{ width: `${Math.round((status.upload.done / Math.max(1, status.upload.total)) * 100)}%` }} />
@@ -58,7 +58,7 @@ export function SyncIndicator({ eventId, canSeeRejected }: { eventId: string; ca
         <p>
           کلید رمزگذاری: <strong>{keyReceived ? "دریافت شده" : "در انتظار"}</strong>
         </p>
-        {!keyReceived && <p className="field__hint">تا رسیدن کلید، اطلاعات بانکی و تماس به‌صورت «🔒 در انتظار دریافت کلید» نمایش داده می‌شود. کافی است یکی از دستگاه‌های دیگر ایونت آنلاین شود.</p>}
+        {!keyReceived && <p className="field__hint">تا رسیدن کلید، اطلاعات بانکی و تماس به‌صورت «🔒 در انتظار دریافت کلید» نمایش داده می‌شود. کافی است یکی از دستگاه‌های دیگر رویداد آنلاین شود.</p>}
         {keyError && <p className="field__error">{keyError}</p>}
         {status.lastError && <p className="field__error">{status.lastError}</p>}
 

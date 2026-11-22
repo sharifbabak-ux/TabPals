@@ -62,7 +62,7 @@ async function main() {
 
   // --- Seed: event ----------------------------------------------------
   await page.goto(`${base}#/events`);
-  await page.getByLabel("ایونت جدید").click();
+  await page.getByLabel("رویداد جدید").click();
   await page.locator("#event-title").fill("سفر شمال");
   await page.locator("#event-start").fill("2026-10-02");
   await page.locator("#event-end").fill("2026-10-05");

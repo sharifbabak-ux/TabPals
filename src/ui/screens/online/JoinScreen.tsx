@@ -98,7 +98,7 @@ export function JoinScreen() {
   if (!token) {
     return (
       <div className="screen join-page">
-        <h1>پیوستن به ایونت</h1>
+        <h1>پیوستن به رویداد</h1>
         <p className="field__error">لینک دعوت معتبر نیست.</p>
         <button type="button" className="form-actions__primary" onClick={() => setJoinSheetOpen(true)}>
           پیوستن با کد دعوت
@@ -111,8 +111,8 @@ export function JoinScreen() {
   if (shouldRedeem) {
     return (
       <div className="screen join-page">
-        <h1>پیوستن به ایونت</h1>
-        {busy && <p>در حال پیوستن و دریافت اطلاعات ایونت…</p>}
+        <h1>پیوستن به رویداد</h1>
+        {busy && <p>در حال پیوستن و دریافت اطلاعات رویداد…</p>}
         {pending && (
           <JoinSyncRetry
             eventId={pending.eventId}
@@ -130,7 +130,7 @@ export function JoinScreen() {
               </button>
             )}
             <button type="button" className="form-actions__secondary" onClick={() => navigate("/events", { replace: true })}>
-              بازگشت به ایونت‌ها
+              بازگشت به رویداد‌ها
             </button>
           </>
         )}
@@ -157,7 +157,7 @@ export function JoinScreen() {
   return (
     <div className="screen join-page">
       <h1>ابتدا برنامه را نصب کنید</h1>
-      <p>برای پیوستن به ایونت، باید برنامه را روی صفحه‌ی اصلی گوشی نصب کنید.</p>
+      <p>برای پیوستن به رویداد، باید برنامه را روی صفحه‌ی اصلی گوشی نصب کنید.</p>
 
       {sections.map((section) => (
         <div key={section.key} className="online-card">

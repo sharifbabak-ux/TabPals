@@ -7,16 +7,16 @@ const MESSAGES: Record<string, string> = {
   "device-revoked": "دسترسی این دستگاه قطع شده است.",
   forbidden: "اجازه‌ی این کار را ندارید.",
   "not-found": "پیدا نشد.",
-  "event-not-found": "ایونت روی سرور پیدا نشد.",
+  "event-not-found": "رویداد روی سرور پیدا نشد.",
   "member-not-found": "عضو پیدا نشد.",
   "device-not-found": "دستگاه پیدا نشد.",
   "invite-not-found": "دعوت‌نامه پیدا نشد؛ کد یا لینک را بررسی کنید.",
-  "event-exists": "این ایونت قبلاً روی سرور ساخته شده است.",
+  "event-exists": "این رویداد قبلاً روی سرور ساخته شده است.",
   "member-exists": "این عضو قبلاً ثبت شده است.",
-  "member-removed": "این عضو از ایونت حذف شده است؛ ابتدا او را بازگردانید.",
+  "member-removed": "این عضو از رویداد حذف شده است؛ ابتدا او را بازگردانید.",
   "invite-used": "این دعوت‌نامه قبلاً استفاده شده است.",
-  "last-admin": "هر ایونت باید دست‌کم یک مدیر داشته باشد؛ ابتدا مدیر دیگری تعیین کنید.",
-  "invite-expired": "مهلت این دعوت‌نامه تمام شده است؛ از مدیر ایونت دعوت‌نامه‌ی جدید بخواهید.",
+  "last-admin": "هر رویداد باید دست‌کم یک مدیر داشته باشد؛ ابتدا مدیر دیگری تعیین کنید.",
+  "invite-expired": "مهلت این دعوت‌نامه تمام شده است؛ از مدیر رویداد دعوت‌نامه‌ی جدید بخواهید.",
   "invite-revoked": "این دعوت‌نامه لغو شده است.",
   "payload-too-large": "حجم داده‌ی ارسالی بیش از حد مجاز است.",
   "rate-limited": "تعداد درخواست‌ها زیاد بود؛ کمی بعد دوباره تلاش کنید.",
@@ -29,7 +29,7 @@ const MESSAGES: Record<string, string> = {
   "unknown-type": "نوع تغییر شناخته‌شده نیست.",
   "forbidden-entity": "نقش شما اجازه‌ی تغییر این داده را نمی‌دهد.",
   "forbidden-profile": "فقط خودِ عضو یا مدیر می‌تواند نمایه را تغییر دهد.",
-  "forbidden-purge": "فقط مدیر می‌تواند ایونت را پاک کند.",
+  "forbidden-purge": "فقط مدیر می‌تواند رویداد را پاک کند.",
   "plaintext-blocked": "این تغییر شامل اطلاعات رمزنشده‌ی خصوصی بود و ارسال نشد."
 };
 
@@ -40,9 +40,9 @@ export function onlineErrorMessage(code: string | null | undefined, fallback?: s
 
 /** Persian labels for the admin audit log (docs/API.md `GET audit`). */
 const AUDIT_LABELS: Record<string, string> = {
-  "event.created": "ایونت آنلاین ساخته شد",
+  "event.created": "رویداد آنلاین ساخته شد",
   "member.added": "عضو اضافه شد",
-  "member.removed": "عضو از ایونت حذف شد",
+  "member.removed": "عضو از رویداد حذف شد",
   "member.restored": "عضو بازگردانده شد",
   "key.delivered": "کلید رمزگذاری برای یک دستگاه ارسال شد",
   "statement.sent": "صورت‌حساب ارسال شد",
@@ -59,9 +59,9 @@ export function auditActionLabel(action: string): string {
 
 /** Persian name of a synced entity, for the rejected-ops list. */
 const ENTITY_LABELS: Record<string, string> = {
-  events: "ایونت",
+  events: "رویداد",
   persons: "شخص",
-  eventMembers: "عضو ایونت",
+  eventMembers: "عضو رویداد",
   vouchers: "سند",
   statements: "صورت‌حساب",
   orderSessions: "نشست سفارش",

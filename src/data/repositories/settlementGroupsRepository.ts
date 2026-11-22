@@ -24,9 +24,9 @@ export const SETTLEMENT_GROUP_ERROR_MESSAGES: Record<GroupErrorCode, string> = {
   "empty-name": "نام گروه را وارد کنید.",
   "too-few-members": "هر گروه باید حداقل ۲ عضو داشته باشد.",
   "duplicate-member": "یک نفر نباید دو بار در یک گروه باشد.",
-  "unknown-person": "یکی از اعضا عضو این ایونت نیست.",
+  "unknown-person": "یکی از اعضا عضو این رویداد نیست.",
   "representative-not-member": "نماینده باید یکی از اعضای گروه باشد.",
-  "person-in-multiple-groups": "هر نفر در هر ایونت فقط می‌تواند عضو یک گروه باشد.",
+  "person-in-multiple-groups": "هر نفر در هر رویداد فقط می‌تواند عضو یک گروه باشد.",
   "treasurer-must-represent": "اگر مسئول صندوق عضو یک گروه است، نماینده‌ی آن گروه باید خود مسئول صندوق باشد."
 };
 

@@ -229,7 +229,7 @@ export function EventDetailScreen() {
   if (event === null) {
     return (
       <div className="screen">
-        <EmptyState hint="این ایونت پیدا نشد." />
+        <EmptyState hint="این رویداد پیدا نشد." />
       </div>
     );
   }
@@ -240,7 +240,7 @@ export function EventDetailScreen() {
     ? `${SG_DEACTIVATE.inGroup(targetGroup.name)} ${repairGroupAfterMemberRemoval(targetGroup, deactivateTarget!.personId).message ?? ""}`.trim()
     : "";
   const deactivateMessage = deactivateTarget?.active
-    ? `${groupNote ? `${groupNote} ` : ""}«${deactivateTarget?.name}» از این ایونت غیرفعال شود؟ سابقه‌ی او حذف نمی‌شود.`
+    ? `${groupNote ? `${groupNote} ` : ""}«${deactivateTarget?.name}» از این رویداد غیرفعال شود؟ سابقه‌ی او حذف نمی‌شود.`
     : `«${deactivateTarget?.name}» دوباره فعال شود؟`;
   // Members of an online event can only look: every add/edit/close/issue control is hidden.
   const readOnly = online.readOnly;
@@ -249,7 +249,7 @@ export function EventDetailScreen() {
   return (
     <div className="screen">
       <button type="button" className="back-link" onClick={() => navigate("/events")}>
-        ← بازگشت به ایونت‌ها
+        ← بازگشت به رویداد‌ها
       </button>
 
       <div className="screen-header">
@@ -259,7 +259,7 @@ export function EventDetailScreen() {
             type="button"
             className="icon-button icon-button--ghost icon-button--label"
             onClick={() => setEditOpen(true)}
-            aria-label="ویرایش ایونت"
+            aria-label="ویرایش رویداد"
           >
             ویرایش
           </button>
@@ -294,12 +294,12 @@ export function EventDetailScreen() {
         {!readOnly && <EventStatusControls eventId={eventId} closed={closed} />}
         {ONLINE_ENABLED && online.loaded && !online.online && !event.deletedAt && (
           <button type="button" onClick={handleGoOnlineClick}>
-            آنلاین کردن ایونت
+            آنلاین کردن رویداد
           </button>
         )}
         {!readOnly && canTrashEvent(event).allowed && (
           <button type="button" className="sheet__archive-button" onClick={() => setTrashConfirmOpen(true)}>
-            حذف ایونت
+            حذف رویداد
           </button>
         )}
       </div>
@@ -319,8 +319,8 @@ export function EventDetailScreen() {
 
       {tab === "members" ? (
         <>
-          {closed && <p className="field__hint event-detail__closed-note">این ایونت پایان‌یافته است؛ برای تغییر، ابتدا آن را بازگشایی کنید.</p>}
-          {readOnly && <p className="field__hint event-detail__closed-note">شما در این ایونت آنلاین عضو هستید؛ اطلاعات به‌صورت زنده و فقط‌خواندنی نمایش داده می‌شود.</p>}
+          {closed && <p className="field__hint event-detail__closed-note">این رویداد پایان‌یافته است؛ برای تغییر، ابتدا آن را بازگشایی کنید.</p>}
+          {readOnly && <p className="field__hint event-detail__closed-note">شما در این رویداد آنلاین عضو هستید؛ اطلاعات به‌صورت زنده و فقط‌خواندنی نمایش داده می‌شود.</p>}
 
           {!readOnly && (
             <div className={`action-grid${closed ? " action-grid--disabled" : ""}`}>
@@ -331,7 +331,7 @@ export function EventDetailScreen() {
                 + شخص جدید
               </button>
               <button type="button" disabled={closed} onClick={() => setImportOpen(true)}>
-                وارد کردن از ایونت قبلی
+                وارد کردن از رویداد قبلی
               </button>
               <button type="button" disabled={closed} onClick={() => setGroupOpen(true)}>
                 + افزودن گروه
@@ -384,7 +384,7 @@ export function EventDetailScreen() {
           {online.online && (
             <div className="danger-zone">
               <button type="button" className="danger-button" onClick={() => setLeaveOpen(true)}>
-                خروج از ایونت آنلاین
+                خروج از رویداد آنلاین
               </button>
             </div>
           )}
@@ -490,7 +490,7 @@ export function EventDetailScreen() {
 
       <ConfirmDialog
         open={archiveTarget}
-        title={event.archived ? "بازگردانی ایونت" : "آرشیو ایونت"}
+        title={event.archived ? "بازگردانی رویداد" : "آرشیو رویداد"}
         message={event.archived ? `«${event.title}» از آرشیو خارج شود؟` : `«${event.title}» آرشیو شود؟ اطلاعات حذف نمی‌شود.`}
         confirmLabel={event.archived ? "بازگردانی" : "آرشیو"}
         onConfirm={handleArchiveConfirm}
@@ -521,8 +521,8 @@ export function EventDetailScreen() {
       <InviteSheet open={inviteTarget !== null} eventId={eventId} eventTitle={event.title} member={inviteTarget} onClose={() => setInviteTarget(null)} />
       <ConfirmDialog
         open={leaveOpen}
-        title="خروج از ایونت آنلاین"
-        message={`از «${event.title}» خارج می‌شوید: دسترسی این دستگاه روی سرور حذف و نسخه‌ی محلی ایونت از این دستگاه پاک می‌شود. برای ورود دوباره به دعوت‌نامه‌ی جدید نیاز دارید.`}
+        title="خروج از رویداد آنلاین"
+        message={`از «${event.title}» خارج می‌شوید: دسترسی این دستگاه روی سرور حذف و نسخه‌ی محلی رویداد از این دستگاه پاک می‌شود. برای ورود دوباره به دعوت‌نامه‌ی جدید نیاز دارید.`}
         confirmLabel="خروج"
         danger
         onConfirm={handleLeaveConfirm}
@@ -531,7 +531,7 @@ export function EventDetailScreen() {
 
       <ConfirmDialog
         open={trashConfirmOpen}
-        title="حذف ایونت"
+        title="حذف رویداد"
         message={`«${event.title}» به سطل بازیافت منتقل شود؟ از سطل بازیافت (در تنظیمات) می‌توانید آن را بازگردانید یا برای همیشه حذف کنید.`}
         confirmLabel="انتقال به سطل بازیافت"
         danger

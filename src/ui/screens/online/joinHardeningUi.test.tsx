@@ -55,16 +55,16 @@ describe("MyBankSheet when the person row is missing", () => {
   it("explains the problem, keeps Save disabled and offers a sync button; the form fills in once the person arrives", async () => {
     await db.onlineLinks.put({ localEventId: "E1", serverEventId: "E1", memberId: "P1", roles: ["member"], deviceToken: "t", lastSeq: 0, status: "online", createdAt: "x" });
     await render(<MyBankSheet open eventId="E1" onClose={() => undefined} />);
-    await waitFor(() => text().includes("اطلاعات ایونت هنوز کامل دریافت نشده است"));
-    expect(text()).toContain("اطلاعات ایونت هنوز کامل دریافت نشده است");
+    await waitFor(() => text().includes("اطلاعات رویداد هنوز کامل دریافت نشده است"));
+    expect(text()).toContain("اطلاعات رویداد هنوز کامل دریافت نشده است");
     expect((button("ذخیره") as HTMLButtonElement).disabled).toBe(true);
 
     await act(async () => button("همگام‌سازی دوباره")!.click());
     expect(mocks.syncNow).toHaveBeenCalledWith("E1");
 
     await db.persons.add({ id: "P1", firstName: "سارا", lastName: "احمدی", createdAt: "x", updatedAt: "x", deviceId: "d", version: 1, deleted: false } as never);
-    await waitFor(() => !text().includes("اطلاعات ایونت هنوز کامل دریافت نشده است"));
-    expect(text()).not.toContain("اطلاعات ایونت هنوز کامل دریافت نشده است");
+    await waitFor(() => !text().includes("اطلاعات رویداد هنوز کامل دریافت نشده است"));
+    expect(text()).not.toContain("اطلاعات رویداد هنوز کامل دریافت نشده است");
   });
 });
 

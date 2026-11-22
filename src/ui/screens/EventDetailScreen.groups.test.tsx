@@ -94,7 +94,7 @@ describe("EventDetailScreen — deactivating a member who is in a settlement gro
     expect((await groups.get(g.id))?.memberIds).toHaveLength(3);
     const alert = container.querySelector(".confirm-dialog")?.textContent ?? "";
     expect(alert).toContain("خارج کردن ممکن نیست");
-    expect(alert).toContain("نماینده‌ی گروه یا مسئول صندوق ایونت را عوض کنید");
+    expect(alert).toContain("نماینده‌ی گروه یا مسئول صندوق رویداد را عوض کنید");
     expect(alert).not.toMatch(/Error|SettlementGroup/);
   });
 });
@@ -129,7 +129,7 @@ describe("EventDetailScreen — changing the treasurer when settlement groups ex
     const { event, ids } = await seed();
     await groups.create({ eventId: event.id, name: "خانواده", memberIds: [ids["الف"], ids["ب"]], representativeId: ids["الف"] });
     await show(event.id);
-    const editBtn = container.querySelector<HTMLButtonElement>('button[aria-label="ویرایش ایونت"]')!;
+    const editBtn = container.querySelector<HTMLButtonElement>('button[aria-label="ویرایش رویداد"]')!;
     await act(async () => editBtn.click());
     await wait();
     const select = document.querySelector<HTMLSelectElement>("#event-treasurer")!;

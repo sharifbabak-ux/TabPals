@@ -118,7 +118,7 @@ export function SessionFormSheet({ open, eventId, session, treasurerPersonId, tr
     <BottomSheet open={open} title={session ? "ویرایش نشست" : "نشست جدید"} onClose={onClose}>
       {missingTreasurer ? (
         <>
-          <p className="field__warning">برای ثبت سفارش گروهی، ابتدا مسئول صندوق ایونت را تعیین کنید؛ او مدیر نشست است.</p>
+          <p className="field__warning">برای ثبت سفارش گروهی، ابتدا مسئول صندوق رویداد را تعیین کنید؛ او مدیر نشست است.</p>
           {onRequestSetTreasurer && (
             <div className="form-actions">
               <button type="button" className="form-actions__primary" onClick={onRequestSetTreasurer}>
@@ -214,7 +214,7 @@ export function SessionFormSheet({ open, eventId, session, treasurerPersonId, tr
                 </label>
               ))}
             </div>
-            {settlement === "own" && <p className="field__hint">فعلاً فقط ثبت می‌شود؛ صورت‌حساب جداگانه‌ی نشست در نسخه‌های بعدی اضافه می‌شود و تا آن زمان سند نشست مثل همیشه به تراز ایونت می‌رود.</p>}
+            {settlement === "own" && <p className="field__hint">فعلاً فقط ثبت می‌شود؛ صورت‌حساب جداگانه‌ی نشست در نسخه‌های بعدی اضافه می‌شود و تا آن زمان سند نشست مثل همیشه به تراز رویداد می‌رود.</p>}
           </div>
 
           {!session && treasurerName && <p className="field__hint">مدیر نشست: {treasurerName} (مسئول صندوق)</p>}

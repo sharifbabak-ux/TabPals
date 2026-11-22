@@ -156,7 +156,7 @@ export function PersonFormSheet({
 
   const permanentDeleteBlockedReason =
     referencingEvents && referencingEvents.length > 0
-      ? `این شخص در ایونت‌های زیر استفاده شده و بهتر است آرشیو باقی بماند: ${referencingEvents.map((e) => e.title).join("، ")}`
+      ? `این شخص در رویداد‌های زیر استفاده شده و بهتر است آرشیو باقی بماند: ${referencingEvents.map((e) => e.title).join("، ")}`
       : null;
 
   return (

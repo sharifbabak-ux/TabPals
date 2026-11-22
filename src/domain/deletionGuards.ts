@@ -25,7 +25,7 @@ export function canDeletePerson(person: PersonForDeletion, references: PersonRef
     return { allowed: false, reason: "این شخص آرشیو نشده است." };
   }
   if (references.referencedByAnyEvent) {
-    return { allowed: false, reason: "این شخص در یک یا چند ایونت (به‌عنوان عضو یا در سند) استفاده شده و قابل حذف دائمی نیست." };
+    return { allowed: false, reason: "این شخص در یک یا چند رویداد (به‌عنوان عضو یا در سند) استفاده شده و قابل حذف دائمی نیست." };
   }
   return { allowed: true, reason: null };
 }
@@ -47,13 +47,13 @@ export interface EventForTrash {
   deletedAt?: string | null;
 }
 
-/** Moving an event to trash ("حذف ایونت"): only a CLOSED event that isn't already in trash. */
+/** Moving an event to trash ("حذف رویداد"): only a CLOSED event that isn't already in trash. */
 export function canTrashEvent(event: EventForTrash): DeletionCheck {
   if (event.deletedAt) {
-    return { allowed: false, reason: "این ایونت از قبل در سطل بازیافت است." };
+    return { allowed: false, reason: "این رویداد از قبل در سطل بازیافت است." };
   }
   if (!event.closedAt) {
-    return { allowed: false, reason: "فقط ایونت پایان‌یافته قابل انتقال به سطل بازیافت است." };
+    return { allowed: false, reason: "فقط رویداد پایان‌یافته قابل انتقال به سطل بازیافت است." };
   }
   return { allowed: true, reason: null };
 }
@@ -61,7 +61,7 @@ export function canTrashEvent(event: EventForTrash): DeletionCheck {
 /** Permanent event delete: only an event already in trash. */
 export function canDeleteEvent(event: EventForTrash): DeletionCheck {
   if (!event.deletedAt) {
-    return { allowed: false, reason: "این ایونت در سطل بازیافت نیست." };
+    return { allowed: false, reason: "این رویداد در سطل بازیافت نیست." };
   }
   return { allowed: true, reason: null };
 }

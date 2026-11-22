@@ -45,7 +45,7 @@ export function EventsScreen() {
     <div className="screen">
       <div className="screen-header screen-header--brand">
         <Logo showTagline />
-        <button type="button" className="icon-button" onClick={() => setCreating(true)} aria-label="ایونت جدید">
+        <button type="button" className="icon-button" onClick={() => setCreating(true)} aria-label="رویداد جدید">
           +
         </button>
       </div>
@@ -59,7 +59,7 @@ export function EventsScreen() {
         </div>
       )}
 
-      {filtered && filtered.length === 0 && <EmptyState hint="هنوز ایونتی نساخته‌اید. با دکمه‌ی + شروع کنید." />}
+      {filtered && filtered.length === 0 && <EmptyState hint="هنوز رویدادی نساخته‌اید. با دکمه‌ی + شروع کنید." />}
 
       <ul className="list">
         {filtered?.map((event) => (

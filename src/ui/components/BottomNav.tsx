@@ -3,7 +3,7 @@ import { ArchiveIcon, CalendarIcon, SettingsIcon, UsersIcon } from "./icons";
 import "./BottomNav.css";
 
 const NAV_ITEMS = [
-  { to: "/events", label: "ایونت‌ها", Icon: CalendarIcon },
+  { to: "/events", label: "رویداد‌ها", Icon: CalendarIcon },
   { to: "/people", label: "اشخاص", Icon: UsersIcon },
   { to: "/backup", label: "پشتیبان", Icon: ArchiveIcon },
   { to: "/settings", label: "تنظیمات", Icon: SettingsIcon }
