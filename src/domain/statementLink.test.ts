@@ -91,7 +91,7 @@ describe("statement link size-policy tiers", () => {
 
     const decoded = decodeStatementPayload(result.encoded!);
     expect(decoded!.data.kind).toBe("member");
-    if (decoded!.data.kind !== "comprehensive") {
+    if (decoded!.data.kind === "member" || decoded!.data.kind === "treasurer") {
       expect(decoded!.data.expenses.every((e) => e.participantNames.length === 0 && e.splitExplanation === "")).toBe(true);
     }
   });

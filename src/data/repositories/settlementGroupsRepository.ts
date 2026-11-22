@@ -20,7 +20,7 @@ import { diffFields, logOperation, newBaseFields, touchBaseFields } from "./oper
 
 const GROUP_LOG_FIELDS: (keyof SettlementGroup)[] = ["eventId", "name", "memberIds", "representativeId", "deleted"];
 
-const ERROR_MESSAGES: Record<GroupErrorCode, string> = {
+export const SETTLEMENT_GROUP_ERROR_MESSAGES: Record<GroupErrorCode, string> = {
   "empty-name": "نام گروه را وارد کنید.",
   "too-few-members": "هر گروه باید حداقل ۲ عضو داشته باشد.",
   "duplicate-member": "یک نفر نباید دو بار در یک گروه باشد.",
@@ -33,7 +33,7 @@ const ERROR_MESSAGES: Record<GroupErrorCode, string> = {
 /** The resulting set of groups would be invalid; nothing was stored. */
 export class SettlementGroupValidationError extends Error {
   constructor(public readonly errors: GroupValidationError[]) {
-    super([...new Set(errors.map((e) => ERROR_MESSAGES[e.code]))].join("\n"));
+    super([...new Set(errors.map((e) => SETTLEMENT_GROUP_ERROR_MESSAGES[e.code]))].join("\n"));
     this.name = "SettlementGroupValidationError";
   }
 }
@@ -57,6 +57,10 @@ export interface MemberRemovalOutcome {
   notice: RepairResult["notice"];
   /** Persian message for the UI. */
   message: string | null;
+}
+
+function compareText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function toInput(g: SettlementGroup): SettlementGroupInput {
@@ -87,7 +91,8 @@ export const settlementGroupsRepository = {
   /** Groups of an event, soft-deleted ones excluded. */
   async listByEvent(eventId: string): Promise<SettlementGroup[]> {
     const groups = await liveGroups(eventId);
-    return groups.sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : 1));
+    // Creation time, then id: rows created in the same millisecond must still come back in a fixed order.
+    return groups.sort((a, b) => compareText(a.createdAt, b.createdAt) || compareText(a.id, b.id));
   },
 
   async get(id: string): Promise<SettlementGroup | undefined> {

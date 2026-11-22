@@ -1,7 +1,18 @@
 import { APP_VERSION } from "@/config/app";
 import { displayName } from "@/domain/displayName";
 import { isEventClosed } from "@/domain/eventStatus";
+import { computeBalances } from "@/domain/balanceEngine";
 import { formatAmount } from "@/domain/format";
+import {
+  buildGroupStatementData,
+  GroupStatementError,
+  isGroupStatementStale,
+  splitGroupCandidates,
+  type GroupCandidates,
+  type GroupStatementData,
+  type GroupStatementMemberInput
+} from "@/domain/groupStatement";
+import type { SettlementGroupInput } from "@/domain/settlementUnits";
 import { buildBalanceText, categoryForStatement, fillTemplate, pickTemplate } from "@/domain/messageTemplate";
 import { formatCardNumberGrouped, formatIbanGrouped } from "@/domain/paymentValidation";
 import {
@@ -16,6 +27,7 @@ import { db } from "../db";
 import type { Event, SendChannel, Statement, StatementKind } from "../types";
 import { OnlinePermissionError } from "../online/outboxHook";
 import { diffFields, logOperation, newBaseFields, touchBaseFields } from "./operationLog";
+import { SETTLEMENT_GROUP_ERROR_MESSAGES } from "./settlementGroupsRepository";
 
 const STATEMENT_LOG_FIELDS: (keyof Statement)[] = [
   "eventId",
@@ -208,6 +220,70 @@ async function previewForPerson(eventId: string, personId: string) {
   return { ...data, closingText, appVersion: APP_VERSION };
 }
 
+/** Everything a group statement is built from, read live (all members, archived ones too). */
+async function loadGroupContext(eventId: string) {
+  const event = await db.events.get(eventId);
+  if (!event) throw new Error(`Event ${eventId} not found`);
+  const memberRows = await db.eventMembers.where("eventId").equals(eventId).filter((m) => !m.deleted).toArray();
+  const persons = await db.persons.bulkGet(memberRows.map((m) => m.personId));
+  const nameParts = memberRows.map((m, i) => ({ personId: m.personId, firstName: persons[i]?.firstName ?? "؟", lastName: persons[i]?.lastName ?? "" }));
+
+  const voucherRows = await db.vouchers
+    .where("eventId")
+    .equals(eventId)
+    .filter((v) => !v.deleted && v.status === "active")
+    .toArray();
+  const balances = computeBalances(
+    memberRows.map((m) => m.personId),
+    voucherRows.map((v) => ({ type: v.type, status: "active", totalAmount: v.totalAmount, payers: v.payers, shares: v.shares, fromPersonId: v.fromPersonId, toPersonId: v.toPersonId }))
+  );
+  const balanceOf = new Map(balances.map((b) => [b.personId, b.balance]));
+
+  const members: GroupStatementMemberInput[] = memberRows.map((m, i) => ({
+    personId: m.personId,
+    name: displayName(nameParts[i], nameParts),
+    firstName: persons[i]?.firstName ?? "؟",
+    balance: balanceOf.get(m.personId) ?? 0,
+    active: m.active,
+    sortOrder: m.sortOrder
+  }));
+
+  const groupRows = await db.settlementGroups.where("eventId").equals(eventId).filter((g) => !g.deleted).toArray();
+  const groups: SettlementGroupInput[] = groupRows.map((g) => ({ id: g.id, name: g.name, memberIds: g.memberIds, representativeId: g.representativeId }));
+
+  const buildEvent: StatementBuildEvent = {
+    title: event.title,
+    startDate: event.startDate,
+    endDate: event.endDate,
+    currency: event.currency,
+    treasurerPersonId: event.treasurerPersonId,
+    treasurerCardNumberGrouped: event.treasurerCardNumber ? formatCardNumberGrouped(event.treasurerCardNumber) : undefined,
+    treasurerIbanGrouped: event.treasurerIban ? formatIbanGrouped(event.treasurerIban) : undefined,
+    treasurerBankName: event.treasurerBankName,
+    treasurerAccountHolder: event.treasurerAccountHolder
+  };
+  return { event, buildEvent, members, groups };
+}
+
+function groupErrorMessage(e: unknown): Error {
+  if (e instanceof GroupStatementError) {
+    const reasons = [...new Set(e.codes.map((c) => SETTLEMENT_GROUP_ERROR_MESSAGES[c]))];
+    return new Error([e.message, ...reasons].join("\n"));
+  }
+  return e instanceof Error ? e : new Error(String(e));
+}
+
+async function issueForGroupInContext(eventId: string, groupId: string, ctx: Awaited<ReturnType<typeof loadGroupContext>>): Promise<Statement> {
+  let data: GroupStatementData;
+  try {
+    data = buildGroupStatementData({ event: ctx.buildEvent, members: ctx.members, groups: ctx.groups, groupId });
+  } catch (e) {
+    throw groupErrorMessage(e);
+  }
+  // personId holds the group id: the "same statement" key (prior issues become outdated, version counts up).
+  return persistStatement(eventId, "group", groupId, { ...data, appVersion: APP_VERSION }, null, data.closingText);
+}
+
 export const statementsRepository = {
   /** Live, unissued preview of one member's statement (no write, no operation). */
   previewForMember: previewForPerson,
@@ -236,6 +312,62 @@ export const statementsRepository = {
     assertReadyToIssue(ctx.event);
     const data = buildComprehensiveReportData({ event: ctx.buildEvent, members: ctx.members, vouchers: ctx.vouchers });
     return persistStatement(eventId, "comprehensive", null, { ...data, appVersion: APP_VERSION }, null, "");
+  },
+
+  /** Which of the event's settlement groups may get a statement, and why the others may not (SG-5). */
+  async listGroupCandidates(eventId: string): Promise<GroupCandidates & { names: Record<string, string> }> {
+    const ctx = await loadGroupContext(eventId);
+    const split = splitGroupCandidates(ctx.groups, { knownPersonIds: ctx.members.map((m) => m.personId), treasurerId: ctx.event.treasurerPersonId ?? "" });
+    return { ...split, names: Object.fromEntries(ctx.groups.map((g) => [g.id, g.name])) };
+  },
+
+  /** "صدور برای یک گروه": issues (or re-issues) one group's statement. Refuses invalid groups. */
+  async issueForGroup(eventId: string, groupId: string): Promise<Statement> {
+    const ctx = await loadGroupContext(eventId);
+    assertReadyToIssue(ctx.event);
+    return issueForGroupInContext(eventId, groupId, ctx);
+  },
+
+  /** "صدور صورت‌حساب گروه‌ها": issues a statement for every valid group; invalid groups are skipped. */
+  async issueForAllGroups(eventId: string): Promise<Statement[]> {
+    const ctx = await loadGroupContext(eventId);
+    assertReadyToIssue(ctx.event);
+    const { valid } = splitGroupCandidates(ctx.groups, { knownPersonIds: ctx.members.map((m) => m.personId), treasurerId: ctx.event.treasurerPersonId ?? "" });
+    if (valid.length === 0) throw new Error("گروه معتبری برای صدور صورت‌حساب وجود ندارد.");
+    const statements: Statement[] = [];
+    for (const group of valid) statements.push(await issueForGroupInContext(eventId, group.id, ctx));
+    return statements;
+  },
+
+  /**
+   * Ids of the event's CURRENT group statements (older versions are already "outdated") that no longer match the live data (balances, members,
+   * representative, name, treasurer, or the group is gone/invalid). Computed on read, never stored.
+   */
+  async staleGroupStatementIds(eventId: string): Promise<string[]> {
+    const issued = await db.statements
+      .where("eventId")
+      .equals(eventId)
+      .filter((s) => !s.deleted && s.kind === "group" && s.status === "current")
+      .toArray();
+    if (issued.length === 0) return [];
+    const ctx = await loadGroupContext(eventId);
+    const stale: string[] = [];
+    for (const statement of issued) {
+      let old: GroupStatementData;
+      try {
+        old = JSON.parse(statement.snapshot) as GroupStatementData;
+      } catch {
+        continue; // still encrypted (no event key yet): nothing to compare
+      }
+      let current: GroupStatementData | null = null;
+      try {
+        current = buildGroupStatementData({ event: ctx.buildEvent, members: ctx.members, groups: ctx.groups, groupId: statement.personId ?? "" });
+      } catch {
+        current = null;
+      }
+      if (isGroupStatementStale(old, current)) stale.push(statement.id);
+    }
+    return stale;
   },
 
   async list(eventId: string): Promise<Statement[]> {

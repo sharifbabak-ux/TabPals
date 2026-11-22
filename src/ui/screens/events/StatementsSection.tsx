@@ -1,4 +1,4 @@
-import { loadExportData } from "../statements/statementData";
+import { loadExportData, parseSnapshot } from "../statements/statementData";
 import { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useNavigate } from "react-router-dom";
@@ -6,6 +6,7 @@ import { db } from "@/data/db";
 import type { SendChannel, Statement } from "@/data/types";
 import { statementsRepository } from "@/data/repositories";
 import { toPersianDigits } from "@/domain/format";
+import type { GroupStatementData } from "@/domain/groupStatement";
 import type { StatementLinkData } from "@/domain/statementLink";
 import { EmptyState } from "@/ui/components/EmptyState";
 import { JalaliDate } from "@/ui/components/JalaliDate";
@@ -13,6 +14,8 @@ import { BottomSheet } from "@/ui/components/BottomSheet";
 import { ConfirmDialog } from "@/ui/components/ConfirmDialog";
 import { Avatar } from "@/ui/components/Avatar";
 import { shareStatementFilesBulk } from "@/ui/screens/statements/sendActions";
+import { DRAFT_ERROR_MESSAGES } from "./settlementGroupLabels";
+import { GS_TEXT } from "./groupStatementLabels";
 import "./StatementsSection.css";
 
 interface MemberOption {
@@ -37,7 +40,8 @@ interface StatementsSectionProps {
 const KIND_LABELS: Record<Statement["kind"], string> = {
   member: "صورت‌حساب عضو",
   treasurer: "صورت‌حساب مسئول صندوق",
-  comprehensive: "گزارش جامع"
+  comprehensive: "گزارش جامع",
+  group: "صورت‌حساب گروه"
 };
 
 const SEND_CHANNEL_LABELS: Record<SendChannel, string> = {
@@ -47,6 +51,12 @@ const SEND_CHANNEL_LABELS: Record<SendChannel, string> = {
   sms: "پیامک",
   print: "چاپ"
 };
+
+/** The group's name from an issued group statement (falls back while the snapshot is still encrypted). */
+function groupNameOf(statement: Statement): string {
+  const parsed = parseSnapshot(statement.snapshot) as (GroupStatementData & { appVersion: string }) | null;
+  return parsed?.kind === "group" ? parsed.group.name : GS_TEXT.fallbackName;
+}
 
 function nameOf(members: MemberOption[], personId: string | null): string {
   if (personId === null) return "گزارش جامع رویداد";
@@ -75,6 +85,13 @@ export function StatementsSection({ eventId, eventTitle, eventClosed, readOnly =
         .toArray(),
     [eventId]
   );
+
+  // Group statements (SG-5): which groups may be issued, and which issued ones no longer match the live data.
+  const groupCandidates = useLiveQuery(() => statementsRepository.listGroupCandidates(eventId), [eventId, treasurerPersonId]);
+  const staleGroupIds = useLiveQuery(() => statementsRepository.staleGroupStatementIds(eventId), [eventId, treasurerPersonId]);
+  const [groupPickerOpen, setGroupPickerOpen] = useState(false);
+  const validGroups = groupCandidates?.valid ?? [];
+  const invalidGroups = groupCandidates?.invalid ?? [];
 
   const sorted = useMemo(() => (statements ?? []).slice().sort((a, b) => b.number - a.number), [statements]);
 
@@ -211,6 +228,16 @@ export function StatementsSection({ eventId, eventTitle, eventClosed, readOnly =
         <button type="button" disabled={busy} onClick={() => withBusy(() => statementsRepository.issueComprehensiveReport(eventId))}>
           صدور گزارش جامع
         </button>
+        {validGroups.length > 0 && (
+          <>
+            <button type="button" disabled={busy} onClick={() => withBusy(() => statementsRepository.issueForAllGroups(eventId))}>
+              {GS_TEXT.issueAll}
+            </button>
+            <button type="button" disabled={busy} onClick={() => setGroupPickerOpen(true)}>
+              {GS_TEXT.issueOne}
+            </button>
+          </>
+        )}
         <button type="button" disabled={busy || activeMembers.length === 0} onClick={openBulkPicker}>
           ارسال گروهی
         </button>
@@ -219,16 +246,26 @@ export function StatementsSection({ eventId, eventTitle, eventClosed, readOnly =
 
       {error && <p className="field__error">{error}</p>}
 
+      {!readOnly && invalidGroups.length > 0 && (
+        <div className="field__warning" data-testid="group-statement-invalid">
+          {invalidGroups.map(({ group, reasons }) => (
+            <p key={group.id}>{GS_TEXT.invalidLine(group.name, reasons.map((r) => DRAFT_ERROR_MESSAGES[r]).join(" "))}</p>
+          ))}
+        </div>
+      )}
+
       <h2 className="section-title">صورت‌حساب‌های صادرشده</h2>
       {sorted.length === 0 && <EmptyState hint="هنوز صورت‌حسابی صادر نشده است." />}
 
       <ul className="list">
         {sorted.map((statement) => {
-          const name = nameOf(activeMembers, statement.personId);
+          const isGroup = statement.kind === "group";
+          const name = isGroup ? groupNameOf(statement) : nameOf(activeMembers, statement.personId);
+          const effectiveStatus = statement.status === "outdated" || (isGroup && (staleGroupIds ?? []).includes(statement.id)) ? "outdated" : "current";
           const lastSend = statement.sendLog[statement.sendLog.length - 1];
           return (
             <li key={statement.id} className="list-item" onClick={() => navigate(`/events/${eventId}/statements/${statement.id}`)}>
-              {statement.personId && <Avatar id={statement.personId} name={name} photo={activeMembers.find((m) => m.personId === statement.personId)?.photo} />}
+              {statement.personId && !isGroup && <Avatar id={statement.personId} name={name} photo={activeMembers.find((m) => m.personId === statement.personId)?.photo} />}
               <div className="list-item__main">
                 <span className="list-item__title">
                   #{toPersianDigits(statement.number)} · {KIND_LABELS[statement.kind]} · {name}
@@ -243,8 +280,8 @@ export function StatementsSection({ eventId, eventTitle, eventClosed, readOnly =
                 )}
               </div>
               <div className="list-item__meta">
-                <span className={`badge statement-status-chip statement-status-chip--${statement.status}`}>
-                  {statement.status === "current" ? "معتبر" : "نیازمند صدور مجدد"}
+                <span className={`badge statement-status-chip statement-status-chip--${effectiveStatus}`}>
+                  {effectiveStatus === "current" ? "معتبر" : "نیازمند صدور مجدد"}
                 </span>
               </div>
             </li>
@@ -267,6 +304,27 @@ export function StatementsSection({ eventId, eventTitle, eventClosed, readOnly =
               <div className="list-item__main">
                 <span className="list-item__title">{member.name}</span>
                 {member.personId === treasurerPersonId && <span className="list-item__subtitle">مسئول صندوق</span>}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </BottomSheet>
+
+      <BottomSheet open={groupPickerOpen} title={GS_TEXT.pickerTitle} onClose={() => setGroupPickerOpen(false)}>
+        <ul className="list">
+          {validGroups.map((group) => (
+            <li
+              key={group.id}
+              className="list-item"
+              onClick={() => {
+                setGroupPickerOpen(false);
+                void withBusy(() => statementsRepository.issueForGroup(eventId, group.id));
+              }}
+            >
+              <div className="list-item__main">
+                <span className="list-item__title">
+                  {GS_TEXT.groupWord} {group.name}
+                </span>
               </div>
             </li>
           ))}

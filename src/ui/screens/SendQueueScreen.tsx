@@ -122,7 +122,7 @@ export function SendQueueScreen() {
         <ul className="list">
           {rows.map((row) => {
             const lastSend = row.statement.sendLog[row.statement.sendLog.length - 1];
-            const balance = row.data.kind === "comprehensive" ? 0 : row.data.summary.balance;
+            const balance = row.data.kind === "member" || row.data.kind === "treasurer" ? row.data.summary.balance : 0;
             const chipClass = balance > 0 ? "balance-chip balance-chip--creditor" : balance < 0 ? "balance-chip balance-chip--debtor" : "balance-chip";
             return (
               <li key={row.personId} className="list-item send-queue-row">

@@ -1,7 +1,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/data/db";
 import { eventMembersRepository, eventsRepository, personsRepository } from "@/data/repositories";
 import { settlementGroupsRepository as groups } from "@/data/repositories/settlementGroupsRepository";
@@ -117,6 +117,13 @@ describe("EventDetailScreen — settlement groups section", () => {
   });
 });
 
+const scrollSpy = vi.fn();
+beforeEach(() => {
+  scrollSpy.mockClear();
+  // jsdom has no scrollIntoView
+  Element.prototype.scrollIntoView = scrollSpy;
+});
+
 describe("EventDetailScreen — changing the treasurer when settlement groups exist (SG-4)", () => {
   it("blocks the change, names the group under the treasurer field, and keeps the treasurer", async () => {
     const { event, ids } = await seed();
@@ -139,5 +146,22 @@ describe("EventDetailScreen — changing the treasurer when settlement groups ex
     const alert = select.parentElement!.querySelector('[role="alert"]');
     expect(alert?.textContent).toContain("ابتدا نمایندهٔ گروه «خانواده»");
     expect((await db.events.get(event.id))!.treasurerPersonId).toBe(ids["صندوق"]);
+
+    // Prominent alert block (Fix A): styled class, icon, bold title, explanation; scrolled into view; sits directly under the field.
+    expect(alert?.classList.contains("event-form-alert")).toBe(true);
+    expect(alert?.querySelector(".event-form-alert__icon")).not.toBeNull();
+    expect(alert?.querySelector("strong")?.textContent).toBe("تغییر انجام نشد");
+    expect(alert?.querySelector(".event-form-alert__text")?.textContent).toContain("ابتدا نمایندهٔ گروه «خانواده»");
+    expect(select.nextElementSibling).toBe(alert);
+    expect(scrollSpy).toHaveBeenCalled();
+
+    // It stays until the field changes.
+    expect(select.parentElement!.querySelector('[role="alert"]')).not.toBeNull();
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!;
+      setter.call(select, ids["صندوق"]);
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(select.parentElement!.querySelector('[role="alert"]')).toBeNull();
   });
 });

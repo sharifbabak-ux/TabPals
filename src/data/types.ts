@@ -229,8 +229,11 @@ export interface ItemizedSnapshot {
   people: ItemizedPersonSnapshot[];
 }
 
-/** "member" statements are per-person; "comprehensive" covers the whole event (personId is null). */
-export type StatementKind = "member" | "treasurer" | "comprehensive";
+/**
+ * "member" statements are per-person; "comprehensive" covers the whole event (personId is null);
+ * "group" (SG-5) is one settlement group's statement — its `personId` holds the settlement group's id.
+ */
+export type StatementKind = "member" | "treasurer" | "comprehensive" | "group";
 export type StatementStatus = "current" | "outdated";
 
 /**
