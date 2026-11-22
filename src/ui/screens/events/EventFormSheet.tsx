@@ -134,7 +134,7 @@ export function EventFormSheet({ open, event, closed, treasurerOptions, onClose,
   }
 
   return (
-    <BottomSheet open={open} title={event ? "ویرایش ایونت" : "ایونت جدید"} onClose={onClose}>
+    <BottomSheet open={open} title={event ? "ویرایش رویداد" : "رویداد جدید"} onClose={onClose}>
       <form onSubmit={handleSubmit}>
         <div className="field">
           <label htmlFor="event-title">عنوان</label>
@@ -189,7 +189,7 @@ export function EventFormSheet({ open, event, closed, treasurerOptions, onClose,
               </div>
             </div>
           )}
-          {!event && <p className="field__hint">شخص انتخاب‌شده به‌عنوان اولین عضو ایونت هم اضافه می‌شود.</p>}
+          {!event && <p className="field__hint">شخص انتخاب‌شده به‌عنوان اولین عضو رویداد هم اضافه می‌شود.</p>}
         </div>
         <div className="field">
           <label htmlFor="event-treasurer-card">شماره کارت مسئول صندوق (اختیاری)</label>
@@ -232,7 +232,7 @@ export function EventFormSheet({ open, event, closed, treasurerOptions, onClose,
           />
         </div>
         {treasurerLocked && (
-          <p className="field__hint">این ایونت پایان‌یافته است؛ برای تغییر مسئول صندوق، ابتدا آن را بازگشایی کنید.</p>
+          <p className="field__hint">این رویداد پایان‌یافته است؛ برای تغییر مسئول صندوق، ابتدا آن را بازگشایی کنید.</p>
         )}
 
         {submitError && !treasurerBlocked && <p className="field__error">{submitError}</p>}
@@ -248,7 +248,7 @@ export function EventFormSheet({ open, event, closed, treasurerOptions, onClose,
         {event && onArchiveRequest && (
           <div className="sheet__danger-zone">
             <button type="button" className="sheet__archive-button" onClick={onArchiveRequest}>
-              {event.archived ? "بازگردانی از آرشیو" : "آرشیو کردن این ایونت"}
+              {event.archived ? "بازگردانی از آرشیو" : "آرشیو کردن این رویداد"}
             </button>
           </div>
         )}

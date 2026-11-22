@@ -175,7 +175,7 @@ async function loadWritableSession(sessionId: string): Promise<{ session: OrderS
   if (!session || session.deleted) throw new Error(`Session ${sessionId} not found`);
   const event = await loadEvent(session.eventId);
   if (isEventClosed(event, new Date())) {
-    throw new Error("این ایونت پایان یافته است؛ نشست‌های آن فقط‌خواندنی است.");
+    throw new Error("این رویداد پایان یافته است؛ نشست‌های آن فقط‌خواندنی است.");
   }
   return { session, event };
 }
@@ -223,8 +223,8 @@ export const orderSessionsRepository = {
     if (!title) throw new Error("عنوان نشست را وارد کنید");
     return db.transaction("rw", db.events, db.eventMembers, db.orderSessions, db.operations, async () => {
       const event = await loadEvent(input.eventId);
-      if (isEventClosed(event, new Date())) throw new Error("این ایونت پایان یافته است و امکان ایجاد نشست جدید وجود ندارد.");
-      if (!event.treasurerPersonId) throw new Error("برای ایجاد نشست، ابتدا مسئول صندوق ایونت را تعیین کنید.");
+      if (isEventClosed(event, new Date())) throw new Error("این رویداد پایان یافته است و امکان ایجاد نشست جدید وجود ندارد.");
+      if (!event.treasurerPersonId) throw new Error("برای ایجاد نشست، ابتدا مسئول صندوق رویداد را تعیین کنید.");
       let participants = normalizeParticipants(input.participants ?? []);
       if (participants.length === 0) {
         const members = await db.eventMembers.where("eventId").equals(input.eventId).filter((m) => m.active && !m.deleted).toArray();

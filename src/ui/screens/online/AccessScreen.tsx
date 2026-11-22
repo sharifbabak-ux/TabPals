@@ -77,7 +77,7 @@ export function AccessScreen() {
         <button type="button" className="back-link" onClick={() => navigate(`/events/${eventId}`)}>
           ← بازگشت
         </button>
-        <EmptyState hint="این بخش فقط برای مدیر ایونت آنلاین در دسترس است." />
+        <EmptyState hint="این بخش فقط برای مدیر رویداد آنلاین در دسترس است." />
       </div>
     );
   }
@@ -183,7 +183,7 @@ export function AccessScreen() {
   return (
     <div className="screen">
       <button type="button" className="back-link" onClick={() => navigate(`/events/${eventId}`)}>
-        ← بازگشت به ایونت
+        ← بازگشت به رویداد
       </button>
       <h1>اعضا و دسترسی‌ها</h1>
       {error && <p className="field__error">{error}</p>}
@@ -217,7 +217,7 @@ export function AccessScreen() {
                 ))}
                 {member.memberId !== online.link?.memberId && (
                   <button type="button" className="danger-button" onClick={() => setRemoveTarget(member)}>
-                    حذف از ایونت
+                    حذف از رویداد
                   </button>
                 )}
               </div>
@@ -315,13 +315,13 @@ export function AccessScreen() {
 
       <div className="danger-zone">
         <h3>منطقه‌ی خطر</h3>
-        <p className="field__hint">با حذف ایونت از سرور، دسترسی همه‌ی اعضا قطع می‌شود و نسخه‌ی آن‌ها از دستگاهشان پاک می‌شود. نسخه‌ی روی این دستگاه به‌صورت آفلاین می‌ماند.</p>
+        <p className="field__hint">با حذف رویداد از سرور، دسترسی همه‌ی اعضا قطع می‌شود و نسخه‌ی آن‌ها از دستگاهشان پاک می‌شود. نسخه‌ی روی این دستگاه به‌صورت آفلاین می‌ماند.</p>
         <button type="button" className="danger-button" onClick={() => setPurgeOpen(true)}>
-          حذف ایونت از سرور
+          حذف رویداد از سرور
         </button>
         {purgeOpen && (
           <div className="field" style={{ marginTop: 10 }}>
-            <label htmlFor="purge-title">برای تأیید، عنوان ایونت را عیناً بنویسید: «{event.title}»</label>
+            <label htmlFor="purge-title">برای تأیید، عنوان رویداد را عیناً بنویسید: «{event.title}»</label>
             <input id="purge-title" value={typedTitle} onChange={(e) => setTypedTitle(e.target.value)} autoComplete="off" />
             <button type="button" className="danger-button" disabled={purgeBusy || typedTitle.trim() !== event.title.trim()} onClick={purge} style={{ marginTop: 8 }}>
               {purgeBusy ? "در حال حذف…" : "حذف از سرور"}
@@ -332,9 +332,9 @@ export function AccessScreen() {
 
       <ConfirmDialog
         open={removeTarget !== null}
-        title="حذف از ایونت"
-        message={`«${removeTarget?.displayName ?? ""}» از ایونت حذف شود؟ همه‌ی دستگاه‌های او قطع و نسخه‌ی ایونت از دستگاهش پاک می‌شود و دعوت‌های بازِ او لغو می‌شود. سابقه‌ی مالی او (هزینه‌ها، سهم‌ها و صورت‌حساب‌ها) برای بقیه می‌ماند و در صورت نیاز می‌توانید او را بازگردانید.`}
-        confirmLabel="حذف از ایونت"
+        title="حذف از رویداد"
+        message={`«${removeTarget?.displayName ?? ""}» از رویداد حذف شود؟ همه‌ی دستگاه‌های او قطع و نسخه‌ی رویداد از دستگاهش پاک می‌شود و دعوت‌های بازِ او لغو می‌شود. سابقه‌ی مالی او (هزینه‌ها، سهم‌ها و صورت‌حساب‌ها) برای بقیه می‌ماند و در صورت نیاز می‌توانید او را بازگردانید.`}
+        confirmLabel="حذف از رویداد"
         danger
         onConfirm={confirmRemoveMember}
         onCancel={() => setRemoveTarget(null)}
@@ -343,7 +343,7 @@ export function AccessScreen() {
       <ConfirmDialog
         open={replaceTarget !== null}
         title="جایگزینی دستگاه"
-        message={`دستگاه قدیمی «${replaceTarget ? nameOf(replaceTarget.memberId) : ""} · ${replaceTarget?.label ?? ""}» قطع می‌شود و بلافاصله یک دعوت‌نامه‌ی تازه برای همین عضو ساخته می‌شود تا دستگاه جدیدش بپیوندد. نسخه‌ی ایونت از دستگاه قدیمی پاک می‌شود.`}
+        message={`دستگاه قدیمی «${replaceTarget ? nameOf(replaceTarget.memberId) : ""} · ${replaceTarget?.label ?? ""}» قطع می‌شود و بلافاصله یک دعوت‌نامه‌ی تازه برای همین عضو ساخته می‌شود تا دستگاه جدیدش بپیوندد. نسخه‌ی رویداد از دستگاه قدیمی پاک می‌شود.`}
         confirmLabel="قطع و دعوت تازه"
         danger
         onConfirm={confirmReplaceDevice}
@@ -365,7 +365,7 @@ export function AccessScreen() {
       <ConfirmDialog
         open={revokeTarget !== null}
         title="قطع دسترسی دستگاه"
-        message={`دسترسی «${revokeTarget ? nameOf(revokeTarget.memberId) : ""} · ${revokeTarget?.label ?? ""}» قطع شود؟ نسخه‌ی ایونت از آن دستگاه پاک می‌شود.`}
+        message={`دسترسی «${revokeTarget ? nameOf(revokeTarget.memberId) : ""} · ${revokeTarget?.label ?? ""}» قطع شود؟ نسخه‌ی رویداد از آن دستگاه پاک می‌شود.`}
         confirmLabel="قطع دسترسی"
         danger
         onConfirm={confirmRevokeDevice}

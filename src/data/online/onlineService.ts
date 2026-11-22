@@ -77,7 +77,7 @@ export async function buildSnapshotOps(db: TabPalDB, eventId: string): Promise<S
   };
 
   const event = (await db.events.get(eventId)) as unknown as Row | undefined;
-  if (!event) throw new OnlineServiceError("ایونت پیدا نشد.");
+  if (!event) throw new OnlineServiceError("رویداد پیدا نشد.");
   const members = (await db.eventMembers.where("eventId").equals(eventId).filter((m) => !m.deleted).toArray()) as unknown as Row[];
   const personIds = [...new Set(members.map((m) => m.personId as string))];
   const persons = ((await db.persons.bulkGet(personIds)).filter(Boolean) as unknown) as Row[];
@@ -104,7 +104,7 @@ export function createOnlineService(deps: OnlineServiceDeps) {
 
   async function requireLink(localEventId: string): Promise<OnlineLink> {
     const link = await db.onlineLinks.get(localEventId);
-    if (!link || link.status === "revoked") throw new OnlineServiceError("این ایونت آنلاین نیست.");
+    if (!link || link.status === "revoked") throw new OnlineServiceError("این رویداد آنلاین نیست.");
     return link;
   }
 
@@ -137,9 +137,9 @@ export function createOnlineService(deps: OnlineServiceDeps) {
 
     /** Why an event cannot go online yet, or null. */
     async goOnlineBlocker(event: Event): Promise<string | null> {
-      if (!event.treasurerPersonId) return "برای آنلاین کردن ایونت ابتدا مسئول صندوق را تعیین کنید.";
-      if (event.deletedAt) return "این ایونت در سطل بازیافت است.";
-      if (await db.onlineLinks.get(event.id)) return "این ایونت از قبل آنلاین است.";
+      if (!event.treasurerPersonId) return "برای آنلاین کردن رویداد ابتدا مسئول صندوق را تعیین کنید.";
+      if (event.deletedAt) return "این رویداد در سطل بازیافت است.";
+      if (await db.onlineLinks.get(event.id)) return "این رویداد از قبل آنلاین است.";
       return null;
     },
 
@@ -151,7 +151,7 @@ export function createOnlineService(deps: OnlineServiceDeps) {
      */
     async goOnline(localEventId: string): Promise<void> {
       const event = await db.events.get(localEventId);
-      if (!event) throw new OnlineServiceError("ایونت پیدا نشد.");
+      if (!event) throw new OnlineServiceError("رویداد پیدا نشد.");
       const blocker = await this.goOnlineBlocker(event);
       if (blocker) throw new OnlineServiceError(blocker);
 
@@ -232,7 +232,7 @@ export function createOnlineService(deps: OnlineServiceDeps) {
       // The event id is only known after the redeem, so this is the earliest possible check — and it runs before any local write.
       if (await db.onlineLinks.get(result.eventId)) {
         await revokeFreshDevice(result);
-        throw new OnlineServiceError("شما قبلاً عضو این ایونت آنلاین هستید.");
+        throw new OnlineServiceError("شما قبلاً عضو این رویداد آنلاین هستید.");
       }
 
       const nowIso = new Date().toISOString();
@@ -283,7 +283,7 @@ export function createOnlineService(deps: OnlineServiceDeps) {
     async retryJoinSync(localEventId: string): Promise<JoinResult> {
       const ok = await engine.catchUp(localEventId);
       const link = await db.onlineLinks.get(localEventId);
-      if (!link || link.status === "revoked") throw new OnlineServiceError("دسترسی این دستگاه به ایونت قطع شده است. از مدیر دعوت‌نامه‌ی تازه بخواهید.");
+      if (!link || link.status === "revoked") throw new OnlineServiceError("دسترسی این دستگاه به رویداد قطع شده است. از مدیر دعوت‌نامه‌ی تازه بخواهید.");
       engine.attach(localEventId);
       return ok ? { eventId: localEventId, synced: true } : { eventId: localEventId, synced: false, error: engine.getState(localEventId).lastError ?? onlineErrorMessage("network") };
     },
@@ -325,7 +325,7 @@ export function createOnlineService(deps: OnlineServiceDeps) {
     async saveMyProfile(localEventId: string, input: { cardNumber?: string; iban?: string; bankName?: string; accountHolder?: string; phone?: string }): Promise<void> {
       const link = await requireLink(localEventId);
       const person = await db.persons.get(link.memberId);
-      if (!person) throw new OnlineServiceError("اطلاعات شما در این ایونت پیدا نشد؛ کمی بعد دوباره تلاش کنید.");
+      if (!person) throw new OnlineServiceError("اطلاعات شما در این رویداد پیدا نشد؛ کمی بعد دوباره تلاش کنید.");
       const patch: Partial<Record<(typeof PROFILE_FIELDS)[number], string | undefined>> = {};
       if (input.cardNumber !== undefined) {
         const text = input.cardNumber.trim();
@@ -395,8 +395,8 @@ export function createOnlineService(deps: OnlineServiceDeps) {
     async purgeFromServer(localEventId: string, typedTitle: string): Promise<void> {
       const event = await db.events.get(localEventId);
       const link = await requireLink(localEventId);
-      if (!event || typedTitle.trim() !== event.title.trim()) throw new OnlineServiceError("عنوان ایونت درست وارد نشده است.");
-      if (!can(link.roles, "event.purge")) throw new OnlineServiceError("فقط مدیر می‌تواند ایونت را از سرور حذف کند.");
+      if (!event || typedTitle.trim() !== event.title.trim()) throw new OnlineServiceError("عنوان رویداد درست وارد نشده است.");
+      if (!can(link.roles, "event.purge")) throw new OnlineServiceError("فقط مدیر می‌تواند رویداد را از سرور حذف کند.");
       engine.expectPurge(localEventId);
       try {
         await api.purgeEvent(link.deviceToken, link.serverEventId);
@@ -407,10 +407,10 @@ export function createOnlineService(deps: OnlineServiceDeps) {
       }
       engine.detach(localEventId);
       await detachOnlineEvent(localEventId, db);
-      await setOnlineNotice(`ایونت «${event.title}» از سرور حذف شد؛ نسخه‌ی محلی به‌صورت آفلاین روی این دستگاه ماند.`, db);
+      await setOnlineNotice(`رویداد «${event.title}» از سرور حذف شد؛ نسخه‌ی محلی به‌صورت آفلاین روی این دستگاه ماند.`, db);
     },
 
-    /** "خروج از ایونت آنلاین": deletes this device on the server, then the local copy. */
+    /** "خروج از رویداد آنلاین": deletes this device on the server, then the local copy. */
     async leave(localEventId: string): Promise<void> {
       const link = await requireLink(localEventId);
       if (link.deviceId) {

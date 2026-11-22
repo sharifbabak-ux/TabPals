@@ -8,7 +8,7 @@ interface EventStatusControlsProps {
   closed: boolean;
 }
 
-/** پایان ایونت / بازگشایی ایونت — both are logged operations (docs/PLAN.md item 2, Stage 2 task description part D). */
+/** پایان رویداد / بازگشایی رویداد — both are logged operations (docs/PLAN.md item 2, Stage 2 task description part D). */
 export function EventStatusControls({ eventId, closed }: EventStatusControlsProps) {
   const [confirmingClose, setConfirmingClose] = useState(false);
   const [reopening, setReopening] = useState(false);
@@ -37,26 +37,26 @@ export function EventStatusControls({ eventId, closed }: EventStatusControlsProp
     <div className="event-status-bar">
       {closed ? (
         <button type="button" onClick={() => setReopening(true)}>
-          بازگشایی ایونت
+          بازگشایی رویداد
         </button>
       ) : (
         <button type="button" onClick={() => setConfirmingClose(true)}>
-          پایان ایونت
+          پایان رویداد
         </button>
       )}
 
       <ConfirmDialog
         open={confirmingClose}
-        title="پایان ایونت"
-        message="این ایونت پایان یابد؟ پس از این، ثبت سند جدید ممکن نخواهد بود مگر اینکه دوباره بازگشایی شود."
-        confirmLabel="پایان ایونت"
+        title="پایان رویداد"
+        message="این رویداد پایان یابد؟ پس از این، ثبت سند جدید ممکن نخواهد بود مگر اینکه دوباره بازگشایی شود."
+        confirmLabel="پایان رویداد"
         onConfirm={handleClose}
         onCancel={() => setConfirmingClose(false)}
       />
 
       <BottomSheet
         open={reopening}
-        title="بازگشایی ایونت"
+        title="بازگشایی رویداد"
         onClose={() => {
           setReopening(false);
           setReopenReason("");

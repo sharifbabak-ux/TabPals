@@ -133,8 +133,8 @@ export function OrderSessionScreen() {
         <span className="session-chip">{toPersianDigits(participantIds.length)} شرکت‌کننده</span>
       </div>
 
-      {closed && <p className="field__hint">این ایونت پایان‌یافته است؛ نشست فقط‌خواندنی است.</p>}
-      {!closed && online.readOnly && <p className="field__hint">شما در این ایونت آنلاین عضو هستید؛ نشست فقط‌خواندنی است.</p>}
+      {closed && <p className="field__hint">این رویداد پایان‌یافته است؛ نشست فقط‌خواندنی است.</p>}
+      {!closed && online.readOnly && <p className="field__hint">شما در این رویداد آنلاین عضو هستید؛ نشست فقط‌خواندنی است.</p>}
       {session.status === "cancelled" && <p className="field__warning">این نشست لغو شده است{session.cancelReason ? `: ${session.cancelReason}` : "."}</p>}
       {session.status === "finalized" && (
         <p className="field__hint">

@@ -163,8 +163,8 @@ export function OrderPricingScreen() {
         {session.title}
         {session.restaurant ? ` · ${session.restaurant}` : ""}
       </p>
-      {closed && <p className="field__hint">این ایونت پایان‌یافته است؛ فقط‌خواندنی.</p>}
-      {!closed && online.readOnly && <p className="field__hint">شما در این ایونت آنلاین عضو هستید؛ این صفحه فقط‌خواندنی است.</p>}
+      {closed && <p className="field__hint">این رویداد پایان‌یافته است؛ فقط‌خواندنی.</p>}
+      {!closed && online.readOnly && <p className="field__hint">شما در این رویداد آنلاین عضو هستید؛ این صفحه فقط‌خواندنی است.</p>}
       {calc.error && <p className="field__error">{calc.error}</p>}
 
       {/* (a) missing prices */}

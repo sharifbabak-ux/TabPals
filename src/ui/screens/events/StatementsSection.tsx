@@ -198,7 +198,7 @@ export function StatementsSection({ eventId, eventTitle, eventClosed, readOnly =
     return (
       <div>
         {myPreview}
-        <EmptyState hint="صورت‌حساب پس از پایان ایونت قابل صدور است." />
+        <EmptyState hint="صورت‌حساب پس از پایان رویداد قابل صدور است." />
       </div>
     );
   }
@@ -206,7 +206,7 @@ export function StatementsSection({ eventId, eventTitle, eventClosed, readOnly =
   if (!treasurerPersonId && !readOnly) {
     return (
       <div className="statements-section__prompt">
-        <EmptyState hint="برای صدور صورت‌حساب، ابتدا باید مسئول صندوق این ایونت را تعیین کنید." />
+        <EmptyState hint="برای صدور صورت‌حساب، ابتدا باید مسئول صندوق این رویداد را تعیین کنید." />
         <button type="button" className="form-actions__primary" onClick={onRequestSetTreasurer}>
           تعیین مسئول صندوق
         </button>

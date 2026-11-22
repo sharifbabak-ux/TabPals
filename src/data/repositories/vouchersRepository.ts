@@ -158,7 +158,7 @@ function computeExpenseSplit(
 ): { participants: VoucherParticipant[]; shares: VoucherShare[] } {
   switch (split.mode) {
     case "equal_all": {
-      if (activeMemberPersonIds.length === 0) throw new Error("این ایونت عضو فعالی ندارد");
+      if (activeMemberPersonIds.length === 0) throw new Error("این رویداد عضو فعالی ندارد");
       return {
         participants: activeMemberPersonIds.map((personId) => ({ personId, weight: 1 })),
         shares: splitEqual(totalAmount, activeMemberPersonIds)
@@ -211,7 +211,7 @@ async function assertEventOpenForNewVoucher(eventId: string): Promise<void> {
   const event = await db.events.get(eventId);
   if (!event) throw new Error(`Event ${eventId} not found`);
   if (isEventClosed(event, new Date())) {
-    throw new Error("این ایونت پایان یافته است و امکان ثبت سند جدید وجود ندارد.");
+    throw new Error("این رویداد پایان یافته است و امکان ثبت سند جدید وجود ندارد.");
   }
 }
 
@@ -314,7 +314,7 @@ export const vouchersRepository = {
   async createContribution(input: CreateContributionInput): Promise<Voucher> {
     const event = await db.events.get(input.eventId);
     if (!event) throw new Error(`Event ${input.eventId} not found`);
-    if (!event.treasurerPersonId) throw new Error("برای این ایونت مسئول صندوق تعیین نشده است.");
+    if (!event.treasurerPersonId) throw new Error("برای این رویداد مسئول صندوق تعیین نشده است.");
     return createTransfer({ ...input, toPersonId: event.treasurerPersonId }, "contribution");
   },
 

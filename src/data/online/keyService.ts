@@ -160,7 +160,7 @@ export function createKeyService(deps: KeyServiceDeps) {
     const keyCheck = event?.keyCheck;
     if (keyCheck) {
       if (!(await verifyKeyCheck(key, link.serverEventId, keyCheck))) {
-        await setKeyError(localEventId, "کلید دریافت‌شده با این ایونت سازگار نیست و رد شد.");
+        await setKeyError(localEventId, "کلید دریافت‌شده با این رویداد سازگار نیست و رد شد.");
         return "rejected";
       }
       await putEventKey(localEventId, key, true, db);
@@ -188,7 +188,7 @@ export function createKeyService(deps: KeyServiceDeps) {
       return "verified";
     }
     await db.eventKeys.delete(localEventId);
-    await setKeyError(localEventId, "کلید موجود در لینک دعوت با این ایونت سازگار نبود و رد شد؛ منتظر دریافت کلید از دستگاه‌های دیگر می‌مانیم.");
+    await setKeyError(localEventId, "کلید موجود در لینک دعوت با این رویداد سازگار نبود و رد شد؛ منتظر دریافت کلید از دستگاه‌های دیگر می‌مانیم.");
     return "rejected";
   }
 
@@ -319,10 +319,10 @@ export function createKeyService(deps: KeyServiceDeps) {
     /** Restores the key from backup text. Throws a Persian message on a wrong passphrase, another event, or a key that fails keyCheck. */
     async restoreFromBackup(localEventId: string, text: string, passphrase?: string): Promise<void> {
       const link = await db.onlineLinks.get(localEventId);
-      if (!link) throw new Error("این ایونت آنلاین نیست.");
+      if (!link) throw new Error("این رویداد آنلاین نیست.");
       const parsed = parseBackupText(text);
       if (!parsed) throw new Error("کلید پشتیبان معتبر نیست.");
-      if (parsed.serverEventId !== link.serverEventId) throw new Error("این کلید پشتیبان مربوط به ایونت دیگری است.");
+      if (parsed.serverEventId !== link.serverEventId) throw new Error("این کلید پشتیبان مربوط به رویداد دیگری است.");
       if (parsed.protectedByPassphrase && !passphrase) throw new Error("این کلید با گذرواژه محافظت شده است؛ گذرواژه را وارد کنید.");
       let key: CryptoKey;
       try {
@@ -331,9 +331,9 @@ export function createKeyService(deps: KeyServiceDeps) {
         throw new Error("گذرواژه نادرست است یا کلید پشتیبان آسیب دیده است.");
       }
       const event = await db.events.get(localEventId);
-      if (!event?.keyCheck) throw new Error("هنوز اطلاعات ایونت کامل دریافت نشده؛ اتصال را بررسی کنید و دوباره تلاش کنید.");
+      if (!event?.keyCheck) throw new Error("هنوز اطلاعات رویداد کامل دریافت نشده؛ اتصال را بررسی کنید و دوباره تلاش کنید.");
       const result = await acceptCandidate(localEventId, key, "backup");
-      if (result !== "stored") throw new Error("این کلید با اطلاعات ایونت سازگار نیست.");
+      if (result !== "stored") throw new Error("این کلید با اطلاعات رویداد سازگار نیست.");
     },
 
     /** The raw key as invite-fragment text, or null without a verified key. */

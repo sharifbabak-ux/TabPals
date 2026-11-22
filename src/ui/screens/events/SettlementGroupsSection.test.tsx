@@ -197,7 +197,7 @@ describe("SettlementGroupsSection — non-admin", () => {
     expect(text()).toContain("نماینده: ب");
     expect(addButton()).toBeNull();
     expect(container.querySelector("button.sg-item")).toBeNull();
-    expect(text()).toContain("فقط مدیر ایونت");
+    expect(text()).toContain("فقط مدیر رویداد");
     expect(container.querySelector(".sg-section__title .help-hint__button")).not.toBeNull();
   });
 

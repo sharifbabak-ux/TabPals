@@ -154,7 +154,7 @@ export function TransferFormSheet({ open, type, eventId, members, treasurerPerso
           )}
           <p className="wizard-step__guidance">{step === "amount" ? guidance : STEP_GUIDANCE[step]}</p>
 
-          {missingTreasurer && <p className="field__error">برای این ایونت مسئول صندوق تعیین نشده است. ابتدا از ویرایش ایونت مسئول صندوق را مشخص کنید.</p>}
+          {missingTreasurer && <p className="field__error">برای این رویداد مسئول صندوق تعیین نشده است. ابتدا از ویرایش رویداد مسئول صندوق را مشخص کنید.</p>}
 
           {step === "amount" && (
             <>

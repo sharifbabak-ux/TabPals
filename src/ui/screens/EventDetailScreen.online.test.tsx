@@ -67,13 +67,13 @@ const buttons = () => [...container.querySelectorAll("button")].map((b) => b.tex
 const hasButton = (label: string) => buttons().some((b) => b.includes(label));
 
 describe("EventDetailScreen — online roles", () => {
-  it("offline event: unchanged controls plus «آنلاین کردن ایونت»", async () => {
+  it("offline event: unchanged controls plus «آنلاین کردن رویداد»", async () => {
     const { event } = await seed(null);
     await show(event.id);
     expect(hasButton("ویرایش")).toBe(true);
     expect(hasButton("+ افزودن از اشخاص")).toBe(true);
-    expect(hasButton("پایان ایونت")).toBe(true);
-    expect(hasButton("آنلاین کردن ایونت")).toBe(true);
+    expect(hasButton("پایان رویداد")).toBe(true);
+    expect(hasButton("آنلاین کردن رویداد")).toBe(true);
     expect(text()).not.toContain("وضعیت همگام‌سازی");
   });
 
@@ -84,11 +84,11 @@ describe("EventDetailScreen — online roles", () => {
     expect(text()).toContain("عضو"); // role chip
     expect(text()).toContain("علی");
     expect(text()).toContain("سارا");
-    for (const label of ["ویرایش", "+ افزودن از اشخاص", "+ شخص جدید", "وارد کردن از ایونت قبلی", "+ افزودن گروه", "پایان ایونت", "بازگشایی ایونت", "غیرفعال کردن", "آنلاین کردن ایونت", "دعوت", "اعضا و دسترسی‌ها"]) {
+    for (const label of ["ویرایش", "+ افزودن از اشخاص", "+ شخص جدید", "وارد کردن از رویداد قبلی", "+ افزودن گروه", "پایان رویداد", "بازگشایی رویداد", "غیرفعال کردن", "آنلاین کردن رویداد", "دعوت", "اعضا و دسترسی‌ها"]) {
       expect(hasButton(label), label).toBe(false);
     }
     expect(container.querySelector(".member-row__handle")).toBeNull();
-    expect(hasButton("خروج از ایونت آنلاین")).toBe(true);
+    expect(hasButton("خروج از رویداد آنلاین")).toBe(true);
     expect(text()).toContain("فقط‌خواندنی");
 
     await show(event.id, "vouchers");
@@ -108,9 +108,9 @@ describe("EventDetailScreen — online roles", () => {
     await show(event.id);
     expect(hasButton("ویرایش")).toBe(true);
     expect(hasButton("+ افزودن از اشخاص")).toBe(true);
-    expect(hasButton("پایان ایونت")).toBe(true);
+    expect(hasButton("پایان رویداد")).toBe(true);
     expect(hasButton("اعضا و دسترسی‌ها")).toBe(false); // admin only
-    expect(hasButton("آنلاین کردن ایونت")).toBe(false); // already online
+    expect(hasButton("آنلاین کردن رویداد")).toBe(false); // already online
     expect(text()).toContain("مسئول صندوق");
   });
 

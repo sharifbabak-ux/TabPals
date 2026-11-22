@@ -64,10 +64,10 @@ export function ImportMembersSheet({ open, currentEventId, currentMemberPersonId
   }
 
   return (
-    <BottomSheet open={open} title="وارد کردن از ایونت قبلی" onClose={onClose}>
+    <BottomSheet open={open} title="وارد کردن از رویداد قبلی" onClose={onClose}>
       {sourceEventId === null ? (
         sortedEvents.length === 0 ? (
-          <EmptyState hint="ایونت دیگری برای وارد کردن اعضا وجود ندارد." />
+          <EmptyState hint="رویداد دیگری برای وارد کردن اعضا وجود ندارد." />
         ) : (
           <ul className="list">
             {sortedEvents.map((event) => (
@@ -82,7 +82,7 @@ export function ImportMembersSheet({ open, currentEventId, currentMemberPersonId
       ) : (
         <>
           <button type="button" className="back-link" onClick={() => setSourceEventId(null)}>
-            ← انتخاب ایونت دیگر
+            ← انتخاب رویداد دیگر
           </button>
 
           <div className="checklist-actions">
@@ -95,7 +95,7 @@ export function ImportMembersSheet({ open, currentEventId, currentMemberPersonId
           </div>
 
           {candidates.length === 0 ? (
-            <EmptyState hint="همه‌ی اعضای این ایونت قبلاً اضافه شده‌اند." />
+            <EmptyState hint="همه‌ی اعضای این رویداد قبلاً اضافه شده‌اند." />
           ) : (
             <ul className="checklist">
               {candidates.map((candidate) => (

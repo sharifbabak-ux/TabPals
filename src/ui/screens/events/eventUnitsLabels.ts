@@ -23,8 +23,8 @@ export const EU_TEXT = {
   hubGroupNote: (group: string, amount: string, currency: string, creditor: boolean) =>
     `مسئول صندوق عضو گروه «${group}» است؛ باقی‌ماندهٔ تراز این گروه (${amount} ${currency} ${creditor ? "طلب" : "بدهی"}) سهم خود او است و بیرون از برنامه تسویه می‌شود.`,
   hubGroupSettled: (group: string) => `مسئول صندوق عضو گروه «${group}» است؛ تراز این گروه صفر است و چیزی برای تسویه‌ی بیرونی نمانده.`,
-  invalidWarning: "گروه‌های این ایونت الان معتبر نیستند؛ تسویه به‌صورت فردی نشان داده می‌شود. ابتدا گروه‌ها را اصلاح کنید:",
-  noTreasurerWarning: "برای تسویه ابتدا مسئول صندوق ایونت را تعیین کنید."
+  invalidWarning: "گروه‌های این رویداد الان معتبر نیستند؛ تسویه به‌صورت فردی نشان داده می‌شود. ابتدا گروه‌ها را اصلاح کنید:",
+  noTreasurerWarning: "برای تسویه ابتدا مسئول صندوق رویداد را تعیین کنید."
 } as const;
 
 export const EU_HELP = {

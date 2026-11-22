@@ -1,6 +1,6 @@
 /**
  * Pure logic for "import members from a previous event" (docs/PLAN.md #1
- * and the ایونت‌ها event detail screen). No DOM/IndexedDB access — the UI
+ * and the رویداد‌ها event detail screen). No DOM/IndexedDB access — the UI
  * loads the source event's members and the current event's member person
  * ids, and everything else happens here.
  */

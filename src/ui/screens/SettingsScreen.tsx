@@ -50,7 +50,7 @@ function ApiServerSection() {
           ذخیره
         </button>
       </div>
-      {saved && <p className="field__hint">ذخیره شد؛ برای اتصال دوباره‌ی ایونت‌های آنلاین، برنامه را ببندید و دوباره باز کنید.</p>}
+      {saved && <p className="field__hint">ذخیره شد؛ برای اتصال دوباره‌ی رویداد‌های آنلاین، برنامه را ببندید و دوباره باز کنید.</p>}
     </>
   );
 }
@@ -110,14 +110,14 @@ export function SettingsScreen() {
           <li className="list-item" onClick={() => setJoinOpen(true)}>
             <div className="list-item__main">
               <span className="list-item__title">پیوستن با دعوت</span>
-              <span className="list-item__subtitle">ورود به ایونت آنلاین با اسکن QR یا کد دعوت</span>
+              <span className="list-item__subtitle">ورود به رویداد آنلاین با اسکن QR یا کد دعوت</span>
             </div>
           </li>
         )}
         <li className="list-item" onClick={() => navigate("/settings/trash")}>
           <div className="list-item__main">
             <span className="list-item__title">سطل بازیافت</span>
-            <span className="list-item__subtitle">{toPersianDigits(trashedEventsCount ?? 0)} ایونت</span>
+            <span className="list-item__subtitle">{toPersianDigits(trashedEventsCount ?? 0)} رویداد</span>
           </div>
         </li>
       </ul>

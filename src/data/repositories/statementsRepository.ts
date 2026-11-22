@@ -52,7 +52,7 @@ interface StatementIssueContext {
 /** Statements can only be issued for a closed event that has a treasurer set (docs/PLAN.md Stage 3B UI). */
 function assertReadyToIssue(event: Event): void {
   if (!isEventClosed(event, new Date())) {
-    throw new Error("صورت‌حساب پس از پایان ایونت قابل صدور است.");
+    throw new Error("صورت‌حساب پس از پایان رویداد قابل صدور است.");
   }
   if (!event.treasurerPersonId) {
     throw new Error("برای صدور صورت‌حساب، ابتدا مسئول صندوق را تعیین کنید.");

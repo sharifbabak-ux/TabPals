@@ -76,7 +76,7 @@ export function OrderSessionsSection({ eventId, currency, eventClosed, readOnly 
         )}
       </div>
 
-      {eventClosed && <p className="field__hint">این ایونت پایان‌یافته است؛ نشست‌ها فقط‌خواندنی‌اند.</p>}
+      {eventClosed && <p className="field__hint">این رویداد پایان‌یافته است؛ نشست‌ها فقط‌خواندنی‌اند.</p>}
       {openCount > 0 && <p className="sessions-summary">{toPersianDigits(openCount)} نشست باز</p>}
       {sorted.length === 0 && <EmptyState hint="هنوز نشست سفارشی ثبت نشده است." />}
 

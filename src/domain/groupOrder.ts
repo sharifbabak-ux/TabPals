@@ -467,7 +467,7 @@ export interface FinalizeCheckInput {
 export function validateFinalize(input: FinalizeCheckInput): string[] {
   const errors: string[] = [];
   const { computation, billTotal } = input;
-  if (input.eventClosed) errors.push("این ایونت پایان یافته است.");
+  if (input.eventClosed) errors.push("این رویداد پایان یافته است.");
   if (input.status !== "pricing") errors.push("نشست باید در مرحله‌ی قیمت‌گذاری باشد.");
   if (computation.bills.length === 0) errors.push("هیچ سفارشی ثبت نشده است.");
   for (const person of computation.persons) {

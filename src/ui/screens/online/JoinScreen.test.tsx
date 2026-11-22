@@ -149,7 +149,7 @@ describe("#/join failures", () => {
     mocks.standalone = true;
     mocks.join.mockResolvedValueOnce({ eventId: "EVENT1", synced: false, error: "اتصال برقرار نشد" });
     await renderAt("/join?t=tok-sync");
-    expect(text()).toContain("اطلاعات ایونت هنوز کامل دریافت نشده است");
+    expect(text()).toContain("اطلاعات رویداد هنوز کامل دریافت نشده است");
     expect(container.querySelector("[data-testid=where]")).toBeNull();
     mocks.retry.mockResolvedValueOnce({ eventId: "EVENT1", synced: false, error: "هنوز وصل نیست" });
     await act(async () => button("تلاش دوباره")!.click());

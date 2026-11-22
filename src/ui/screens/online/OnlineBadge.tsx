@@ -9,7 +9,7 @@ export function OnlineBadge({ roles }: { roles: OnlineRole[] }) {
     <>
       <span className="badge badge--online">آنلاین</span>
       {main.map((role) => (
-        <span key={role} className="badge" title="نقش شما در این ایونت">
+        <span key={role} className="badge" title="نقش شما در این رویداد">
           {ROLE_LABELS_FA[role]}
         </span>
       ))}

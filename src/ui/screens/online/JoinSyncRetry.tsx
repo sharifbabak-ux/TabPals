@@ -31,7 +31,7 @@ export function JoinSyncRetry({ eventId, error, onSynced, onLater }: JoinSyncRet
   return (
     <div role="alert">
       <p className="field__error">
-        دعوت پذیرفته شد، اما اطلاعات ایونت هنوز کامل دریافت نشده است. اینترنت را بررسی کنید و دوباره تلاش کنید. ({message})
+        دعوت پذیرفته شد، اما اطلاعات رویداد هنوز کامل دریافت نشده است. اینترنت را بررسی کنید و دوباره تلاش کنید. ({message})
       </p>
       <div className="form-actions">
         <button type="button" className="form-actions__secondary" disabled={busy} onClick={onLater}>

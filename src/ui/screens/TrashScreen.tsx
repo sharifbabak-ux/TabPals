@@ -82,7 +82,7 @@ export function TrashScreen() {
         ))}
       </ul>
 
-      <BottomSheet open={restoreTarget !== null} title="بازگردانی ایونت" onClose={() => setRestoreTarget(null)}>
+      <BottomSheet open={restoreTarget !== null} title="بازگردانی رویداد" onClose={() => setRestoreTarget(null)}>
         <p>«{restoreTarget?.title}» از سطل بازیافت بازگردانده شود؟</p>
         <div className="form-actions">
           <button type="button" className="form-actions__secondary" onClick={() => setRestoreTarget(null)}>
@@ -96,7 +96,7 @@ export function TrashScreen() {
 
       <BottomSheet
         open={deleteTarget !== null}
-        title="حذف دائمی ایونت"
+        title="حذف دائمی رویداد"
         onClose={() => {
           setDeleteTarget(null);
           setConfirmText("");
@@ -106,7 +106,7 @@ export function TrashScreen() {
           همه‌ی اسناد و صورت‌حساب‌های «{deleteTarget?.title}» برای همیشه حذف خواهند شد. این عملیات قابل بازگشت نیست.
         </p>
         <div className="field">
-          <label htmlFor="trash-confirm-title">برای تأیید، عنوان ایونت («{deleteTarget?.title}») را تایپ کنید</label>
+          <label htmlFor="trash-confirm-title">برای تأیید، عنوان رویداد («{deleteTarget?.title}») را تایپ کنید</label>
           <input id="trash-confirm-title" value={confirmText} onChange={(event) => setConfirmText(event.target.value)} />
         </div>
         {error && <p className="field__error">{error}</p>}

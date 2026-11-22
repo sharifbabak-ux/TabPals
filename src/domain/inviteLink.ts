@@ -75,5 +75,5 @@ export function formatShortCode(input: string): string {
 
 /** The text of a share message carrying the link and the short code. */
 export function buildInviteMessage(appName: string, eventTitle: string, memberName: string, url: string, shortCode: string): string {
-  return `${memberName} عزیز، به ایونت «${eventTitle}» در برنامه‌ی ${appName} دعوت شده‌اید.\nلینک دعوت: ${url}\nکد دعوت: ${formatShortCode(shortCode)}`;
+  return `${memberName} عزیز، به رویداد «${eventTitle}» در برنامه‌ی ${appName} دعوت شده‌اید.\nلینک دعوت: ${url}\nکد دعوت: ${formatShortCode(shortCode)}`;
 }

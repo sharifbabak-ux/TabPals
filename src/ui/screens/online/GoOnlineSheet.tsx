@@ -13,7 +13,7 @@ interface GoOnlineSheetProps {
   onClose: () => void;
 }
 
-/** «آنلاین کردن ایونت»: explains what is shared, creates the event on the server and uploads the existing data with a progress bar (resumable). */
+/** «آنلاین کردن رویداد»: explains what is shared, creates the event on the server and uploads the existing data with a progress bar (resumable). */
 export function GoOnlineSheet({ open, eventId, onClose }: GoOnlineSheetProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,13 +38,13 @@ export function GoOnlineSheet({ open, eventId, onClose }: GoOnlineSheetProps) {
   const percent = status.upload ? Math.round((status.upload.done / Math.max(1, status.upload.total)) * 100) : finished ? 100 : 0;
 
   return (
-    <BottomSheet open={open} title="آنلاین کردن ایونت" onClose={onClose}>
+    <BottomSheet open={open} title="آنلاین کردن رویداد" onClose={onClose}>
       {!started && (
         <>
-          <p>با آنلاین کردن، اعضای ایونت می‌توانند با دعوت‌نامه وارد شوند و سندها، تراز حساب‌ها، سفارش‌ها و صورت‌حساب‌ها را به‌صورت زنده (فقط‌خواندنی) ببینند.</p>
+          <p>با آنلاین کردن، اعضای رویداد می‌توانند با دعوت‌نامه وارد شوند و سندها، تراز حساب‌ها، سفارش‌ها و صورت‌حساب‌ها را به‌صورت زنده (فقط‌خواندنی) ببینند.</p>
           <div className="online-card">
             <h3>چه چیزی به اشتراک گذاشته می‌شود؟</h3>
-            <p className="field__hint">عنوان و تاریخ ایونت، نام اعضا، اسناد، سفارش‌های گروهی و صورت‌حساب‌های صادرشده.</p>
+            <p className="field__hint">عنوان و تاریخ رویداد، نام اعضا، اسناد، سفارش‌های گروهی و صورت‌حساب‌های صادرشده.</p>
           </div>
           <div className="online-card">
             <h3>چه چیزی فقط روی این دستگاه می‌ماند؟</h3>
@@ -66,7 +66,7 @@ export function GoOnlineSheet({ open, eventId, onClose }: GoOnlineSheetProps) {
 
       {started && (
         <>
-          <p>{finished ? "ایونت آنلاین شد ✓" : "در حال بارگذاری اطلاعات ایونت…"}</p>
+          <p>{finished ? "رویداد آنلاین شد ✓" : "در حال بارگذاری اطلاعات رویداد…"}</p>
           <div className="online-progress" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
             <div className="online-progress__bar" style={{ width: `${percent}%` }} />
           </div>

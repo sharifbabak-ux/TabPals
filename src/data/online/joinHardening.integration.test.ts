@@ -129,7 +129,7 @@ describe("join hardening", () => {
     const linkBefore = await memberDb.onlineLinks.get(event.id);
     const second = await admin.service.createInvite(event.id, sara.id);
 
-    await expect(member.service.joinWithInvite({ inviteToken: second.inviteToken })).rejects.toThrow("قبلاً عضو این ایونت");
+    await expect(member.service.joinWithInvite({ inviteToken: second.inviteToken })).rejects.toThrow("قبلاً عضو این رویداد");
     expect(await memberDb.onlineLinks.get(event.id)).toEqual(linkBefore); // untouched
     expect(serverDevices(event.id, sara.id).filter((d) => !d.revokedAt)).toHaveLength(1);
   });

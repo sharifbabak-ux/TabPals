@@ -132,7 +132,7 @@ export function StatementViewScreen() {
       </div>
 
       {statement.status === "outdated" ? (
-        <p className="field__warning no-print">این صورت‌حساب نیازمند صدور مجدد است؛ ایونت پس از صدور آن بازگشایی شده است.</p>
+        <p className="field__warning no-print">این صورت‌حساب نیازمند صدور مجدد است؛ رویداد پس از صدور آن بازگشایی شده است.</p>
       ) : (
         groupStale && <p className="field__warning no-print">این صورت‌حساب نیازمند صدور مجدد است؛ {GS_TEXT.staleHint}</p>
       )}
