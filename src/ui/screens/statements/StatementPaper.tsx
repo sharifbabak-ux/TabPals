@@ -7,6 +7,7 @@ import { Logo } from "@/ui/components/Logo";
 import { Avatar } from "@/ui/components/Avatar";
 import { MemberStatementView } from "./MemberStatementView";
 import { ComprehensiveReportView } from "./ComprehensiveReportView";
+import { GroupStatementView } from "./GroupStatementView";
 import "./StatementView.css";
 
 /** The export captures at 2×, so a QR of N raster px occupies N/2 CSS px and is drawn back 1:1 (no resampling). */
@@ -65,7 +66,13 @@ export function StatementPaper({ data, meta, innerRef, maskPayment = false, hide
             </span>
           )}
         </div>
-        {data.kind !== "comprehensive" && (
+        {data.kind === "group" && (
+          <div className="statement-header__member">
+            <Avatar id={data.group.groupId} name={data.group.name} size={48} />
+            <span>گروه {data.group.name}</span>
+          </div>
+        )}
+        {(data.kind === "member" || data.kind === "treasurer") && (
           <div className="statement-header__member">
             <Avatar id={data.member.personId} name={`${data.member.firstName} ${data.member.lastName}`.trim()} size={48} />
             <span>{`${data.member.firstName} ${data.member.lastName}`.trim()}</span>
@@ -92,7 +99,13 @@ export function StatementPaper({ data, meta, innerRef, maskPayment = false, hide
         </div>
       </header>
 
-      {data.kind === "comprehensive" ? <ComprehensiveReportView data={data} /> : <MemberStatementView data={data} closingText={data.closingText} maskPayment={maskPayment} />}
+      {data.kind === "comprehensive" ? (
+        <ComprehensiveReportView data={data} />
+      ) : data.kind === "group" ? (
+        <GroupStatementView data={data} maskPayment={maskPayment} />
+      ) : (
+        <MemberStatementView data={data} closingText={data.closingText} maskPayment={maskPayment} />
+      )}
 
       {meta.link && (
         <section className="statement-online" data-export-block>

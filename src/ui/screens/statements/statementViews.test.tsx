@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it } from "vitest";
+import type { GroupStatementData } from "@/domain/groupStatement";
 import type { ComprehensiveReportData, MemberStatementData } from "@/domain/statementBuilder";
 import { buildSummaryLink, type StatementLinkPayload } from "@/domain/statementLink";
 import { SharedStatementScreen, SUMMARY_NOTE } from "../SharedStatementScreen";
@@ -107,5 +108,52 @@ describe("shared summary link view (GO-1.1)", () => {
     expect(html).toContain("۲٬۵۰۰ تومان بدهکار به صندوق");
     expect(html).toContain("6037 9972 1234 5678");
     expect(html).toContain("A1B2-C3D4");
+  });
+});
+
+describe("group statement view (SG-5)", () => {
+  const group = (over: Partial<GroupStatementData> = {}): GroupStatementData => ({
+    kind: "group",
+    event: { title: "سفر", currency: "تومان" },
+    group: { groupId: "g1", name: "خانواده", representativeId: "b", representativeName: "ب", representativeFirstName: "ب" },
+    members: [
+      { personId: "a", name: "الف", balance: 400, active: true },
+      { personId: "b", name: "ب", balance: -450, active: false }
+    ],
+    internalCancelled: 400,
+    groupBalance: -50,
+    outcome: "pay",
+    amount: 50,
+    treasurerInGroup: false,
+    treasurerPersonId: "t",
+    treasurerName: "ت",
+    treasurerCardNumberGrouped: "6037 0000 0000 0000",
+    treasurerIbanGrouped: null,
+    treasurerBankName: "بانک نمونه",
+    treasurerAccountHolder: "ت نمونه",
+    closingText: "نمایندهٔ گروه (ب) باید مبلغ ۵۰ تومان به مسئول صندوق (ت) پرداخت کند.",
+    ...over
+  });
+
+  it("shows members' own balances, the cancelled amount, the sentence and the treasurer's payment info", () => {
+    const html = renderToStaticMarkup(createElement(StatementPaper, { data: group(), meta }));
+    expect(html).toContain("گروه خانواده");
+    expect(html).toContain("نماینده: <strong>ب</strong>");
+    expect(html).toContain("۴۰۰ تومان بستانکار از صندوق");
+    expect(html).toContain("۴۵۰ تومان بدهکار به صندوق");
+    expect(html).toContain("(کنار گذاشته‌شده)");
+    expect(html).toContain("بدهی و طلبِ داخل گروه که با هم صفر شد");
+    expect(html).toContain("۵۰ تومان بدهکار به صندوق");
+    expect(html).toContain("نمایندهٔ گروه (ب) باید مبلغ ۵۰ تومان به مسئول صندوق (ت) پرداخت کند.");
+    expect(html).toContain("6037 0000 0000 0000");
+    expect(html).toContain("A1B2-C3D4");
+  });
+
+  it("a settled group says «تسویه‌شده» and has no payment box; a treasurer's group has none either", () => {
+    const settled = renderToStaticMarkup(createElement(StatementPaper, { data: group({ groupBalance: 0, outcome: "settled", amount: 0, closingText: "تسویه‌شده؛ حساب این گروه صاف است." }), meta }));
+    expect(settled).toContain("تسویه‌شده");
+    expect(settled).not.toContain("اطلاعات پرداخت");
+    const hub = renderToStaticMarkup(createElement(StatementPaper, { data: group({ treasurerInGroup: true }), meta }));
+    expect(hub).not.toContain("اطلاعات پرداخت");
   });
 });

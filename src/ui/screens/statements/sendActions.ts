@@ -8,7 +8,8 @@ import { APP_VERSION } from "@/config/app";
 import type { Statement } from "@/data/types";
 import { buildStatementExportFilenameBase } from "@/domain/exportNaming";
 import { normalizeIranianPhone } from "@/domain/phoneNormalization";
-import { buildStatementSummaryText } from "@/domain/sendSummary";
+import { buildGroupSummaryText } from "@/domain/groupStatement";
+import { buildStatementSummaryText, NO_LINK_CONTACT_TREASURER_LINE } from "@/domain/sendSummary";
 import { buildSmsUrl, buildTelegramUrl, buildWhatsAppUrl } from "@/domain/sendUrls";
 import { buildStatementLink, buildSummaryLink, type StatementLinkData, type StatementLinkPayload } from "@/domain/statementLink";
 import { clipboardService, platform, qrService, shareService } from "@/platform";
@@ -22,11 +23,15 @@ function statementLinkBaseUrl(): string {
 
 /** "person id or 'event'" — the comprehensive report has no single recipient (docs/PLAN.md Stage 3C sendLog target). */
 export function targetOf(data: StatementLinkData): string {
-  return data.kind === "comprehensive" ? "event" : data.member.personId;
+  if (data.kind === "comprehensive") return "event";
+  // A group statement goes to its representative.
+  return data.kind === "group" ? data.group.representativeId : data.member.personId;
 }
 
 export function memberLabelOf(data: StatementLinkData): string {
-  return data.kind === "comprehensive" ? "گزارش جامع" : `${data.member.firstName} ${data.member.lastName}`.trim();
+  if (data.kind === "comprehensive") return "گزارش جامع";
+  if (data.kind === "group") return `گروه ${data.group.name}`;
+  return `${data.member.firstName} ${data.member.lastName}`.trim();
 }
 
 function buildPayload(statement: Statement, data: StatementLinkData): StatementLinkPayload {
@@ -52,7 +57,9 @@ export function buildLinkAndSummary(statement: Statement, data: StatementLinkDat
   const summaryText =
     data.kind === "comprehensive"
       ? [`گزارش جامع رویداد «${eventTitle}»`, link.url ?? "برای دریافت گزارش کامل با مسئول صندوق در تماس باشید"].join("\n")
-      : buildStatementSummaryText({
+      : data.kind === "group"
+        ? buildGroupSummaryText({ data, link: link.url, noLinkLine: NO_LINK_CONTACT_TREASURER_LINE })
+        : buildStatementSummaryText({
           firstName: data.member.firstName,
           eventTitle,
           balance: data.summary.balance,

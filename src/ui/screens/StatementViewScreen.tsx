@@ -14,6 +14,7 @@ import { parseSnapshot, withCreditorDetails, type ParsedSnapshot } from "./state
 import { StatementPaper, type StatementPaperMeta } from "./statements/StatementPaper";
 import { buildStatementShareLink } from "./statements/sendActions";
 import { SendMenuSheet } from "./statements/SendMenuSheet";
+import { GS_TEXT } from "./events/groupStatementLabels";
 import "./statements/StatementView.css";
 
 export function StatementViewScreen() {
@@ -24,8 +25,13 @@ export function StatementViewScreen() {
   const online = useOnlineEvent(eventId);
 
   const statement = useLiveQuery(() => db.statements.get(statementId), [statementId]);
-  const memberPersonId = statement?.personId ?? null;
+  const isGroup = statement?.kind === "group";
+  // A group statement is sent to the group's representative (its personId is the group id).
+  const [representativeId, setRepresentativeId] = useState<string | null>(null);
+  const memberPersonId = isGroup ? representativeId : (statement?.personId ?? null);
   const memberPerson = useLiveQuery(() => (memberPersonId ? db.persons.get(memberPersonId) : undefined), [memberPersonId]);
+  const staleGroupIds = useLiveQuery(() => (isGroup ? statementsRepository.staleGroupStatementIds(eventId) : []), [isGroup, eventId]);
+  const groupStale = Boolean(statement && isGroup && (staleGroupIds ?? []).includes(statement.id));
 
   const [link, setLink] = useState<StatementPaperMeta["link"]>(undefined);
   const snapshot = statement?.snapshot;
@@ -49,6 +55,10 @@ export function StatementViewScreen() {
     };
   }, [snapshot]);
   const screenData = filled ?? parsed;
+  const representativeOfData = screenData?.kind === "group" ? screenData.group.representativeId : null;
+  useEffect(() => {
+    setRepresentativeId(representativeOfData);
+  }, [representativeOfData]);
   /** What leaves the app (send menu, exports): the same data, minus payment details when the privacy setting is on. */
   const exportData = screenData && hidePayment ? hidePaymentDetails(screenData) : screenData;
 
@@ -121,8 +131,10 @@ export function StatementViewScreen() {
         </div>
       </div>
 
-      {statement.status === "outdated" && (
+      {statement.status === "outdated" ? (
         <p className="field__warning no-print">این صورت‌حساب نیازمند صدور مجدد است؛ ایونت پس از صدور آن بازگشایی شده است.</p>
+      ) : (
+        groupStale && <p className="field__warning no-print">این صورت‌حساب نیازمند صدور مجدد است؛ {GS_TEXT.staleHint}</p>
       )}
 
       <StatementPaper
@@ -134,7 +146,7 @@ export function StatementViewScreen() {
           issueVersion: statement.issueVersion,
           issuedAt: statement.issuedAt,
           verificationCode: statement.verificationCode,
-          status: statement.status,
+          status: groupStale ? "outdated" : statement.status,
           appVersion: data.appVersion,
           link
         }}

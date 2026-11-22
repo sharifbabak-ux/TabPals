@@ -11,9 +11,10 @@
  * reduced — callers fall back to a link-less SMS summary).
  */
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from "lz-string";
+import type { GroupStatementData } from "./groupStatement";
 import type { ComprehensiveReportData, MemberStatementData } from "./statementBuilder";
 
-export type StatementLinkData = (MemberStatementData & { closingText: string }) | ComprehensiveReportData;
+export type StatementLinkData = (MemberStatementData & { closingText: string }) | ComprehensiveReportData | GroupStatementData;
 
 export interface StatementLinkPayload {
   v: 1;
@@ -40,6 +41,7 @@ function reduceStatementData(data: StatementLinkData): StatementLinkData {
   if (data.kind === "comprehensive") {
     return { ...data, ledger: data.ledger.map(({ itemized: _itemized, ...row }) => ({ ...row, participantShares: [] })) };
   }
+  if (data.kind === "group") return data;
   return { ...data, expenses: data.expenses.map((row) => ({ ...row, participantNames: [], splitExplanation: "" })) };
 }
 
@@ -141,6 +143,18 @@ export function buildSummaryPayload(payload: StatementLinkPayload): SummaryLinkP
     vc: payload.verificationCode
   };
   if (data.kind === "comprehensive") return { ...base, k: "c" };
+  if (data.kind === "group") {
+    // The compact link has no group shape: it reads as one "person" line named after the group, with the group's balance.
+    return {
+      ...base,
+      k: "m",
+      n: `گروه ${data.group.name}`,
+      b: data.groupBalance,
+      r: data.treasurerName ?? undefined,
+      cd: compactDigits(data.treasurerCardNumberGrouped),
+      ib: compactDigits(data.treasurerIbanGrouped)
+    };
+  }
   const treasurer = data.treasurerName ?? undefined;
   return {
     ...base,

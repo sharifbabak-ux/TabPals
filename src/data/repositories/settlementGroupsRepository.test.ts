@@ -48,11 +48,19 @@ describe("settlementGroupsRepository CRUD", () => {
     expect((await db.settlementGroups.get(g1.id))?.deleted).toBe(true);
     expect((await repo.listByEvent(e2.id)).length).toBe(1);
     const ops = await db.operations.where("entityId").equals(g1.id).toArray();
-    expect(ops.map((o) => [o.entity, o.type])).toEqual([
-      ["settlementGroups", "create"],
-      ["settlementGroups", "update"],
-      ["settlementGroups", "delete"]
+    // Operations created in the same millisecond have random ULIDs, so their stored order is not fixed: compare as a set.
+    expect(ops.map((o) => `${o.entity}:${o.type}`).sort()).toEqual(["settlementGroups:create", "settlementGroups:delete", "settlementGroups:update"]);
+  });
+
+  it("lists groups with the same creation time in a fixed order (by id)", async () => {
+    const e = await setup();
+    const base = { eventId: e.id, memberIds: ["a", "b"], representativeId: "a", createdAt: "2025-01-01T00:00:00.000Z", updatedAt: "2025-01-01T00:00:00.000Z", deviceId: "d", version: 1, deleted: false };
+    await db.settlementGroups.bulkAdd([
+      { ...base, id: "01C", name: "ج" },
+      { ...base, id: "01A", name: "الف" },
+      { ...base, id: "01B", name: "ب" }
     ]);
+    expect((await repo.listByEvent(e.id)).map((g) => g.id)).toEqual(["01A", "01B", "01C"]);
   });
 
   it("allows a person to be re-grouped after their group was deleted", async () => {

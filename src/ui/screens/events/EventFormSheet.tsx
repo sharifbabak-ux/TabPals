@@ -1,10 +1,13 @@
 import { editableValue, isPendingKey } from "@/domain/encryptedDisplay";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { BottomSheet } from "@/ui/components/BottomSheet";
 import { JalaliDatePicker } from "@/ui/components/JalaliDatePicker";
 import { validateCardNumber, validateIban } from "@/domain/paymentValidation";
 import type { Event, EventCurrency } from "@/data/types";
 import { TreasurerChangeBlockedError, type EventInput } from "@/data/repositories/eventsRepository";
+import "./eventForm.css";
+
+const TREASURER_ALERT_TITLE = "تغییر انجام نشد";
 
 interface PersonOption {
   id: string;
@@ -50,6 +53,13 @@ export function EventFormSheet({ open, event, closed, treasurerOptions, onClose,
   const [submitError, setSubmitError] = useState<string | null>(null);
   /** The error is about the treasurer choice (settlement groups) → shown right under that field. */
   const [treasurerBlocked, setTreasurerBlocked] = useState(false);
+  /** Counts blocked attempts, so the alert scrolls into view again when the same message comes back. */
+  const [treasurerBlockedCount, setTreasurerBlockedCount] = useState(0);
+  const treasurerAlertRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (treasurerBlockedCount > 0) treasurerAlertRef.current?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+  }, [treasurerBlockedCount]);
 
   useEffect(() => {
     if (open) {
@@ -70,6 +80,9 @@ export function EventFormSheet({ open, event, closed, treasurerOptions, onClose,
   /** Choosing a treasurer prefills all four bank fields from their saved person record (docs/PLAN.md Stage 3B.1); the fields stay editable per event afterward. */
   function handleTreasurerSelect(personId: string) {
     setTreasurerPersonId(personId);
+    // The alert stays until the field changes.
+    setTreasurerBlocked(false);
+    setSubmitError(null);
     const person = treasurerOptions.find((p) => p.id === personId);
     if (!person) return;
     setTreasurerCardNumber(person.cardNumber ?? "");
@@ -112,7 +125,9 @@ export function EventFormSheet({ open, event, closed, treasurerOptions, onClose,
       });
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "خطایی رخ داد");
-      setTreasurerBlocked(error instanceof TreasurerChangeBlockedError);
+      const blocked = error instanceof TreasurerChangeBlockedError;
+      setTreasurerBlocked(blocked);
+      if (blocked) setTreasurerBlockedCount((n) => n + 1);
     } finally {
       setSubmitting(false);
     }
@@ -164,9 +179,15 @@ export function EventFormSheet({ open, event, closed, treasurerOptions, onClose,
             ))}
           </select>
           {treasurerBlocked && submitError && (
-            <p className="field__error" role="alert" style={{ whiteSpace: "pre-line" }}>
-              {submitError}
-            </p>
+            <div className="event-form-alert" role="alert" ref={treasurerAlertRef}>
+              <span className="event-form-alert__icon" aria-hidden="true">
+                ⚠
+              </span>
+              <div className="event-form-alert__body">
+                <strong className="event-form-alert__title">{TREASURER_ALERT_TITLE}</strong>
+                <p className="event-form-alert__text">{submitError}</p>
+              </div>
+            </div>
           )}
           {!event && <p className="field__hint">شخص انتخاب‌شده به‌عنوان اولین عضو ایونت هم اضافه می‌شود.</p>}
         </div>

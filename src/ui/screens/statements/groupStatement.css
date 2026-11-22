@@ -1,0 +1,23 @@
+/* Group statement (SG-5): only what the shared statement styles do not already give. Scoped class names, nothing global. */
+.group-statement__line {
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+}
+
+.group-statement__line--muted {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.group-statement__note {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.group-statement__amount--creditor {
+  color: var(--color-creditor);
+}
+
+.group-statement__amount--debtor {
+  color: var(--color-debtor);
+}
