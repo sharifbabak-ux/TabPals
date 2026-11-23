@@ -1,20 +1,22 @@
 import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { settlementGroupsRepository } from "@/data/repositories/settlementGroupsRepository";
+import { SETTLEMENT_GROUP_ERROR_MESSAGES, settlementGroupsRepository } from "@/data/repositories/settlementGroupsRepository";
 import type { SettlementGroup } from "@/data/types";
 import { toPersianDigits } from "@/domain/format";
+import { validateGroups } from "@/domain/settlementUnits";
 import { useEventMembers } from "@/ui/hooks/useEventMembers";
 import { HelpHint } from "@/ui/components/HelpHint";
 import { SettlementGroupSheet } from "./SettlementGroupSheet";
 import { SG_HELP, SG_TEXT } from "./settlementGroupLabels";
+import "./eventForm.css";
 import "./settlementGroups.css";
 
 interface SettlementGroupsSectionProps {
   eventId: string;
   treasurerPersonId: string | null;
-  /** Only the event admin/owner may create, edit or delete; everyone else sees a read-only list. */
+  /** Offline: the owner. Online: admin or treasurer. Everyone else sees a read-only list. */
   canEdit: boolean;
-  /** Online event: groups are not synced yet (SG-6), so say where they live. */
+  /** Online event: groups are synced (SG-6). Offline events keep them on this device only. */
   online?: boolean;
 }
 
@@ -26,6 +28,15 @@ export function SettlementGroupsSection({ eventId, treasurerPersonId, canEdit, o
 
   if (!members || !groups) return null;
   const nameOf = new Map(members.map((m) => [m.personId, m.name]));
+  // Concurrent edits from two devices can leave an invalid set; the views fall back to individual mode, so tell the user clearly.
+  const problems = [
+    ...new Set(
+      validateGroups(
+        groups.map((g) => ({ id: g.id, name: g.name, memberIds: g.memberIds, representativeId: g.representativeId })),
+        { knownPersonIds: members.map((m) => m.personId), treasurerId: treasurerPersonId ?? "" }
+      ).map((e) => SETTLEMENT_GROUP_ERROR_MESSAGES[e.code])
+    )
+  ];
 
   return (
     <section className="sg-section" aria-label={SG_TEXT.sectionTitle}>
@@ -44,6 +55,19 @@ export function SettlementGroupsSection({ eventId, treasurerPersonId, canEdit, o
           </button>
         )}
       </div>
+
+      {problems.length > 0 && (
+        <div className="event-form-alert" role="alert" data-testid="sg-invalid-alert">
+          <span className="event-form-alert__icon" aria-hidden="true">
+            ⚠
+          </span>
+          <div className="event-form-alert__body">
+            <strong className="event-form-alert__title">{SG_TEXT.invalidTitle}</strong>
+            <p className="event-form-alert__text">{problems.join("\n")}</p>
+            <p className="event-form-alert__text">{canEdit ? SG_TEXT.invalidFixEditor : SG_TEXT.invalidFixReader}</p>
+          </div>
+        </div>
+      )}
 
       {groups.length === 0 && <p className="sg-empty">{canEdit ? SG_TEXT.emptyAdmin : SG_TEXT.emptyReader}</p>}
 
@@ -73,8 +97,8 @@ export function SettlementGroupsSection({ eventId, treasurerPersonId, canEdit, o
         })}
       </ul>
 
-      {!canEdit && <p className="field__hint sg-note">{SG_TEXT.readOnlyNote}</p>}
-      {online && <p className="field__hint sg-note">{SG_TEXT.onlineLocalNote}</p>}
+      {!canEdit && <p className="field__hint sg-note">{online ? SG_TEXT.readOnlyNoteOnline : SG_TEXT.readOnlyNote}</p>}
+      {!online && <p className="field__hint sg-note">{SG_TEXT.onlineLocalNote}</p>}
 
       {canEdit && (
         <SettlementGroupSheet

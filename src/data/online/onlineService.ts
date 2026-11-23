@@ -89,6 +89,7 @@ export async function buildSnapshotOps(db: TabPalDB, eventId: string): Promise<S
 
   const sessions = (await db.orderSessions.where("eventId").equals(eventId).filter((s) => !s.deleted).toArray()) as unknown as Row[];
   push("orderSessions", sessions);
+  push("settlementGroups", (await db.settlementGroups.where("eventId").equals(eventId).filter((g) => !g.deleted).toArray()) as unknown as Row[]);
   for (const session of sessions) {
     const sid = session.id;
     push("sessionMenuItems", (await db.sessionMenuItems.where("sessionId").equals(sid).filter((r) => !r.deleted).toArray()) as unknown as Row[]);

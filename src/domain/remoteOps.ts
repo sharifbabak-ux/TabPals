@@ -39,6 +39,8 @@ function entityDefaults(entity: string): Record<string, unknown> {
     case "orderSessions":
       // Sessions from older clients carry none of the O2-1 fields; empty participants = every active member.
       return { participants: [], mode: "admin-entered", membersMayPrice: false, settlement: "event" };
+    case "settlementGroups":
+      return { name: "", memberIds: [], representativeId: "" };
     case "orderLines":
       return { source: "online", sourceVersion: 1 };
     default:

@@ -43,6 +43,7 @@ function rowTable(db: TabPalDB, entity: string): RowTable | null {
     case "vouchers":
     case "statements":
     case "orderSessions":
+    case "settlementGroups":
     case "sessionMenuItems":
     case "orderLines":
     case "orderPersonTotals":
@@ -65,7 +66,8 @@ export async function eventIdsForOp(db: TabPalDB, entity: string, entityId: stri
     case "eventMembers":
     case "vouchers":
     case "statements":
-    case "orderSessions": {
+    case "orderSessions":
+    case "settlementGroups": {
       const row = await rowTable(db, entity)!.get(entityId);
       const eventId = (row?.eventId as string | undefined) ?? fromChange("eventId");
       return eventId ? [eventId] : [];

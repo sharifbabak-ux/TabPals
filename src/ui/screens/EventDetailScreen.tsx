@@ -373,7 +373,7 @@ export function EventDetailScreen() {
           <SettlementGroupsSection
             eventId={eventId}
             treasurerPersonId={event.treasurerPersonId}
-            canEdit={!readOnly && (!online.online || online.isAdmin)}
+            canEdit={!readOnly && (!online.online || online.canWrite)}
             online={online.online}
           />
 

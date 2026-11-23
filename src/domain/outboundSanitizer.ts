@@ -28,6 +28,7 @@ export const SYNCED_ENTITIES = [
   "vouchers",
   "statements",
   "orderSessions",
+  "settlementGroups",
   "sessionMenuItems",
   "orderLines",
   "orderPersonTotals",
