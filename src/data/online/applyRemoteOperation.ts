@@ -16,6 +16,21 @@ import type { OperationType, ServerOp } from "../types";
 import type { RemoteOpEnvelope } from "./apiClient";
 import { decryptInboundChanges, PROFILE_ENTITY } from "./wireCodec";
 
+/** Meta key of the counter of remote ops skipped because their entity is unknown to this app version. */
+export const SKIPPED_UNKNOWN_OPS_META_KEY = "sync.skippedUnknownOps";
+
+async function countSkippedUnknownOp(db: TabPalDB, entity: string): Promise<void> {
+  const row = await db.meta.get(SKIPPED_UNKNOWN_OPS_META_KEY);
+  const count = (Number.parseInt(row?.value ?? "0", 10) || 0) + 1;
+  await db.meta.put({ key: SKIPPED_UNKNOWN_OPS_META_KEY, value: String(count) });
+  console.warn(`[sync] skipped remote op of unknown entity "${entity}" (total skipped: ${count})`);
+}
+
+/** How many remote ops this device skipped as unknown (from a newer app version). */
+export async function readSkippedUnknownOps(db: TabPalDB = defaultDb): Promise<number> {
+  return Number.parseInt((await db.meta.get(SKIPPED_UNKNOWN_OPS_META_KEY))?.value ?? "0", 10) || 0;
+}
+
 export type ApplyResult = "applied" | "duplicate" | "ignored" | "purged";
 
 type AnyRow = Record<string, unknown> & { id: string };
@@ -152,6 +167,7 @@ export async function applyRemoteOperation(localEventId: string, envelope: Remot
       db.vouchers,
       db.statements,
       db.orderSessions,
+      db.settlementGroups,
       db.sessionMenuItems,
       db.orderLines,
       db.orderPersonTotals,
@@ -160,7 +176,8 @@ export async function applyRemoteOperation(localEventId: string, envelope: Remot
       db.operations,
       db.appliedRemoteOps,
       db.onlineLinks,
-      db.eventKeys
+      db.eventKeys,
+      db.meta
     ],
     async (): Promise<ApplyResult> => {
       const advance = async () => {
@@ -180,6 +197,8 @@ export async function applyRemoteOperation(localEventId: string, envelope: Remot
 
       let result: ApplyResult = "applied";
       if (!isSyncedEntity(rawOp.entity) && rawOp.entity !== PROFILE_ENTITY) {
+        // Forward compatibility: an entity from a newer app version is skipped (never thrown), counted, and lastSeq still advances.
+        await countSkippedUnknownOp(db, rawOp.entity);
         result = "ignored";
       } else if (rawOp.type === "purge" && rawOp.entity === "events") {
         result = "purged";

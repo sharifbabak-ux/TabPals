@@ -3,7 +3,7 @@
  * Offline-only storage for the `settlementGroups` table (not the device-level
  * `groups` table). Every write validates the event's whole resulting set of
  * groups with the pure `validateGroups` (SG-1) using the event's real context,
- * and logs to the operation log. Not synced yet (SG-6). Groups may be written on
+ * and logs to the operation log. Synced for online events (SG-6; admin or treasurer may write). Groups may be written on
  * finished events too (SG-3): they are made at the END of an event, before statements.
  */
 import {

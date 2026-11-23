@@ -68,6 +68,7 @@ const SYNC_SCOPE_TABLES = [
   "vouchers",
   "statements",
   "orderSessions",
+  "settlementGroups",
   "sessionMenuItems",
   "orderLines",
   "orderPersonTotals",

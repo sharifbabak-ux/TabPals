@@ -533,7 +533,7 @@ export interface DeviceKeyRow {
 /**
  * A settlement group of an event: N members (min 2) with exactly one
  * representative. Not the same as `Group` (a saved set of people on this
- * device). Stored in the `settlementGroups` table; not synced yet (SG-6).
+ * device). Stored in the `settlementGroups` table; synced for online events (SG-6).
  */
 export interface SettlementGroup extends BaseRecord {
   eventId: string;
