@@ -30,6 +30,7 @@ import { MemberRow } from "./events/MemberRow";
 import { VouchersSection } from "./events/VouchersSection";
 import { BalancesPanel } from "./events/BalancesPanel";
 import { EventUnitsPanel } from "./events/EventUnitsPanel";
+import { LiveEstimatePanel } from "./events/LiveEstimatePanel";
 import { SettlementGroupsSection } from "./events/SettlementGroupsSection";
 import { SG_DEACTIVATE } from "./events/settlementGroupLabels";
 import { StatementsSection } from "./events/StatementsSection";
@@ -376,6 +377,8 @@ export function EventDetailScreen() {
             canEdit={!readOnly && (!online.online || online.canWrite)}
             online={online.online}
           />
+
+          {!closed && <LiveEstimatePanel eventId={eventId} treasurerPersonId={event.treasurerPersonId} currency={event.currency} />}
 
           <BalancesPanel eventId={eventId} members={activeMemberOptions} currency={event.currency} />
 
